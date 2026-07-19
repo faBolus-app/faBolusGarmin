@@ -12,19 +12,26 @@ the pump; EC-JPAKE on Monkey C).
 
 ## Status
 
-Protocol + crypto foundation landed and **byte-exact vs the cliparser oracle** (15/15 unit tests
-pass in the CIQ simulator):
+Protocol + crypto + auth + message layers landed and **byte-exact vs the cliparser oracle**
+(**28/28 unit tests pass** in the CIQ simulator). The BLE client compiles and boots a Gate A
+smoke test, pending on-hardware validation.
 
 - `source/protocol/` — `Bytes`, `Crc16` (CCITT/XModem), `Packetize` (framing + 24-byte HMAC-SHA1
-  signed trailer + chunking), `Packet`/`PacketReassembler`, `Message`/`TransactionId`, `Ble` UUIDs.
-- `source/auth/` — `HmacSha1` (hand-rolled from CIQ SHA-1), `HmacSha256`, `Hkdf`.
-- `source/messages/` — request messages: `ApiVersionRequest`, 20 empty-cargo status reads,
-  `HistoryLogRequest`, `Central`/`PumpChallengeRequest`, `Jpake3SessionKey`/`Jpake4KeyConfirmation`,
-  and the signed bolus flow (`BolusPermission`/`InitiateBolus`/`CancelBolus`/`BolusPermissionRelease`)
-  — the signed 1.0 U `InitiateBolusRequest` matches the oracle byte-for-byte.
+  signed trailer + chunking), `Packet`/`PacketReassembler`, `Message`/`TransactionId`, `Ble` UUIDs,
+  `ResponseParser` (CRC/length validation, signed-trailer stripping, opcode dispatch).
+- `source/auth/` — `HmacSha1` (hand-rolled from CIQ SHA-1), `HmacSha256`, `Hkdf`, and
+  `ResumeCoordinator` (on-watch JPAKE quick-pair rounds 3–4; derives the same `authKey` as the
+  oracle's `jpake-server-resume`).
+- `source/messages/` — request messages (`ApiVersion`, 20 empty-cargo status reads,
+  `HistoryLog`, `Central`/`PumpChallenge`, `Jpake3/4`, signed bolus flow — the signed 1.0 U
+  `InitiateBolusRequest` matches the oracle byte-for-byte) and response parsers (IOB, insulin,
+  battery, CGM+trend, clock, basal, bolus status, signed bolus acks).
+- `source/ble/` — `PumpBleClient` (registerProfile → scan → pairDevice → requestBond → subscribe →
+  serialized writes; per-characteristic reassembly) + `GateAController`, driving the Gate A smoke
+  test. **Compile-verified only; requires venu3s hardware + the bench pump to validate** (the
+  simulator cannot exercise real BLE bonding/notifications).
 
-Not yet built: response parsing + `ResponseParser`, the on-watch JPAKE resume coordinator, and the
-BLE client (Gate A). See the plan and task list.
+Next: on-hardware Gate A, then the Milestone 0 handoff-resume probe (see the plan).
 
 ### Build & test
 
