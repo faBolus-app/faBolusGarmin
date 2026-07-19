@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PumpX2Garmin: standalone direct-to-pump Garmin Connect IQ app for the venu3s.
+     Connects directly to a Tandem t:slim X2 / Mobi pump over BLE (no phone relay).
+     Independent reimplementation of the pumpX2 protocol/auth/BLE. Bench PoC (saline only). -->
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application entry="PumpX2GarminApp"
+                    id="117286e399a08fecf8eb3c116a48e775"
+                    launcherIcon="@Drawables.LauncherIcon"
+                    name="@Strings.AppName"
+                    type="watch-app"
+                    minSdkVersion="5.0.0">
+        <iq:products>
+            <iq:product id="venu3s"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="BluetoothLowEnergy"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+    </iq:application>
+</iq:manifest>

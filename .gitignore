@@ -1,0 +1,13 @@
+# Connect IQ build artifacts
+bin/
+*.prg
+*.iq
+*.debug.xml
+
+# Developer signing keys — never commit
+developer_key.pem
+developer_key.der
+*.der
+*.pem
+
+# Generated golden vectors are committed; the JDK/oracle used to regenerate them is not.
