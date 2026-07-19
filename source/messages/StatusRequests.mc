@@ -4,6 +4,7 @@ using Toybox.Lang;
 // PumpX2Kit `Requests/`. Each is just an opcode on the CURRENT_STATUS characteristic with no
 // cargo; the response opcode is opcode+1. Opcodes verified byte-exact against the oracle.
 
+module PumpX2 {
 class EmptyCurrentStatusRequest extends Message {
     function initialize(opcode as Lang.Number) {
         Message.initialize();
@@ -82,4 +83,6 @@ class CGMAlertStatusRequest extends EmptyCurrentStatusRequest {
 // CurrentEGVGuiDataV2 (CGM reading) request — read-path, empty cargo. Opcode 0xC0.
 class CurrentEgvGuiDataV2Request extends EmptyCurrentStatusRequest {
     function initialize() { EmptyCurrentStatusRequest.initialize(0xC0); }
+}
+
 }

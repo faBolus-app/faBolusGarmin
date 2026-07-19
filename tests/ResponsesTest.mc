@@ -5,6 +5,7 @@ using Toybox.Test;
 // generated in tools/gen_golden.sh notes) and asserting the parsed field values. Exercises the
 // PacketReassembler on real multi-packet frames + ResponseParser CRC/length/dispatch + each
 // response's offset math.
+module PumpX2 {
 module ResponsesTest {
 
     // Reassembles an array of packet-hex strings into a single frame.
@@ -127,4 +128,6 @@ module ResponsesTest {
         Test.assertMessage(threw, "expected ResponseParseException on bad CRC");
         return true;
     }
+}
+
 }

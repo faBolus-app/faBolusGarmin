@@ -4,6 +4,7 @@ using Toybox.Lang;
 // `Bytes` (upstream com.jwoglom.pumpx2.pump.messages.helpers.Bytes). All multi-byte pump cargo
 // values are little-endian. Reads return Long where the value can exceed the signed 32-bit
 // Number range (uint32/uint64); writes accept Number or Long.
+module PumpX2 {
 module Bytes {
 
     // ---- combining / slicing ----
@@ -115,4 +116,6 @@ module Hex {
         if (v >= 0x41 && v <= 0x46) { return v - 0x41 + 10; } // A-F
         return 0;
     }
+}
+
 }

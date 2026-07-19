@@ -5,6 +5,7 @@ using Toybox.Test;
 // serialize to the same packet bytes the upstream library produces (see tools/gen_golden.sh and
 // tests/golden_vectors.txt). These are the tests that make the hand-port trustworthy — mirrors
 // PumpX2Kit's OracleParityTests. Run with a --unit-test build in the CIQ simulator.
+module PumpX2 {
 module ParityTest {
     // Shared signing constants — identical to gen_golden.sh / OracleParityTests so signed
     // packets match byte-for-byte.
@@ -205,4 +206,6 @@ module ParityTest {
             "ca0aa0ad0b63c6b030412df26aceb16a14fdac3d41df7a45d11b823d38563bc8", "hmac-sha256 b");
         return true;
     }
+}
+
 }

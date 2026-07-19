@@ -2,6 +2,7 @@ using Toybox.Lang;
 
 // Thrown when a message that modifies insulin delivery is packetized without the caller having
 // explicitly enabled insulin-affecting actions. Mirrors upstream's safety gate.
+module PumpX2 {
 class InsulinDeliveryNotEnabledException extends Lang.Exception {
     function initialize() {
         Exception.initialize();
@@ -114,4 +115,6 @@ module Packetize {
         }
         return out;
     }
+}
+
 }

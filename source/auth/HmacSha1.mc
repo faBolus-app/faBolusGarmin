@@ -5,6 +5,7 @@ using Toybox.Cryptography;
 // Toybox.Cryptography.HashBasedMessageAuthenticationCode only supports HASH_SHA256.
 // HMAC(K, m) = H((K' XOR opad) || H((K' XOR ipad) || m)), block size 64, digest 20 bytes.
 // Used by Packetize for the 24-byte signed-message trailer. Validate bytes vs the oracle.
+module PumpX2 {
 module HmacSha1 {
     const BLOCK = 64;
 
@@ -36,4 +37,6 @@ module HmacSha1 {
         outerInput.addAll(inner);
         return sha1(outerInput);
     }
+}
+
 }

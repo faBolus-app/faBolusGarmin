@@ -5,6 +5,7 @@ using Toybox.Lang;
 //
 // Wire layout of build(): [packetsRemaining, transactionId, internalCargo...]. For the
 // first/only packet, internalCargo is [opcode, txId, len, cargo..., (hmac), crcLo, crcHi].
+module PumpX2 {
 class Packet {
     var packetsRemaining as Lang.Number;
     var transactionId as Lang.Number;
@@ -66,4 +67,6 @@ class PacketReassembler {
         _acc = []b;
         _expectedTxId = null;
     }
+}
+
 }

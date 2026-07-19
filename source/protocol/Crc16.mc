@@ -10,6 +10,7 @@ using Toybox.Lang;
 // That produces identical low-16-bit output while staying well within Monkey C's 32-bit signed
 // Number range (max intermediate 0xFFFF00), so there are no sign-extension / overflow pitfalls.
 // Equivalence is enforced by the golden-vector oracle tests.
+module PumpX2 {
 module Crc16 {
     // CRC-16 CCITT/XModem lookup table (poly 0x1021). Copied from PumpX2Kit Bytes.crcLookupTable.
     const TABLE = [
@@ -41,4 +42,6 @@ module Crc16 {
         }
         return [crc & 0xFF, (crc >> 8) & 0xFF]b;
     }
+}
+
 }

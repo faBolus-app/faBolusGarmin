@@ -2,6 +2,7 @@ using Toybox.Lang;
 using Toybox.Cryptography;
 
 // Raised when the JPAKE resume handshake gets an unexpected frame or key confirmation fails.
+module PumpX2 {
 class JpakeAuthException extends Lang.Exception {
     var reason as Lang.String;
     function initialize(reason as Lang.String) {
@@ -111,4 +112,6 @@ class ResumeCoordinator {
         }
         return true;
     }
+}
+
 }

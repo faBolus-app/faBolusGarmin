@@ -5,6 +5,7 @@ using Toybox.Lang;
 // and validated by round-tripping oracle-encoded frames through ResponseParser (see ResponsesTest).
 
 // Reads a signed 8-bit value at offset i (two's complement).
+module PumpX2 {
 function readInt8(raw as Lang.ByteArray, i as Lang.Number) as Lang.Number {
     var v = raw[i] & 0xFF;
     return (v >= 128) ? (v - 256) : v;
@@ -169,4 +170,6 @@ class InitiateBolusResponse extends Message {
         statusTypeId = raw[5] & 0xFF;
     }
     function accepted() as Lang.Boolean { return status == 0; }
+}
+
 }

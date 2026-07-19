@@ -5,6 +5,7 @@ using Toybox.Lang;
 // message used by the resume path (rounds 3-4). Cargo layouts verified byte-exact vs oracle.
 
 // Legacy 16-char pairing round 1: appInstanceId (2 LE) + first 8 bytes of the central challenge.
+module PumpX2 {
 class CentralChallengeRequest extends Message {
     function initialize(appInstanceId as Lang.Number, centralChallenge as Lang.ByteArray) {
         Message.initialize();
@@ -60,4 +61,6 @@ class Jpake4KeyConfirmationRequest extends Message {
         c.addAll(hashDigest);
         me.cargo = c;
     }
+}
+
 }

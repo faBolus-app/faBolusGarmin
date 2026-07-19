@@ -7,6 +7,7 @@ using Toybox.Lang;
 // An empty nonce becomes 32 zero bytes as the salt (matches upstream newSecretKeySpec).
 // Port of PumpX2Kit `Crypto.hkdf`. Used to derive the per-session auth key:
 //   authKey = HKDF(serverNonce, derivedSecret).
+module PumpX2 {
 module Hkdf {
     function derive(nonce as Lang.ByteArray, keyMaterial as Lang.ByteArray) as Lang.ByteArray {
         var salt = nonce;
@@ -16,4 +17,6 @@ module Hkdf {
         var prk = HmacSha256.mac(salt, keyMaterial);
         return HmacSha256.mac(prk, [0x01]b);
     }
+}
+
 }

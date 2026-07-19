@@ -1,6 +1,7 @@
 using Toybox.Lang;
 
 // Pump BLE GATT identifiers and MTU. Port of PumpX2Kit `ServiceUUID` / `Characteristic`.
+module PumpX2 {
 module Ble {
     // Tandem TIP service (primary messaging service) and TDU service (Mobi).
     const PUMP_SERVICE = "0000FDFB-0000-1000-8000-00805F9B34FB";
@@ -33,4 +34,6 @@ module Ble {
     function charUuid(characteristic as Lang.Number) as Lang.String {
         return CHAR_UUIDS[characteristic];
     }
+}
+
 }

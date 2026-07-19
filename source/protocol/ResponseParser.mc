@@ -1,6 +1,7 @@
 using Toybox.Lang;
 
 // Raised when a response frame fails CRC/length validation or has an unknown opcode.
+module PumpX2 {
 class ResponseParseException extends Lang.Exception {
     var reason as Lang.String;
     function initialize(reason as Lang.String) {
@@ -75,4 +76,6 @@ module ResponseParser {
         msg.parse(cargo);
         return msg;
     }
+}
+
 }

@@ -9,10 +9,10 @@ class GateAController {
     public var status as Lang.String = "idle";
     public var detail as Lang.String = "";
 
-    private var _client as PumpBleClient;
+    private var _client as PumpX2.PumpBleClient;
 
     function initialize() {
-        _client = new PumpBleClient();
+        _client = new PumpX2.PumpBleClient();
         _client.onStateChange = method(:onState);
         _client.onErrorCb = method(:onError);
         _client.onReady = method(:onReady);
@@ -40,18 +40,18 @@ class GateAController {
     function onReady() as Void {
         status = "ready: reading ApiVersion";
         // Unsigned read; no auth key / pump time needed.
-        _client.send(new ApiVersionRequest(), []b, 0, false);
+        _client.send(new PumpX2.ApiVersionRequest(), []b, 0, false);
         refresh();
     }
 
     function onFrame(charEnum as Lang.Number, frame as Lang.ByteArray) as Void {
         var op = (frame[0] & 0xFF).format("%02X");
-        if (charEnum == Ble.CHAR_AUTHORIZATION) {
+        if (charEnum == PumpX2.Ble.CHAR_AUTHORIZATION) {
             status = "auth frame op=" + op;
             detail = "len=" + frame.size().format("%d");
         } else {
             try {
-                var m = ResponseParser.parse(frame);
+                var m = PumpX2.ResponseParser.parse(frame);
                 status = "GATE A PASS";
                 detail = "parsed response op=" + (m.opCode & 0xFF).format("%02X");
             } catch (e) {

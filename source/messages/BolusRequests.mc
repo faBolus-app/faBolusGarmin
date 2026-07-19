@@ -5,6 +5,7 @@ using Toybox.Lang;
 // modifies insulin delivery. Opcodes and cargo layouts verified byte-exact vs oracle.
 
 // Requests permission to begin a bolus. Opcode 0xA2, empty cargo, signed.
+module PumpX2 {
 class BolusPermissionRequest extends Message {
     function initialize() {
         Message.initialize();
@@ -79,4 +80,6 @@ class InitiateBolusRequest extends Message {
         c.addAll(Bytes.toUint32(0));              // 4 extended3
         me.cargo = c;
     }
+}
+
 }

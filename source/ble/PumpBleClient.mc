@@ -16,6 +16,7 @@ using Toybox.System;
 //   onFrame(charEnum, frame)           -> a reassembled inbound frame on a characteristic
 //   onStateChange(text)                -> human-readable lifecycle progress (for Gate A UI/log)
 //   onErrorCb(text)                    -> a lifecycle/transport error
+module PumpX2 {
 class PumpBleClient extends Btle.BleDelegate {
     // Characteristics we register + subscribe to (subset of what the pump exposes).
     // AUTHORIZATION carries JPAKE; CONTROL/CONTROL_STREAM carry bolus; CURRENT_STATUS/HISTORY_LOG
@@ -250,4 +251,6 @@ class PumpBleClient extends Btle.BleDelegate {
         System.println("[ble][error] " + text);
         if (onErrorCb != null) { onErrorCb.invoke(text); }
     }
+}
+
 }

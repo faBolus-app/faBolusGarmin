@@ -1,6 +1,7 @@
 using Toybox.Lang;
 
 // Message type (request opcodes are even, responses odd = request+1). Port of MessageType.
+module PumpX2 {
 module MsgType {
     enum {
         REQUEST,
@@ -53,4 +54,6 @@ class TransactionId {
     function current() as Lang.Number {
         return _value;
     }
+}
+
 }

@@ -16,6 +16,13 @@ Protocol + crypto + auth + message layers landed and **byte-exact vs the clipars
 (**28/28 unit tests pass** in the CIQ simulator). The BLE client compiles and boots a Gate A
 smoke test, pending on-hardware validation.
 
+The direct-pump engine (`protocol` + `auth` + `messages` + `ble`) is wrapped in a single
+**`PumpX2` namespace module** so it can be pulled into the existing `ControlX2iOS/garmin` remote
+app (via shared `sourcePath`) as a second, direct-BLE transport behind that app's
+`RemoteComm`/`AppState` seam — one Garmin app, no duplicated UX. The Apple Watch app stays in
+ControlX2iOS (it's Swift/watchOS). Consumers reference `PumpX2.PumpBleClient`,
+`PumpX2.ResponseParser`, `PumpX2.ResumeCoordinator`, etc.
+
 - `source/protocol/` — `Bytes`, `Crc16` (CCITT/XModem), `Packetize` (framing + 24-byte HMAC-SHA1
   signed trailer + chunking), `Packet`/`PacketReassembler`, `Message`/`TransactionId`, `Ble` UUIDs,
   `ResponseParser` (CRC/length validation, signed-trailer stripping, opcode dispatch).

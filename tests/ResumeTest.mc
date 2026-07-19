@@ -5,6 +5,7 @@ using Toybox.Test;
 // client nonce in production, so we inject a fixed nonce and cross-check every derived value
 // against numbers computed by the cliparser oracle (hkdf / hmac-sha256) — the same primitives
 // the coordinator relies on, already proven byte-exact in ParityTest.
+module PumpX2 {
 module ResumeTest {
     const DS = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
     const CLIENT_NONCE = "2122232425262728";
@@ -62,4 +63,6 @@ module ResumeTest {
         Test.assertEqualMessage(coord.step, ResumeCoordinator.STEP_FAILED, "step == FAILED");
         return true;
     }
+}
+
 }
