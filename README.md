@@ -16,12 +16,20 @@ Protocol + crypto + auth + message layers landed and **byte-exact vs the clipars
 (**28/28 unit tests pass** in the CIQ simulator). The BLE client compiles and boots a Gate A
 smoke test, pending on-hardware validation.
 
-The direct-pump engine (`protocol` + `auth` + `messages` + `ble`) is wrapped in a single
-**`PumpX2` namespace module** so it can be pulled into the existing `ControlX2iOS/garmin` remote
-app (via shared `sourcePath`) as a second, direct-BLE transport behind that app's
-`RemoteComm`/`AppState` seam — one Garmin app, no duplicated UX. The Apple Watch app stays in
-ControlX2iOS (it's Swift/watchOS). Consumers reference `PumpX2.PumpBleClient`,
-`PumpX2.ResponseParser`, `PumpX2.ResumeCoordinator`, etc.
+This repo now holds **all the Garmin side**: the ControlX2 watch app (moved here from
+`ControlX2iOS/garmin`, under `source/app/`) plus the direct-pump engine, which is wrapped in a
+single **`PumpX2` namespace module** (`protocol` + `auth` + `messages` + `ble`) so its generic
+names don't collide with the app's modules (`AppState`, `RemoteComm`, `Nav`, …). The app currently
+uses its **phone-relay transport** (unchanged); the direct-BLE transport will be wired behind the
+existing `RemoteComm`/`AppState` seam as a second transport — one Garmin app, no duplicated UX.
+The Apple side (iPhone + Apple Watch, Swift/Xcode) stays in `ControlX2iOS`; the bridge contract is
+`ControlX2iOS/schema/command.schema.json`.
+
+- `source/app/` — the ControlX2 watch UI (glance/bolus/1-2-3 confirm/history/alerts, complication,
+  `TrendArrow`, `AppState`, `RemoteComm` phone-relay transport, `Nav`). Entry: `ControlX2App`.
+- `source/ble/GateAController` + `source/ui/GateAView` + `source/PumpX2GarminApp` — a Gate A
+  bring-up harness (a second, non-default `AppBase`). To run it on hardware, temporarily set the
+  manifest `entry` to `PumpX2GarminApp`.
 
 - `source/protocol/` — `Bytes`, `Crc16` (CCITT/XModem), `Packetize` (framing + 24-byte HMAC-SHA1
   signed trailer + chunking), `Packet`/`PacketReassembler`, `Message`/`TransactionId`, `Ble` UUIDs,
