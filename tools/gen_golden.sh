@@ -57,6 +57,20 @@ pkts_signed() {
   echo "CancelBolusRequest|3|$(pkts_signed 3 CancelBolusRequest '[10650]')"
   echo "BolusPermissionReleaseRequest|4|$(pkts_signed 4 BolusPermissionReleaseRequest '[10650]')"
   echo "InitiateBolusRequest|9|$(pkts_signed 9 InitiateBolusRequest '[1000, 42, 1, 0, 0, 0, 0, 0]')"
+
+  # --- Response frames (pump -> app), for ResponseParser tests. Encoded with known field values;
+  # positional params match each response's Java constructor. Signed responses use the env above.
+  echo "# responses below"
+  echo "TimeSinceResetResponse|11|$(pkts 11 TimeSinceResetResponse '[461589180, 461589000]')"
+  echo "ControlIQIOBResponse|11|$(pkts 11 ControlIQIOBResponse '[1500, 3600, 2000, 1234, 1]')"
+  echo "CurrentBatteryV2Response|11|$(pkts 11 CurrentBatteryV2Response '[90, 75, 1, 0, 0, 0, 0]')"
+  echo "InsulinStatusResponse|11|$(pkts 11 InsulinStatusResponse '[123, 0, 20]')"
+  echo "CurrentBasalStatusResponse|11|$(pkts 11 CurrentBasalStatusResponse '[750, 750, 0]')"
+  echo "CurrentEgvGuiDataV2Response|11|$(pkts 11 CurrentEgvGuiDataV2Response '[461589180, 120, 1, 5]')"
+  echo "CurrentBolusStatusResponse|11|$(pkts 11 CurrentBolusStatusResponse '[1, 42, 1000, 5000, 0, 1]')"
+  echo "LastBolusStatusV2Response|11|$(pkts 11 LastBolusStatusV2Response '[1, 42, 461589180, 1000, 0, 0, 1, 0, 1000]')"
+  echo "BolusPermissionResponse|0|$(pkts_signed 0 BolusPermissionResponse '[0, 10650, 0]')"
+  echo "InitiateBolusResponse|0|$(pkts_signed 0 InitiateBolusResponse '[0, 42, 1]')"
 } > "$OUT"
 
 echo "wrote $OUT"
