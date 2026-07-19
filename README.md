@@ -13,7 +13,7 @@ the pump; EC-JPAKE on Monkey C).
 ## Status
 
 Protocol + crypto + auth + message layers landed and **byte-exact vs the cliparser oracle**
-(**28/28 unit tests pass** in the CIQ simulator). The BLE client compiles and boots a Gate A
+(**31/31 unit tests pass** in the CIQ simulator). The BLE client compiles and boots a Gate A
 smoke test, pending on-hardware validation.
 
 This repo now holds **all the Garmin side**: the ControlX2 watch app (moved here from
@@ -26,7 +26,14 @@ The Apple side (iPhone + Apple Watch, Swift/Xcode) stays in `ControlX2iOS`; the 
 `ControlX2iOS/schema/command.schema.json`.
 
 - `source/app/` — the ControlX2 watch UI (glance/bolus/1-2-3 confirm/history/alerts, complication,
-  `TrendArrow`, `AppState`, `RemoteComm` phone-relay transport, `Nav`). Entry: `ControlX2App`.
+  `TrendArrow`, `AppState`, `Nav`). Entry: `ControlX2App`.
+- `source/app/RemoteComm` — a transport **router** behind the existing `send(cmd)`/inbound seam:
+  phone-relay (default) or **direct-to-pump** (`DirectTransport`, engine-backed). `DirectTransport`
+  services the same command dicts (statusRead/bolusRequest/cancelBolus) locally over BLE — resume
+  auth, status reads → `StatusFeed` dict, and the signed permission→initiate bolus flow — delivering
+  replies in the identical schema so `AppState`/UI are unchanged. Direct mode is wired but dormant
+  (`RemoteComm.enableDirect(secret)`); the lease/handoff policy that flips it comes with the
+  phone-side coordination. The BLE session needs hardware; the pure `StatusFeed` mapping is unit-tested.
 - `source/ble/GateAController` + `source/ui/GateAView` + `source/PumpX2GarminApp` — a Gate A
   bring-up harness (a second, non-default `AppBase`). To run it on hardware, temporarily set the
   manifest `entry` to `PumpX2GarminApp`.
@@ -51,10 +58,10 @@ Next: on-hardware Gate A, then the Milestone 0 handoff-resume probe (see the pla
 ### Build & test
 
 ```
-# release build
+# release build (entry ControlX2App)
 monkeyc -f monkey.jungle -o bin/PumpX2Garmin.prg -y developer_key.der -d venu3s -w
-# unit tests (simulator must be running: `connectiq`)
-monkeyc -f monkey.jungle -o bin/PumpX2Garmin-test.prg -y developer_key.der -d venu3s --unit-test -w
+# unit tests (separate config with a minimal entry; simulator must be running: `connectiq`)
+monkeyc -f test.jungle -o bin/PumpX2Garmin-test.prg -y developer_key.der -d venu3s --unit-test -w
 monkeydo bin/PumpX2Garmin-test.prg venu3s -t
 ```
 

@@ -1,0 +1,5 @@
+# Unit-test build config: minimal TestEntryApp entry + engine + app + tests.
+#   monkeyc -f test.jungle -o bin/PumpX2Garmin-test.prg -y developer_key.der -d venu3s --unit-test -w
+#   monkeydo bin/PumpX2Garmin-test.prg venu3s -t
+project.manifest = manifest-test.xml
+base.sourcePath = source;tests

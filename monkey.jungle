@@ -1,8 +1,6 @@
-# Connect IQ build config for PumpX2Garmin (standalone direct-to-pump venu3s app).
+# Connect IQ build config for the PumpX2Garmin app (release; entry ControlX2App).
 # Build:  monkeyc -f monkey.jungle -o bin/PumpX2Garmin.prg -y developer_key.der -d venu3s -w
-# Test:   monkeyc -f monkey.jungle -o bin/PumpX2Garmin-test.prg -y developer_key.der -d venu3s --unit-test -w
-#         monkeydo bin/PumpX2Garmin-test.prg venu3s -t
+# Unit tests use a separate config (test.jungle) with a minimal entry so the test harness
+# isn't blocked by the app's background/timer lifecycle.
 project.manifest = manifest.xml
-# Test sources are included in the sourcePath; their (:test) functions are only compiled into
-# --unit-test builds and stripped from release builds.
-base.sourcePath = source;tests
+base.sourcePath = source
