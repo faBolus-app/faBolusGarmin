@@ -69,7 +69,7 @@ class PumpBleClient extends Btle.BleDelegate {
             Btle.registerProfile({ :uuid => _serviceUuid, :characteristics => chars });
             _state("registering profile");
         } catch (e) {
-            _error("registerProfile failed: " + e.getErrorMessage());
+            _error("registerProfile: " + exText(e));
         }
     }
 
@@ -122,37 +122,51 @@ class PumpBleClient extends Btle.BleDelegate {
     }
 
     function onConnectedStateChanged(device as Btle.Device, state as Btle.ConnectionState) as Void {
-        if (state == Btle.CONNECTION_STATE_CONNECTED) {
-            _device = device;
-            _state("connected; bonding");
-            try {
-                device.requestBond();
-            } catch (e) {
-                _error("requestBond failed: " + e.getErrorMessage());
+        try {
+            if (state == Btle.CONNECTION_STATE_CONNECTED) {
+                _device = device;
+                _state("connected; bonding");
+                try {
+                    device.requestBond();
+                } catch (e) {
+                    // Some stacks bond automatically on connect / disallow an explicit request;
+                    // don't treat that as fatal — wait for onEncryptionStatus, else subscribe.
+                    _state("connected (bond auto?)");
+                }
+            } else {
+                _ready = false;
+                _state("disconnected " + state.format("%d"));
             }
-        } else {
-            _ready = false;
-            _state("disconnected");
+        } catch (ex) {
+            _error("onConnected: " + exText(ex));
         }
     }
 
     function onEncryptionStatus(device as Btle.Device, status as Btle.Status) as Void {
-        if (status != Btle.STATUS_SUCCESS) {
-            _error("encryption/bond status " + status.format("%d"));
-            return;
+        try {
+            if (status != Btle.STATUS_SUCCESS) {
+                _error("encryption/bond status " + status.format("%d"));
+                return;
+            }
+            _device = device;
+            _state("bonded; subscribing");
+            startSubscribing();
+        } catch (ex) {
+            _error("onEncryption: " + exText(ex));
         }
-        _device = device;
-        _state("bonded; subscribing");
-        startSubscribing();
     }
 
     function onCharacteristicChanged(characteristic as Btle.Characteristic, value as Lang.ByteArray) as Void {
-        var ce = charEnumOf(characteristic);
-        if (ce == null) { return; }
-        var ra = _reassemblers[ce];
-        var frame = ra.ingest(value);
-        if (frame != null && onFrame != null) {
-            onFrame.invoke(ce, frame);
+        try {
+            var ce = charEnumOf(characteristic);
+            if (ce == null) { return; }
+            var ra = _reassemblers[ce];
+            var frame = ra.ingest(value);
+            if (frame != null && onFrame != null) {
+                onFrame.invoke(ce, frame);
+            }
+        } catch (ex) {
+            _error("onCharChanged: " + exText(ex));
         }
     }
 
@@ -281,6 +295,12 @@ class PumpBleClient extends Btle.BleDelegate {
     private function _error(text as Lang.String) as Void {
         System.println("[ble][error] " + text);
         if (onErrorCb != null) { onErrorCb.invoke(text); }
+    }
+
+    // Non-null exception message for on-screen display (getErrorMessage() can be null).
+    private function exText(ex) as Lang.String {
+        var m = ex.getErrorMessage();
+        return (m == null) ? "exception" : m;
     }
 }
 
