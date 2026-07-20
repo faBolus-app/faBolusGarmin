@@ -10,6 +10,10 @@ A **Garmin (Connect IQ / Monkey C) remote** for bolusing and status viewing. It 
   companion app (e.g. a future Loop integration). Nothing in the default phone-relay path is
   Tandem-specific.
 
+**Supported watches:** currently the **Garmin Venu 3S**. The layout code is device-relative, so
+adding another Garmin watch is mostly manifest + input + icon work — a welcome contribution; see
+[CONTRIBUTING.md](CONTRIBUTING.md#add-support-for-another-garmin-watch).
+
 > **Experimental — in development.** Not FDA-cleared; if you build or use it you assume all
 > responsibility. Not affiliated with, endorsed by, or a product of Tandem Diabetes Care, Dexcom,
 > or Garmin.
@@ -33,6 +37,12 @@ Monkey C reimplementation of the pump protocol / auth / BLE, **byte-exact vs the
 oracle** (31/31 unit tests). This path **is** Tandem-specific and is **paused / compile-verified
 only**, pending on-hardware validation. It lives under `direct-pump/`, wired but dormant behind the
 same `RemoteComm` seam; the default host-agnostic phone-relay path does not use it.
+
+## Known limitations (being worked on)
+- **BG complication reads 0.** The published BG complication does not yet update with the live CGM
+  value — it currently shows `0` instead of the reading. Fix in progress.
+- **Alert clear doesn't reach the pump.** Clearing an alert currently removes it from the phone and
+  watch UI **but does not clear it on the pump itself**. Fix in progress.
 
 ## Build & test
 ```
