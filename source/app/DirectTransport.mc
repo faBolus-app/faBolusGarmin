@@ -1,6 +1,7 @@
 using Toybox.Lang;
 using Toybox.Math;
 using Toybox.System;
+using Toybox.Timer;
 
 // Direct-to-pump transport: the same command dicts the phone-relay uses (statusRead / bolusRequest
 // / cancelBolus / dismissAlert), serviced locally over BLE via the PumpX2 engine instead of relayed
@@ -13,8 +14,8 @@ using Toybox.System;
 // NOTE: the BLE session (bond/subscribe/notify) can only be validated on venu3s hardware; this is
 // compile-verified. The pure dict-building lives in StatusFeed (unit-tested).
 class DirectTransport {
-    // Bolus micro-state so we can chain time -> permission -> initiate off async responses.
-    enum { B_NONE, B_TIME, B_PERMISSION, B_INITIATE }
+    // Bolus micro-state so we can chain time -> permission -> initiate -> poll off async responses.
+    enum { B_NONE, B_TIME, B_PERMISSION, B_INITIATE, B_POLL }
 
     private var _client as PumpX2.PumpBleClient;
     private var _resume as PumpX2.ResumeCoordinator or Null;
@@ -33,6 +34,14 @@ class DirectTransport {
     private var _bReqId as Lang.String or Null = null;
     private var _bUnits as Lang.Float = 0.0;
     private var _bId as Lang.Number = 0;
+
+    // bolus-completion polling
+    private var _pollTimer as Timer.Timer or Null = null;
+    private var _pollCount as Lang.Number = 0;
+    private var _sawActive as Lang.Boolean = false;
+
+    // pending signed alert-dismiss (sent after a fresh pump-time read)
+    private var _pendingDismiss as Lang.Dictionary or Null = null;
 
     function initialize() {
         _client = new PumpX2.PumpBleClient();
@@ -63,8 +72,9 @@ class DirectTransport {
             beginBolus(cmd);
         } else if (kind.equals("cancelBolus")) {
             cancelBolus();
+        } else if (kind.equals("dismissAlert")) {
+            dismissAlert(cmd);
         }
-        // dismissAlert: DismissNotificationRequest not yet ported — no-op for now (TODO).
     }
 
     // ---- BLE client callbacks ----
@@ -162,9 +172,17 @@ class DirectTransport {
             if (_bStage == B_TIME) {
                 _bStage = B_PERMISSION;
                 _client.send(new PumpX2.BolusPermissionRequest(), _authKey, _pumpTime, true);
+            } else if (_pendingDismiss != null) {
+                var d = _pendingDismiss;
+                _pendingDismiss = null;
+                var nid = d["alertId"] as Lang.Number;
+                var ntype = d["alertKind"] as Lang.Number;
+                _client.send(new PumpX2.DismissNotificationRequest(nid, ntype, false), _authKey, _pumpTime, true);
             } else {
                 markRead();
             }
+        } else if (op == 0x2D) {
+            onBolusStatus(msg as PumpX2.CurrentBolusStatusResponse);
         } else if (op == 0xA3) {
             onPermission(msg as PumpX2.BolusPermissionResponse);
         } else if (op == 0x9F) {
@@ -203,18 +221,80 @@ class DirectTransport {
 
     private function onInitiate(resp as PumpX2.InitiateBolusResponse) as Void {
         if (_bStage != B_INITIATE) { return; }
-        _bStage = B_NONE;
-        // TODO: poll CurrentBolusStatus to confirm true completion; for now report on the ack.
-        if (resp.accepted()) {
-            emitBolus(_bReqId, "delivered", null);
-        } else {
+        if (!resp.accepted()) {
+            _bStage = B_NONE;
             emitBolus(_bReqId, "failed", "not accepted");
+            return;
         }
+        // Accepted: report delivering, then poll CurrentBolusStatus until it's no longer active.
+        emitBolus(_bReqId, "delivering", null);
+        _bStage = B_POLL;
+        _pollCount = 0;
+        _sawActive = false;
+        startPoll();
+    }
+
+    // ---- bolus-completion polling ----
+
+    private function startPoll() as Void {
+        stopPollTimer();
+        _pollTimer = new Timer.Timer();
+        _pollTimer.start(method(:pollBolus), 1500, true);   // poll every 1.5s
+    }
+
+    // Timer callback: request the current bolus status (unsigned read).
+    function pollBolus() as Void {
+        if (_bStage != B_POLL) { stopPollTimer(); return; }
+        _pollCount += 1;
+        if (_pollCount > 40) {   // ~60s guard against a hung poll
+            var done = _sawActive;
+            stopPoll();
+            emitBolus(_bReqId, done ? "delivered" : "failed", done ? null : "status timeout");
+            return;
+        }
+        _client.send(new PumpX2.CurrentBolusStatusRequest(), []b, 0, false);
+    }
+
+    private function onBolusStatus(resp as PumpX2.CurrentBolusStatusResponse) as Void {
+        if (_bStage != B_POLL) { return; }
+        if (resp.bolusId == _bId && resp.isActive()) {
+            _sawActive = true;   // still delivering; wait for the next tick
+            return;
+        }
+        // No longer active. Treat as complete once we've seen it deliver (or after a couple polls,
+        // to cover a bolus that finished before the first poll landed).
+        if (_sawActive || _pollCount >= 3) {
+            stopPoll();
+            emitBolus(_bReqId, "delivered", null);
+        }
+    }
+
+    private function stopPoll() as Void {
+        stopPollTimer();
+        _bStage = B_NONE;
+    }
+
+    private function stopPollTimer() as Void {
+        if (_pollTimer != null) { _pollTimer.stop(); _pollTimer = null; }
     }
 
     private function cancelBolus() as Void {
         if (!_authed) { return; }
+        // Uses the most recent pump time (read seconds earlier for this bolus); cancel is
+        // time-sensitive so we don't re-read first.
         _client.send(new PumpX2.CancelBolusRequest(_bId), _authKey, _pumpTime, true);
+        stopPoll();
+        emitBolus(_bReqId, "failed", "canceled");
+    }
+
+    // ---- alerts ----
+
+    // Signed dismiss of a pump alert. Reads a fresh pump time first (the HMAC covers it), then
+    // sends DismissNotificationRequest from the routeResponse(TimeSinceReset) handler.
+    private function dismissAlert(cmd as Lang.Dictionary) as Void {
+        if (!_authed) { return; }
+        _pendingDismiss = cmd;
+        _client.send(new PumpX2.TimeSinceResetRequest(), []b, 0, false);
     }
 
     private function emitBolus(reqId as Lang.String or Null, status as Lang.String, message as Lang.String or Null) as Void {

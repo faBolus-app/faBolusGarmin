@@ -57,6 +57,8 @@ pkts_signed() {
   echo "CancelBolusRequest|3|$(pkts_signed 3 CancelBolusRequest '[10650]')"
   echo "BolusPermissionReleaseRequest|4|$(pkts_signed 4 BolusPermissionReleaseRequest '[10650]')"
   echo "InitiateBolusRequest|9|$(pkts_signed 9 InitiateBolusRequest '[1000, 42, 1, 0, 0, 0, 0, 0]')"
+  # DismissNotificationRequest via the raw-cargo (byte[]) ctor: notificationId 10, ALERT(1), action 0.
+  echo "DismissNotificationRequest|5|$(pkts_signed 5 DismissNotificationRequest '["0a0000000100"]')"
 
   # --- Response frames (pump -> app), for ResponseParser tests. Encoded with known field values;
   # positional params match each response's Java constructor. Signed responses use the env above.

@@ -155,6 +155,16 @@ module ParityTest {
         return true;
     }
 
+    // Signed dismiss of an alert (notificationId 10, ALERT type 1, no extra action).
+    (:test)
+    function dismissNotificationRequestMatchesOracle(logger as Test.Logger) as Lang.Boolean {
+        var msg = new DismissNotificationRequest(10, 1, false);
+        Test.assertEqualMessage(signedHex(msg, 5),
+            "0005b8051e0a0000000100bc4a831b4785875052f8dccd01aecb2795d753a10ab76099d245",
+            "DismissNotificationRequest");
+        return true;
+    }
+
     // ---- packet reassembly round-trip ----
 
     (:test)
