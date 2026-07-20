@@ -39,6 +39,10 @@ class PumpBleClient extends Btle.BleDelegate {
     private var _pendingSubscribes as Lang.Number = 0;
     private var _ready as Lang.Boolean = false;
 
+    // Scan diagnostics (surfaced to the debug screen so we can see what the watch sees).
+    private var _scanCount as Lang.Number = 0;
+    private var _scanNames as Lang.String = "";
+
     function initialize() {
         BleDelegate.initialize();
         _subChars = [Ble.CHAR_CURRENT_STATUS, Ble.CHAR_AUTHORIZATION, Ble.CHAR_CONTROL, Ble.CHAR_CONTROL_STREAM, Ble.CHAR_HISTORY_LOG];
@@ -84,9 +88,14 @@ class PumpBleClient extends Btle.BleDelegate {
         var r = scanResults.next();
         while (r != null) {
             var sr = r as Btle.ScanResult;
+            _scanCount += 1;
+            var nm = sr.getDeviceName();
+            if (nm != null && nm.length() > 0 && _scanNames.find(nm) == null) {
+                _scanNames = (_scanNames.length() == 0) ? nm : (_scanNames + "," + nm);
+            }
             if (matchesPump(sr)) {
                 Btle.setScanState(Btle.SCAN_STATE_OFF);
-                _state("pairing");
+                _state("pairing " + (nm != null ? nm : "pump"));
                 try {
                     _device = Btle.pairDevice(sr);
                 } catch (e) {
@@ -96,9 +105,20 @@ class PumpBleClient extends Btle.BleDelegate {
             }
             r = scanResults.next();
         }
+        // No pump match yet — surface what we've seen so it's diagnosable from the watch.
+        var msg = "scan " + _scanCount.format("%d");
+        if (_scanNames.length() > 0) {
+            msg = msg + ": " + _scanNames;
+        } else {
+            msg = msg + " (no name/FDFB)";
+        }
+        _state(msg);
     }
 
     function onScanStateChange(scanState as Btle.ScanState, status as Btle.Status) as Void {
+        if (scanState == Btle.SCAN_STATE_SCANNING) {
+            _state("scanning (active)");
+        }
     }
 
     function onConnectedStateChanged(device as Btle.Device, state as Btle.ConnectionState) as Void {
@@ -232,12 +252,23 @@ class PumpBleClient extends Btle.BleDelegate {
     }
 
     private function matchesPump(scanResult as Btle.ScanResult) as Lang.Boolean {
+        // 1) An advertised service UUID containing the pump service (FDFB) or the Mobi TDU
+        //    service (FDFA). Substring match tolerates 16-bit vs full-128-bit representations.
         var uuids = scanResult.getServiceUuids();
         var u = uuids.next();
-        var want = _serviceUuid.toString();
         while (u != null) {
-            if (u.toString().equals(want)) { return true; }
+            var s = u.toString().toLower();
+            if (s.find("fdfb") != null || s.find("fdfa") != null) { return true; }
             u = uuids.next();
+        }
+        // 2) Fall back to the advertised device name (Tandem / t:slim / Mobi).
+        var nm = scanResult.getDeviceName();
+        if (nm != null) {
+            var n = nm.toLower();
+            if (n.find("tandem") != null || n.find("tslim") != null
+                || n.find("t:slim") != null || n.find("mobi") != null) {
+                return true;
+            }
         }
         return false;
     }
