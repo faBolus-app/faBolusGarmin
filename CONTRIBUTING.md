@@ -3,7 +3,7 @@
 faBolusGarmin is a **host- and pump-agnostic Garmin remote**. It speaks the JSON contract in
 [`faBolus`](https://github.com/faBolus-app/faBolus)'s `schema/command.schema.json`; any host that
 implements that contract can drive it. Contributions are welcome by **PR, not fork**. All work is
-**bench/experimental only** (saline into a container on a scale, never on a body).
+for **experimental use only** (in development, not FDA-cleared).
 
 ## Keep it host-agnostic
 - The watch is a thin remote. Everything it sends/receives is the shared contract
@@ -30,4 +30,4 @@ here in Monkey C (`RemoteCommand.mc`). If you change the contract:
   `monkeyc -f monkey.jungle -o bin/faBolusGarmin.prg -y developer_key.der -d venu3s -w`.
 - Run the unit tests in the CIQ simulator (README → "Build & test"); the oracle golden vectors must
   pass.
-- Note anything only compiled vs. bench-tested on hardware.
+- Note anything only compiled vs. tested on hardware.
