@@ -38,19 +38,29 @@ module AppState {
         if (so instanceof Lang.Array) { screenOrder = sanitizeOrder(so); }
         var ds = Storage.getValue("defaultScreen");
         if (ds instanceof Lang.String && contains(screenOrder, ds)) { defaultScreen = ds; }
+        ensureValidDefault();
     }
 
-    // Keep only known ids, then append any missing ones so every screen stays reachable.
+    // Keep only known ids (de-duped), preserving the phone-chosen subset + order. Screens the user
+    // hid are intentionally omitted. Falls back to all screens only if the result would be empty,
+    // so the watch is never left with nothing to show.
     function sanitizeOrder(list as Lang.Array) as Lang.Array {
         var out = [];
         for (var i = 0; i < list.size(); i += 1) {
             var v = list[i];
             if (v instanceof Lang.String && contains(ALL_SCREENS, v) && !contains(out, v)) { out.add(v); }
         }
-        for (var i = 0; i < ALL_SCREENS.size(); i += 1) {
-            if (!contains(out, ALL_SCREENS[i])) { out.add(ALL_SCREENS[i]); }
+        if (out.size() == 0) {
+            for (var i = 0; i < ALL_SCREENS.size(); i += 1) { out.add(ALL_SCREENS[i]); }
         }
         return out;
+    }
+
+    // Ensures the default screen is one that's actually shown; otherwise falls back to the first.
+    function ensureValidDefault() as Void {
+        if (!contains(screenOrder, defaultScreen)) {
+            defaultScreen = (screenOrder.size() > 0) ? (screenOrder[0] as Lang.String) : "glance";
+        }
     }
 
     function contains(list as Lang.Array, v as Lang.String) as Lang.Boolean {
@@ -189,6 +199,7 @@ module AppState {
                 defaultScreen = ds;
                 Storage.setValue("defaultScreen", ds);
             }
+            ensureValidDefault();
         } else if (kind.equals("bolusStatus")) {
             var rid = data["requestId"] as Lang.String?;
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {
