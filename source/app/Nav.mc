@@ -10,7 +10,7 @@ module Nav {
     // [View, Delegate] for a screen id. Falls back to the glance for an unknown id.
     function viewFor(id as Lang.String) as Lang.Array {
         if (id.equals("alerts"))  { return [new AlertsListView(), new AlertsListDelegate()]; }
-        if (id.equals("history")) { return [new DexcomView(), new DexcomDelegate()]; }
+        if (id.equals("history")) { return [new CgmView(), new CgmDelegate()]; }
         if (id.equals("details")) { return [new DetailsView(), new DetailsDelegate()]; }
         return [new MainView(), new MainDelegate()];
     }

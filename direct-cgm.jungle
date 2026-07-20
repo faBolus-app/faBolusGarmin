@@ -1,0 +1,5 @@
+# Build config for the direct-CGM (Dexcom G7) probe (standalone entry CgmProbeApp).
+# Includes only the direct-cgm engine + harness (see direct-cgm/DIRECT_CGM_STATUS.md).
+#   monkeyc -f direct-cgm.jungle -o bin/faBolusGarmin-cgm.prg -y developer_key.der -d venu3s -w
+project.manifest = manifest-directcgm.xml
+base.sourcePath = direct-cgm/engine;direct-cgm/harness

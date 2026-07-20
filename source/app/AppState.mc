@@ -81,13 +81,24 @@ module AppState {
         if (glucose == null || readingEpoch <= 0) { return true; }
         return (Time.now().value() - readingEpoch) > 360;
     }
+    // Show the number whenever we have one — a stale reading is shown but marked (grayed + age
+    // called out), never hidden. "--" only when there's no reading at all.
     function displayGlucose() as Lang.String {
-        return glucoseStale() ? "--" : glucose.toString();
+        return glucose == null ? "--" : glucose.toString();
     }
     // Minutes since the current reading (-1 if unknown).
     function ageMinutes() as Lang.Number {
         if (readingEpoch <= 0) { return -1; }
         return (Time.now().value() - readingEpoch) / 60;
+    }
+    // Relative age label ("now", "3 min ago", "1h 4m ago"), or "" when unknown.
+    function ageLabel() as Lang.String {
+        var m = ageMinutes();
+        if (m < 0) { return ""; }
+        if (m == 0) { return "now"; }
+        if (m < 60) { return m.toString() + " min ago"; }
+        var h = m / 60; var mm = m % 60;
+        return mm == 0 ? h.toString() + "h ago" : h.toString() + "h " + mm.toString() + "m ago";
     }
 
     // Bolus entry

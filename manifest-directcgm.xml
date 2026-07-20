@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Manifest for the direct-CGM (Dexcom G7) probe build only (direct-cgm.jungle). Standalone entry
+     (CgmProbeApp) that passively reads a G7 over BLE. Compile-verified only; not shipped.
+     See direct-cgm/DIRECT_CGM_STATUS.md. -->
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application entry="CgmProbeApp"
+                    id="7c1e9a4d2f60438b9d5e6f7a8b901234"
+                    launcherIcon="@Drawables.LauncherIcon"
+                    name="@Strings.AppName"
+                    type="watch-app"
+                    minSdkVersion="5.0.0">
+        <iq:products>
+            <iq:product id="venu3s"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="BluetoothLowEnergy"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+    </iq:application>
+</iq:manifest>

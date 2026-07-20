@@ -3,7 +3,7 @@ using Toybox.Lang;
 
 // History-screen input: tap cycles the window (3 → 6 → 12 h); swipe between screens in the
 // user-configured order.
-class DexcomDelegate extends Ui.BehaviorDelegate {
+class CgmDelegate extends Ui.BehaviorDelegate {
     function initialize() { BehaviorDelegate.initialize(); }
     private function cycle() as Lang.Boolean { AppState.cyclePlotHours(); Ui.requestUpdate(); return true; }
     function onTap(evt as Ui.ClickEvent) as Lang.Boolean { return cycle(); }

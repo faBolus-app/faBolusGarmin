@@ -2,10 +2,11 @@ using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
 
-// Dexcom-style history screen (swipe up from the glance): "Nm ago", the current reading + trend,
+// CGM history screen (swipe up from the glance): "Nm ago", the current reading + trend,
 // and a 3-hour glucose plot with 100/200/300/400 gridlines. Data comes from the phone
-// (AppState.history, ~5-min spacing). A reading older than 6 min shows as "--".
-class DexcomView extends Ui.View {
+// (AppState.history, ~5-min spacing). A stale reading is shown grayed with its age called out.
+// CGM-agnostic: works with whatever sensor the phone is sourcing.
+class CgmView extends Ui.View {
     function initialize() { View.initialize(); }
 
     private const VMIN = 40.0;
@@ -21,7 +22,7 @@ class DexcomView extends Ui.View {
         // "N M AGO"
         var age = AppState.ageMinutes();
         var ageStr = (age < 0) ? "--" : (age == 0 ? "NOW" : (age.toString() + "M AGO"));
-        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.setColor(stale ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.11, Gfx.FONT_XTINY, ageStr, vc);
 
         // Current reading + trend arrow.
@@ -52,7 +53,7 @@ class DexcomView extends Ui.View {
             dc.drawText(plotR + w * 0.02, y, Gfx.FONT_XTINY, v.toString(), Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER);
         }
 
-        // Data dots (Dexcom-style), oldest → newest across the width. Window to the selected
+        // Data dots (CGM-style), oldest → newest across the width. Window to the selected
         // hours (~12 points/hour at 5-min spacing); newest points are at the end of the array.
         var full = AppState.history;
         var total = full.size();

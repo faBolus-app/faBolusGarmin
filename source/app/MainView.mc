@@ -23,16 +23,24 @@ class MainView extends Ui.View {
         // Glucose (large, range-colored), vertically centered so the glyph baseline can't
         // collide with the unit label below it.
         var stale = AppState.glucoseStale();
-        var g = AppState.displayGlucose();   // "--" when missing or older than 6 min
-        dc.setColor(stale ? Gfx.COLOR_LT_GRAY : AppState.glucoseColor(), Gfx.COLOR_TRANSPARENT);
+        var g = AppState.displayGlucose();   // "--" only when there's no reading at all
+        var gColor = stale ? Gfx.COLOR_LT_GRAY : AppState.glucoseColor();
+        dc.setColor(gColor, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.36, Gfx.FONT_NUMBER_HOT, g, vc);
-        // Trend arrow (drawn shape, from the phone's direction token) just right of the number.
-        if (!stale && !AppState.trend.equals("")) {
+        // Trend arrow (drawn shape, from the phone's direction token) just right of the number;
+        // grayed when the reading is stale.
+        if (!AppState.trend.equals("")) {
             var gw = dc.getTextWidthInPixels(g, Gfx.FONT_NUMBER_HOT);
-            TrendArrow.draw(dc, cx + gw / 2 + 24, h * 0.36, 13, AppState.trend, AppState.glucoseColor());
+            TrendArrow.draw(dc, cx + gw / 2 + 24, h * 0.36, 13, AppState.trend, gColor);
         }
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.55, Gfx.FONT_XTINY, "mg/dL", vc);
+        // Reading age — always shown; called out in orange when stale.
+        var age = AppState.ageLabel();
+        if (!age.equals("")) {
+            dc.setColor(stale ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.63, Gfx.FONT_XTINY, age, vc);
+        }
 
         // Bolus button (bottom), label vertically centered.
         var bw = w * 0.52, bh = h * 0.17;
