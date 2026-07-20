@@ -2,6 +2,6 @@
 # Build:  monkeyc -f monkey.jungle -o bin/faBolus.iq -y <dev_key.der> -e -r -w
 #
 # The paused direct-to-pump work lives under direct-pump/ and is NOT part of this build
-# (see DIRECT_PUMP_STATUS.md). Its engine is exercised by test.jungle and probe.jungle.
+# (see direct-pump/DIRECT_PUMP_STATUS.md). Its engine is exercised by test.jungle and probe.jungle.
 project.manifest = manifest.xml
 base.sourcePath = source/app
