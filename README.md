@@ -70,7 +70,7 @@ Golden oracle vectors live in `tests/golden_vectors.txt`; regenerate with `tools
 (needs a JDK 14+ and the prebuilt `cliparser.jar`).
 
 ## Related
-- [`PumpX2Kit`](https://github.com/zgranowitz/PumpX2Kit) — the Swift protocol/auth/BLE core
+- [`PumpX2Kit`](https://github.com/faBolus-app/PumpX2Kit) — the Swift protocol/auth/BLE core
   (byte-exact vs the oracle); the primary reference to port from.
-- [`faBolus`](https://github.com/zgranowitz/faBolus) — iOS host + the **phone-relay**
+- [`faBolus`](https://github.com/faBolus-app/faBolus) — iOS host + the **phone-relay**
   Garmin remote; reuse its UI patterns (this project replaces the transport, not the UX).

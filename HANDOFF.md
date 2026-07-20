@@ -82,7 +82,7 @@ Then (only after that): a UI modeled on the already-built phone-relay Garmin app
 All paths are siblings under a common parent directory (clone the GitHub repos side by side if on
 a fresh machine):
 
-- **`PumpX2Kit/`** (github.com/zgranowitz/PumpX2Kit) — **your primary reference.** A
+- **`PumpX2Kit/`** (github.com/faBolus-app/PumpX2Kit) — **your primary reference.** A
   Swift port of the whole protocol/auth/BLE, validated **byte-exact** against the oracle. Port
   its logic to Monkey C. Key files:
   - `Sources/PumpX2Messages/Core/Packetize.swift` — framing + signing (the spine).
@@ -99,7 +99,7 @@ a fresh machine):
 - **`references/controlX2/`** (github.com/jwoglom/controlX2) — Android/**Wear OS** reference. The
   `wear/` module is the closest existing "watch" client; mine it for the connection lifecycle,
   the notification/bolus flows, and `NotificationBundle`.
-- **`faBolus/garmin/`** (github.com/zgranowitz/faBolus) — the **phone-relay** Garmin
+- **`faBolus/garmin/`** (github.com/faBolus-app/faBolus) — the **phone-relay** Garmin
   app already built for the venu3s. Reuse its **UI patterns and hard-won venu3s constraints**
   (see §5), the Loop-style screens, the 1-2-3 confirm, the Dexcom-style history plot, the
   complication. This new app replaces its *transport* (direct BLE instead of phone messages),
