@@ -12,7 +12,17 @@ module Nav {
         if (id.equals("alerts"))  { return [new AlertsListView(), new AlertsListDelegate()]; }
         if (id.equals("history")) { return [new DexcomView(), new DexcomDelegate()]; }
         if (id.equals("details")) { return [new DetailsView(), new DetailsDelegate()]; }
+        if (id.equals("direct"))  { return [new DirectDebugView(), new DirectDebugDelegate()]; }
         return [new MainView(), new MainDelegate()];
+    }
+
+    // The swipe order plus a trailing "direct" debug screen (bench handoff test). Reachable by
+    // swiping up past the last configured screen; not part of the phone-configured order.
+    function effectiveOrder() as Lang.Array {
+        var order = [];
+        order.addAll(AppState.screenOrder);
+        order.add("direct");
+        return order;
     }
 
     // The first screen shown at launch.
@@ -21,7 +31,7 @@ module Nav {
     }
 
     function indexOf(id as Lang.String) as Lang.Number {
-        var order = AppState.screenOrder;
+        var order = effectiveOrder();
         for (var i = 0; i < order.size(); i += 1) {
             if ((order[i] as Lang.String).equals(id)) { return i; }
         }
@@ -30,8 +40,8 @@ module Nav {
 
     // Swipe up → next screen in the order (clamped at the last screen).
     function goNext(currentId as Lang.String) as Lang.Boolean {
+        var order = effectiveOrder();
         var i = indexOf(currentId);
-        var order = AppState.screenOrder;
         if (i < 0 || i + 1 >= order.size()) { return true; }   // at the end: swallow, no move
         var vd = viewFor(order[i + 1] as Lang.String);
         Ui.switchToView(vd[0], vd[1], Ui.SLIDE_UP);
@@ -40,9 +50,10 @@ module Nav {
 
     // Swipe down → previous screen in the order (clamped at the first screen).
     function goPrev(currentId as Lang.String) as Lang.Boolean {
+        var order = effectiveOrder();
         var i = indexOf(currentId);
         if (i <= 0) { return true; }                            // at the start: swallow, no move
-        var vd = viewFor(AppState.screenOrder[i - 1] as Lang.String);
+        var vd = viewFor(order[i - 1] as Lang.String);
         Ui.switchToView(vd[0], vd[1], Ui.SLIDE_DOWN);
         return true;
     }

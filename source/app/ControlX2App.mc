@@ -69,6 +69,15 @@ class ControlX2App extends App.AppBase {
 
     // Applies an inbound reply dict from either transport (phone-relay or direct-to-pump).
     function handleInbound(data as Lang.Dictionary) as Void {
+        var kind = data["kind"];
+        if (kind instanceof Lang.String && (kind as Lang.String).equals("keyShare")) {
+            // Phone shared the pump's derived secret so the watch can connect directly (bench).
+            var hex = data["pumpKeyHex"];
+            if (hex instanceof Lang.String) {
+                App.Storage.setValue(RemoteComm.KEY_SECRET, hex);
+            }
+            return;
+        }
         AppState.handle(data);
         BgComplication.publishFromState();
         notifyNewAlerts();

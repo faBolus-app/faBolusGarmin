@@ -1,6 +1,7 @@
 using Toybox.Communications as Comm;
 using Toybox.Lang;
 using Toybox.System;
+using Toybox.Application.Storage;
 
 // Command builder + transport ROUTER. Same call surface the UI already uses (builders + send),
 // but send() now routes to one of two transports:
@@ -18,6 +19,9 @@ module RemoteComm {
     var _direct as DirectTransport or Null = null;
     // Set by the app; receives inbound reply dicts from whichever transport is active.
     var onInbound as Lang.Method or Null = null;
+
+    // Storage key for the pump derived secret shared from the phone (keyShare message).
+    const KEY_SECRET = "pumpKeyHex";
 
     // Builds a units-only bolus request dictionary matching the schema.
     function bolusRequest(units as Lang.Float, requestId as Lang.String) as Lang.Dictionary {
@@ -84,6 +88,31 @@ module RemoteComm {
     // Revert to phone-relay mode (e.g. when the phone comes back in range).
     function usePhone() as Void {
         mode = MODE_PHONE;
+    }
+
+    // True when a pump derived secret has been shared from the phone and stored.
+    function hasStoredKey() as Lang.Boolean {
+        return Storage.getValue(KEY_SECRET) instanceof Lang.String;
+    }
+
+    // Enable direct mode using the stored (bridged) secret. Returns false if none is stored.
+    function enableDirectFromStorage() as Lang.Boolean {
+        var hex = Storage.getValue(KEY_SECRET);
+        if (!(hex instanceof Lang.String)) { return false; }
+        enableDirect(PumpX2.Hex.decode(hex as Lang.String));
+        return true;
+    }
+
+    // Live status of the direct session (for the debug screen).
+    function directStatus() as Lang.String {
+        return _direct != null ? _direct.status : "no session";
+    }
+    function directDetail() as Lang.String {
+        return _direct != null ? _direct.detail : "";
+    }
+    // Register a callback fired when the direct session's status changes.
+    function setDirectStatusListener(cb as Lang.Method or Null) as Void {
+        if (_direct != null) { _direct.onStatus = cb; }
     }
 
     var _counter = 0;

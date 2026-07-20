@@ -10,43 +10,45 @@ achievable model is "one host at a time, switching requires a full re-pair."
 > container on a scale — never on a body.** The derived secret is long-term pairing material;
 > treat it like a credential and delete the copy afterward.
 
-The probe app (`probe/`, built via `probe.jungle`) subsumes **Gate A**: its lifecycle line goes
-`registering profile → scanning → pairing → connected → bonding → bonded → subscribing → ready`,
-which *is* the Gate A bond+subscribe+notify test, before it attempts resume.
+The **Direct (debug)** screen (last in the watch app's swipe rotation) subsumes **Gate A**: its
+status line goes `registering profile → scanning → pairing → connected → bonding → bonded →
+subscribing → ready → resuming (rounds 3-4)`, which *is* the Gate A bond+subscribe+notify test,
+before it attempts resume.
 
 ---
 
-## Prerequisites
-- venu3s in developer mode (sideload enabled), Connect IQ SDK 9.2.0, and `developer_key.der` in the
-  repo root (already present on the build machine).
+## Preferred flow — through the shipped app (no sideloading)
+
+Use this when you can push a normal Connect IQ update to the watch but can't sideload from a Mac.
+The direct-to-pump path is built into the real ControlX2 app; the secret is shared from the phone
+over the Connect IQ bridge.
+
+### Prerequisites
 - The bench pump (Mobi / t:slim X2 v7.7+, 6-digit JPAKE), **not currently bonded to any other
   device**.
-- iPhone with the ControlX2 app (this build includes the debug "Copy pairing secret" affordance).
+- The updated **ControlX2 Garmin app** on the venu3s (built from `monkey.jungle`, includes the
+  Direct debug screen) and the updated **iPhone app** (includes "Send pump key to Garmin").
 
-## Steps
+### Steps
+1. **Pair the pump from the iPhone** (ControlX2 → Connect → 6-digit code); confirm it reads status.
+2. **Share the key to the watch**: ControlX2 → **Settings → Pump → "Send pump key to Garmin
+   (debug)"**. (Requires the Garmin remote to have been set up once via "Set up Garmin remote".)
+   The watch stores the derived secret.
+3. **Free the single bond**: in ControlX2 Disconnect, then **iOS Settings → Bluetooth → forget the
+   pump**. If the Mobi needs pairing-mode entry (charging pad) to accept a new central, note that —
+   it's part of the result.
+4. **On the watch**, open the ControlX2 app and **swipe up past the last screen to "Direct
+   (debug)"**, then **tap** it. Watch the status line.
 
-**1. Pair the pump from the iPhone (produces the derived secret).**
-In ControlX2: Connect → enter the pump's 6-digit code → confirm it connects and shows a reading.
+---
 
-**2. Copy the derived secret off the phone.**
-ControlX2 → **Settings → Pump → "Copy pairing secret (debug)"**. AirDrop/paste the hex (64 hex
-chars) to your Mac.
+## Alternative flow — standalone probe (if you can sideload)
 
-**3. Build + sideload the probe with that secret.**
-Paste the hex into `probe/ProbeController.mc` → `const DERIVED_SECRET_HEX = "…";`, then:
-```
-monkeyc -f probe.jungle -o bin/PumpX2Garmin-probe.prg -y developer_key.der -d venu3s -w
-```
-Sideload `bin/PumpX2Garmin-probe.prg` to the venu3s (Connect IQ store beta / Garmin Express /
-copy to `GARMIN/APPS/`). Do **not** launch it yet.
-
-**4. Release the pump from the phone (free the single bond).**
-In ControlX2: Disconnect. Then **iOS Settings → Bluetooth → forget the pump** (drops the OS-level
-bond). If the Mobi needs to be put into pairing mode to accept a new central (e.g. on its charging
-pad), note that — **it's part of the result** (see below).
-
-**5. Run the probe on the watch and read the status line.**
-Launch the probe app on the venu3s and watch the top status text.
+The `probe/` app (built via `probe.jungle`) does the same thing with the secret pasted into a
+constant. Read the secret via ControlX2 → Settings → Pump → **"Copy pairing secret (debug)"**, paste
+into `probe/ProbeController.mc` (`DERIVED_SECRET_HEX`), build
+(`monkeyc -f probe.jungle -o bin/PumpX2Garmin-probe.prg -y developer_key.der -d venu3s -w`), sideload,
+free the phone bond (step 3 above), then launch the probe.
 
 ## Interpreting the result
 

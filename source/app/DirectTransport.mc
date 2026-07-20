@@ -24,6 +24,11 @@ class DirectTransport {
     private var _pumpTime as Lang.Long = 0l;
     private var _authed as Lang.Boolean = false;
 
+    // Live status for the debug screen (and, later, a handoff indicator).
+    public var status as Lang.String = "idle";
+    public var detail as Lang.String = "";
+    public var onStatus as Lang.Method or Null = null;
+
     // status-read aggregation
     private var _agg as Lang.Dictionary = {};
     private var _pendingReads as Lang.Number = 0;
@@ -80,6 +85,7 @@ class DirectTransport {
     // ---- BLE client callbacks ----
 
     function onReady() as Void {
+        setStatus("resuming (rounds 3-4)", "");
         _resume = new PumpX2.ResumeCoordinator(_derivedSecret, 0, null);
         _client.send(_resume.start(), []b, 0, false);
     }
@@ -100,10 +106,18 @@ class DirectTransport {
 
     function onState(text as Lang.String) as Void {
         System.println("[direct] " + text);
+        setStatus(text, detail);
     }
 
     function onError(text as Lang.String) as Void {
         System.println("[direct][error] " + text);
+        setStatus("ERROR", text);
+    }
+
+    private function setStatus(s as Lang.String, d as Lang.String) as Void {
+        status = s;
+        detail = d;
+        if (onStatus != null) { onStatus.invoke(); }
     }
 
     // ---- auth (resume) ----
@@ -117,10 +131,12 @@ class DirectTransport {
             } else if (_resume.step == PumpX2.ResumeCoordinator.STEP_PAIRED) {
                 _authKey = _resume.authKey;
                 _authed = true;
+                setStatus("direct connected", "");
                 if (_statusQueued) { readBatch(); }
             }
         } catch (e) {
             _authed = false; // resume failed
+            setStatus("RESUME FAILED", "handshake rejected");
         }
     }
 
@@ -141,6 +157,7 @@ class DirectTransport {
         if (_pendingReads > 0) { _pendingReads -= 1; }
         if (_pendingReads == 0 && _statusQueued) {
             _statusQueued = false;
+            setStatus("reading ok", "");
             RemoteComm.emitInbound(StatusFeed.build(_agg));
         }
     }
