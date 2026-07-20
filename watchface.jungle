@@ -1,0 +1,9 @@
+# Connect IQ build config for the faBolus WATCH FACE (a separate app from the remote).
+# Build:  monkeyc -f watchface.jungle -o bin/faBolusFace.iq -y <dev_key.der> -e -r -w
+#
+# The watch face is its own Connect IQ app (type=watch-face) with source in watchface/. It reuses
+# the shared strings/launcher-icon resources but NOT the complication resource (a face consumes
+# complications, it doesn't publish one). Watches only — Edge devices have no watch face.
+project.manifest = manifest-watchface.xml
+base.sourcePath = watchface
+base.resourcePath = resources

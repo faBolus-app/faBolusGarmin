@@ -4,9 +4,9 @@ using Toybox.System;
 using Toybox.Math;
 
 // Bolus entry input, portable across devices:
-//   • Touch  — onTap hit-tests the drawn controls (− / + / mode chip / Deliver).
-//   • Buttons — up/down move the focus cursor, START activates the focused control.
-// Both routes funnel through act(), so the behavior is identical however it was triggered.
+//   • Touch (venu3s): onTap hit-tests the drawn controls (− / + / mode chip / Deliver).
+//   • Buttons: UP / DOWN adjust the amount directly, MENU toggles Units/Carbs, START delivers —
+//     button-native, no on-screen focus cursor.
 class BolusEntryDelegate extends Ui.BehaviorDelegate {
     private var _view as BolusEntryView;
     function initialize(view as BolusEntryView) { BehaviorDelegate.initialize(); _view = view; }
@@ -24,30 +24,20 @@ class BolusEntryDelegate extends Ui.BehaviorDelegate {
         var c = evt.getCoordinates();
         var s = System.getDeviceSettings();
         var w = s.screenWidth, h = s.screenHeight;
-        if (nearCircle(c, BolusEntryView.minusCenter(w, h), BolusEntryView.stepRadius(w))) { return act(1); }
-        if (nearCircle(c, BolusEntryView.plusCenter(w, h), BolusEntryView.stepRadius(w))) { return act(2); }
-        if (inRect(c, BolusEntryView.chipRect(w, h))) { return act(0); }
-        if (inRect(c, BolusEntryView.deliverRect(w, h))) { return act(3); }
+        if (nearCircle(c, BolusEntryView.minusCenter(w, h), BolusEntryView.stepRadius(w))) { AppState.adjust(-1); Ui.requestUpdate(); return true; }
+        if (nearCircle(c, BolusEntryView.plusCenter(w, h), BolusEntryView.stepRadius(w))) { AppState.adjust(1); Ui.requestUpdate(); return true; }
+        if (inRect(c, BolusEntryView.chipRect(w, h))) { AppState.toggleMode(); Ui.requestUpdate(); return true; }
+        if (inRect(c, BolusEntryView.deliverRect(w, h))) { return deliver(); }
         return true;
     }
 
-    // Buttons: move the focus cursor and activate it. (This is a modal view, so up/down are free
-    // to move focus rather than change screens.)
-    function onNextPage() as Lang.Boolean {
-        _view.focus = (_view.focus + 1) % BolusEntryView.TARGET_COUNT;
-        Ui.requestUpdate(); return true;
-    }
-    function onPreviousPage() as Lang.Boolean {
-        _view.focus = (_view.focus + BolusEntryView.TARGET_COUNT - 1) % BolusEntryView.TARGET_COUNT;
-        Ui.requestUpdate(); return true;
-    }
-    function onSelect() as Lang.Boolean { return act(_view.focus); }
+    // Buttons: UP = increase, DOWN = decrease, MENU = switch mode, START = deliver.
+    function onPreviousPage() as Lang.Boolean { AppState.adjust(1); Ui.requestUpdate(); return true; }   // UP
+    function onNextPage() as Lang.Boolean { AppState.adjust(-1); Ui.requestUpdate(); return true; }       // DOWN
+    function onMenu() as Lang.Boolean { AppState.toggleMode(); Ui.requestUpdate(); return true; }
+    function onSelect() as Lang.Boolean { return deliver(); }
 
-    // 0 = mode chip, 1 = minus, 2 = plus, 3 = deliver.
-    private function act(target as Lang.Number) as Lang.Boolean {
-        if (target == 0) { AppState.toggleMode(); Ui.requestUpdate(); return true; }
-        if (target == 1) { AppState.adjust(-1); Ui.requestUpdate(); return true; }
-        if (target == 2) { AppState.adjust(1); Ui.requestUpdate(); return true; }
+    private function deliver() as Lang.Boolean {
         AppState.deliverUnits = AppState.computeUnits();
         if (AppState.deliverUnits < 0.05) { return true; }   // nothing to deliver
         var v = new HoldView();

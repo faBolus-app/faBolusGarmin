@@ -28,11 +28,20 @@ answers them. Safety interlocks are enforced on both sides — an explicit confi
 (1-2-3 / hold) *and* the host's own confirmation + max-bolus clamp. The watch confirm is a second
 factor, never the only one.
 
-- `source/app/` — the watch UI (glance / bolus / 1-2-3 confirm / history / alerts, complication,
-  `TrendArrow`, `AppState`, `Nav`). Entry: `FaBolusApp`.
+- `source/app/` — the UI (glance / bolus / confirm / history / alerts, complication, `TrendArrow`,
+  `AppState`, `Nav`). Entry: `FaBolusApp`.
+- `source/app/DeviceProfile.mc` — the device seam. Screens read it (`isTouch()`, `isButtons()`,
+  `hasComplications()`) and adapt at runtime:
+  - **Touch** devices: tap the controls; confirm by tapping **1 → 2 → 3**.
+  - **Button** devices: **UP/DOWN** adjust the dose, **MENU** switches Units/Carbs, **START**
+    delivers; confirm is a deliberate **two-button hold** (hold UP to arm, then hold START to
+    deliver). No on-screen cursor.
 - `source/app/RemoteComm` — a transport **router** behind one `send(cmd)` seam: **phone-relay**
   (default) or **direct-to-pump**. The same command dicts flow either way, so the UI is
   transport-agnostic.
+
+A **watch face** scaffold also lives here (`watchface/` + `manifest-watchface.xml` +
+`watchface.jungle`) — a separate Connect IQ app; see [CONTRIBUTING.md](CONTRIBUTING.md#add-a-watch-face-or-another-connect-iq-app-type).
 
 ### Experimental: direct-to-pump (Tandem)
 An optional engine lets the watch talk **directly** to a Tandem pump over BLE with no phone — a full

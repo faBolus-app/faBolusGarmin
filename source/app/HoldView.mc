@@ -2,16 +2,19 @@ using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
 
-// Confirm screen: tap the numbered targets 1 → 2 → 3 in order (sequentially, not held) to
-// deliver — like unlocking a t:slim. A wrong/out-of-order tap resets to 1. Uses plain onTap
-// coordinate hit-testing (reliable on the venu3s). Once sent, shows delivery status.
+// Confirm screen. Two deliberate-input models, chosen by device:
+//   • Touch (venu3s): tap the numbered targets 1 → 2 → 3 in order (a wrong tap resets).
+//   • Buttons: hold UP to ARM, then hold START to DELIVER — two DIFFERENT buttons, each held for
+//     ~1.5s (releasing early cancels). A bolus can't be triggered by repeated presses of one button.
+// Either way it takes sustained, deliberate action. Once sent, shows delivery status.
 class HoldView extends Ui.View {
-    private var _progress as Lang.Number = 0;   // correct taps so far (0..3)
+    private var _progress as Lang.Number = 0;      // touch: correct taps so far (0..3)
+    public var btnArmed as Lang.Boolean = false;   // buttons: UP-hold completed
+    public var btnProgress as Lang.Float = 0.0;    // buttons: current hold fill (0..1)
 
     function initialize() { View.initialize(); }
 
-    // Circle centers/radius (pixels), shared with the delegate. In order, left → right.
-    // Spread out and sized so the three circles don't overlap.
+    // Circle centers/radius (pixels) for the touch 1-2-3 targets, shared with the delegate.
     static function center(i, w, h) {
         var xs = [0.23, 0.50, 0.77];
         return [ (w * xs[i]).toNumber(), (h * 0.50).toNumber() ];
@@ -23,7 +26,7 @@ class HoldView extends Ui.View {
 
     function progress() as Lang.Number { return _progress; }
 
-    // Register a tap on button number `num` (1..3).
+    // Touch: register a tap on button number `num` (1..3).
     function tapped(num as Lang.Number) as Void {
         if (AppState.status != null) { return; }
         if (num == _progress + 1) {
@@ -33,6 +36,11 @@ class HoldView extends Ui.View {
             _progress = 0;   // out of order — start over
         }
         Ui.requestUpdate();
+    }
+
+    // Buttons: the delegate calls this once the START hold completes.
+    function confirmDeliver() as Void {
+        if (AppState.status == null) { deliver(); }
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {
@@ -52,18 +60,14 @@ class HoldView extends Ui.View {
                 dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
                 dc.drawText(cx, h * 0.44, Gfx.FONT_XTINY, AppState.message, Gfx.TEXT_JUSTIFY_CENTER);
             }
-            // While delivering, a red Cancel button (tap) instead of relying on the BACK button.
             if (s.equals("delivering") || s.equals("cancelling")) {
                 var cr = cancelRect(w, h);
                 dc.setColor(Gfx.COLOR_RED, Gfx.COLOR_TRANSPARENT);
                 dc.fillRoundedRectangle(cr[0], cr[1], cr[2], cr[3], 10);
                 dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-                dc.drawText(cx, cr[1] + cr[3] / 2, Gfx.FONT_SMALL, "Cancel",
+                dc.drawText(cx, cr[1] + cr[3] / 2, Gfx.FONT_SMALL,
+                            DeviceProfile.isButtons() ? "Cancel (START)" : "Cancel",
                             Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
-                if (DeviceProfile.isButtons()) {
-                    dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-                    dc.drawText(cx, h * 0.88, Gfx.FONT_XTINY, "START to cancel", Gfx.TEXT_JUSTIFY_CENTER);
-                }
             } else {
                 dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
                 dc.drawText(cx, h * 0.80, Gfx.FONT_XTINY, "BACK to exit", Gfx.TEXT_JUSTIFY_CENTER);
@@ -71,13 +75,24 @@ class HoldView extends Ui.View {
             return;
         }
 
-        var buttons = DeviceProfile.isButtons();
+        // Dose, top.
         dc.setColor(0x8AB4FF, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.14, Gfx.FONT_SMALL, AppState.deliverUnits.format("%.2f") + " U", vc);
-        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.28, Gfx.FONT_XTINY,
-                    buttons ? "Press START: 1 - 2 - 3" : "Tap 1 - 2 - 3 in order", vc);
 
+        if (DeviceProfile.isButtons()) {
+            drawButtonConfirm(dc, w, h, cx, vc);
+        } else {
+            drawTouchConfirm(dc, w, h, cx, vc);
+        }
+
+        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, "experimental", vc);
+    }
+
+    // Touch: the 1-2-3 circles.
+    private function drawTouchConfirm(dc, w, h, cx, vc) as Void {
+        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.28, Gfx.FONT_XTINY, "Tap 1 - 2 - 3 in order", vc);
         var r = radius(w);
         for (var i = 0; i < 3; i += 1) {
             var c = center(i, w, h);
@@ -87,18 +102,28 @@ class HoldView extends Ui.View {
             dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
             dc.drawText(c[0], c[1], Gfx.FONT_NUMBER_MEDIUM, (i + 1).toString(), vc);
         }
+    }
 
-        // Button-mode: highlight the next number to press (START activates it, in order).
-        if (buttons && _progress < 3) {
-            var fc = center(_progress, w, h);
-            dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
-            dc.setPenWidth(3);
-            dc.drawCircle(fc[0], fc[1], r + 2);
-            dc.setPenWidth(1);
+    // Buttons: two-step hold. Step 1 = hold UP to arm; step 2 = hold START to deliver.
+    private function drawButtonConfirm(dc, w, h, cx, vc) as Void {
+        var step1 = btnArmed ? "1. armed" : "1. Hold UP to arm";
+        var step2 = btnArmed ? "2. Hold START to deliver" : "2. then hold START";
+        dc.setColor(btnArmed ? Gfx.COLOR_GREEN : Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.34, Gfx.FONT_XTINY, step1, vc);
+        dc.setColor(btnArmed ? Gfx.COLOR_WHITE : Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.48, Gfx.FONT_XTINY, step2, vc);
+
+        // Hold-progress bar.
+        var bx = w * 0.22, bw = w * 0.56, by = h * 0.62, bh = h * 0.06;
+        dc.setColor(0x333333, Gfx.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(bx, by, bw, bh, 4);
+        if (btnProgress > 0.0) {
+            var fillW = bw * btnProgress;
+            dc.setColor(btnArmed ? Gfx.COLOR_GREEN : Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(bx, by, fillW, bh, 4);
         }
-
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, "experimental", vc);
+        dc.drawText(cx, h * 0.76, Gfx.FONT_XTINY, "release cancels", vc);
     }
 
     private function deliver() as Void {
