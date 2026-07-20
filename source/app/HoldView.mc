@@ -83,7 +83,7 @@ class HoldView extends Ui.View {
         }
 
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, "saline · bench", vc);
+        dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, "experimental", vc);
     }
 
     private function deliver() as Void {

@@ -3,7 +3,7 @@ using Toybox.Graphics as Gfx;
 using Toybox.Lang;
 
 // Bolus entry — tap buttons: mode chip (top) toggles Units/Carbs, − / + adjust the value,
-// Deliver (bottom) goes to the 1-2-3 confirm. Saline bench only.
+// Deliver (bottom) goes to the 1-2-3 confirm.
 class BolusEntryView extends Ui.View {
     function initialize() { View.initialize(); }
 

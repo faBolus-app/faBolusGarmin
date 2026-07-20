@@ -7,7 +7,7 @@ using Toybox.Lang;
 // temporal event it re-publishes the last-known reading (so a newly-added complication isn't
 // blank), then asks the phone for a fresh status; when the phone replies it publishes the new
 // value directly and exits. If the phone is unreachable it just exits — the persisted value
-// stays on the face. Bench PoC: background phone reachability varies, so this is best-effort;
+// stays on the face. Background phone reachability varies, so this is best-effort;
 // foreground opens/glances remain the reliable refresh path.
 (:background)
 class BgServiceDelegate extends System.ServiceDelegate {
