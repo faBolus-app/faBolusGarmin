@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  schema-drift:
+    name: Monkey C ↔ contract schema drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out faBolusGarmin
+        uses: actions/checkout@v4
+
+      - name: Check out faBolus (for the contract schema)
+        uses: actions/checkout@v4
+        with:
+          repository: faBolus-app/faBolus
+          path: _faBolus
+
+      - name: Check the Garmin remote against the schema
+        run: SCHEMA=_faBolus/schema/command.schema.json ./scripts/check-schema-drift.sh

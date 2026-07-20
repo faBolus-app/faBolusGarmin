@@ -1,0 +1,39 @@
+# Schema keys this Garmin remote depends on — the "Monkey C mirror" of
+# faBolus/schema/command.schema.json (the source of truth). The remote consumes a SUBSET of the
+# contract (it's units-only and has no double-confirm-token flow), so this lists only the keys it
+# actually reads or writes, not every schema property.
+#
+# scripts/check-schema-drift.sh asserts each key here (a) still exists in the schema and (b) is still
+# referenced in the Monkey C source (source/app/RemoteComm.mc / AppState.mc). Renaming a schema key,
+# or dropping one from the code without updating this list, fails CI. One key per line; # = comment.
+
+# Envelope (every message)
+version
+kind
+requestId
+
+# Outbound commands (RemoteComm.mc)
+units
+alertId
+alertKind
+
+# statusRead reply consumed by the watch (AppState.mc)
+status
+message
+trend
+bgMgdl
+glucoseAgeSec
+history
+alerts
+lastBolusUnits
+reservoirUnits
+batteryPercent
+carbRatio
+isf
+targetBg
+maxBolusUnits
+bolusMode
+bolusIncrement
+carbIncrement
+screenOrder
+defaultScreen

@@ -2,12 +2,14 @@ using Toybox.Communications as Comm;
 using Toybox.Lang;
 using Toybox.System;
 
-// Phone↔remote command builder + transport. Mirrors ../Shared/RemoteCommand.swift and
-// schema/command.schema.json (version 1). Commands are sent to the iPhone host over the
-// Connect IQ mobile SDK; the phone runs the confirm interlock and dispatches via PumpX2Kit.
+// Phone↔remote command builder + transport. Mirrors the faBolus contract
+// (faBolus/schema/command.schema.json, source of truth; Swift mirror in faBolusCore/RemoteCommand.swift).
+// The schema keys this remote uses are pinned in ../../schema/remote-keys.txt and checked against the
+// schema by scripts/check-schema-drift.sh in CI. Commands are sent to the iPhone host over the
+// Connect IQ mobile SDK; the phone runs the confirm interlock and dispatches to the pump backend.
 //
 // (A direct-to-pump transport was prototyped behind a router here; it's paused and lives under
-// direct-pump/ — see DIRECT_PUMP_STATUS.md. This is the shipping phone-relay version.)
+// direct-pump/. This is the shipping phone-relay version.)
 module RemoteComm {
     const SCHEMA_VERSION = 1;
 
