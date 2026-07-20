@@ -37,6 +37,12 @@ class FaBolusApp extends App.AppBase {
         return Nav.initialView();   // the user-configured default screen
     }
 
+    // Compact BG glance shown in the glance/widget carousel (devices that support glances).
+    (:glance)
+    function getGlanceView() {
+        return [ new FaBolusGlanceView() ];
+    }
+
     // The background service that refreshes the complication when the app is closed.
     function getServiceDelegate() as [System.ServiceDelegate] {
         return [ new BgServiceDelegate() ];

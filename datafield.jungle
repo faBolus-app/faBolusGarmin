@@ -1,0 +1,9 @@
+# Connect IQ build config for the faBolus BG DATA FIELD (a separate app from the remote).
+# Build:  monkeyc -f datafield.jungle -o bin/faBolusField.iq -y <dev_key.der> -e -r -w
+#
+# A data field (type=datafield) shows glucose on an activity screen. Source in datafield/. It uses
+# the shared strings/launcher-icon resources but not the complication resource (a data field
+# consumes BG, it doesn't publish a complication). Works on watches and Edge cycling computers.
+project.manifest = manifest-datafield.xml
+base.sourcePath = datafield
+base.resourcePath = resources

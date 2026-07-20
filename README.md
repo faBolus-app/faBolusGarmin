@@ -40,8 +40,14 @@ factor, never the only one.
   (default) or **direct-to-pump**. The same command dicts flow either way, so the UI is
   transport-agnostic.
 
-A **watch face** scaffold also lives here (`watchface/` + `manifest-watchface.xml` +
-`watchface.jungle`) — a separate Connect IQ app; see [CONTRIBUTING.md](CONTRIBUTING.md#add-a-watch-face-or-another-connect-iq-app-type).
+Beyond the remote, the repo also builds three more Connect IQ surfaces from the same BG feed:
+- a **glance** (compact BG in the glance carousel) — built into the app (`FaBolusGlanceView`, reads
+  the persisted reading directly).
+- a **BG data field** for activity screens on watches and Edge — `datafield/` + `datafield.jungle`.
+- a **watch face** scaffold — `watchface/` + `watchface.jungle`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md#add-a-watch-face-or-another-connect-iq-app-type) for building
+and extending these.
 
 ### Experimental: direct-to-pump (Tandem)
 An optional engine lets the watch talk **directly** to a Tandem pump over BLE with no phone — a full

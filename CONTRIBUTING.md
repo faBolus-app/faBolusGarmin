@@ -58,10 +58,14 @@ by side (like `probe.jungle` / `test.jungle`):
   (`monkeyc -f watchface.jungle -o bin/faBolusFace.iq -y <dev_key.der> -e -r -w`). It draws the time
   and a BG slot; wire live glucose by subscribing to the faBolus **public BG complication** (see the
   TODO in `watchface/FaBolusFaceView.mc`). Watches only — Edge has no watch face.
-- **Data field / glance / widget** — not built yet, and good next targets. A BG **data field**
-  (`type="datafield"`) would show glucose on any run/ride activity screen (Edge included). Add one
-  the same way: a `<type>/` source dir + `manifest-<type>.xml` + `<type>.jungle`, reusing
-  `RemoteComm`/`AppState` for the phone feed and the shared `resources`.
+- **Data field** — `datafield/` + `manifest-datafield.xml` + `datafield.jungle`
+  (`monkeyc -f datafield.jungle -o bin/faBolusField.iq -y <dev_key.der> -e -r -w`). A `SimpleDataField`
+  that shows BG on any run/ride activity screen — watches **and** Edge. Same public-complication feed
+  as the watch face (stubbed TODO in `datafield/FaBolusDataField.mc`), so it shows "--" until wired.
+- **Glance** — built into the remote app itself: `FaBolusApp.getGlanceView()` +
+  `source/app/FaBolusGlanceView.mc`, both annotated `(:glance)`. Because it's the same app it reads
+  the persisted BG (`bg`/`bgEpoch`) directly, so it shows a real reading with no extra wiring.
+- **Widget** — not built; add it the same way (its own `manifest-*.xml` + `*.jungle` + source dir).
 
 ## The contract mirror (don't let it drift)
 The source of truth is `faBolus/schema/command.schema.json`, mirrored in Swift (`RemoteCommand`) and
