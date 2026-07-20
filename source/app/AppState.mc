@@ -140,20 +140,24 @@ module AppState {
     }
 
     // The units that will actually be delivered (rounded to 0.05, clamped to the pump max).
-    // Matches the t:slim bolus calculator: carb bolus + a *signed* correction from the current
-    // CGM reading, with IOB subtracted from the whole (so a low BG or high IOB reduces — or
-    // zeroes — the dose). Units mode is a manual fixed dose (no correction / IOB).
+    // Mirrors the t:slim / iPhone calculator EXACTLY so a carb bolus from the watch matches the
+    // pump: food = carbs / carbRatio, plus a correction that is reduced by IOB and *floored at 0*
+    // (IOB reduces only the correction, never the carb coverage), then the whole floored at 0.
+    // Units mode is a manual fixed dose (no correction / IOB).
     function computeUnits() as Lang.Float {
         var total;
         if (mode.equals("units")) {
             total = unitsValue;
-        } else {
-            var food = (carbRatio > 0.0) ? (carbsValue.toFloat() / carbRatio) : 0.0;
+        } else if (carbRatio > 0.0) {
+            var food = carbsValue.toFloat() / carbRatio;
             var correction = 0.0;
             if (isf > 0 && glucose != null) {
-                correction = (glucose - targetBg).toFloat() / isf.toFloat();   // signed
+                correction = (glucose - targetBg).toFloat() / isf.toFloat() - iob;  // IOB reduces correction only
+                if (correction < 0.0) { correction = 0.0; }                         // floored, like the t:slim
             }
-            total = food + correction - iob;   // IOB reduces the total
+            total = food + correction;
+        } else {
+            total = carbsValue.toFloat() / 10.0 - iob;   // fallback when no carb ratio — matches iPhone
         }
         total = Math.round(total * 20.0) / 20.0;   // 0.05 u steps
         if (total < 0.0) { total = 0.0; }
