@@ -1,0 +1,6 @@
+# Build config for the Milestone 0 handoff-resume probe (standalone entry ProbeApp).
+# Includes only the engine (protocol/auth/messages/ble) + the probe/ harness — NOT the main app.
+#   monkeyc -f probe.jungle -o bin/PumpX2Garmin-probe.prg -y developer_key.der -d venu3s -w
+#   (sideload bin/PumpX2Garmin-probe.prg to the venu3s; see the handoff-test instructions)
+project.manifest = manifest-probe.xml
+base.sourcePath = source/protocol;source/auth;source/messages;source/ble;probe
