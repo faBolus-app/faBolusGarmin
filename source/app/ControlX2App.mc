@@ -20,7 +20,6 @@ class ControlX2App extends App.AppBase {
 
     function onStart(state as Lang.Dictionary?) as Void {
         Comm.registerForPhoneAppMessages(method(:onPhoneMessage));
-        RemoteComm.onInbound = method(:handleInbound);  // direct transport delivers replies here too
         AppState.loadPersisted();            // show last-known BG instantly (no "--" flash)
         AppState.loadPrefs();                // restore configured screen order + default screen
         BgComplication.publish(null, null, 0);  // re-publish last-known reading to the complication
@@ -63,25 +62,11 @@ class ControlX2App extends App.AppBase {
     function onPhoneMessage(msg as Comm.PhoneAppMessage) as Void {
         var data = msg.data;
         if (data instanceof Lang.Dictionary) {
-            handleInbound(data as Lang.Dictionary);
+            AppState.handle(data as Lang.Dictionary);
+            BgComplication.publishFromState();
+            notifyNewAlerts();
+            Ui.requestUpdate();
         }
-    }
-
-    // Applies an inbound reply dict from either transport (phone-relay or direct-to-pump).
-    function handleInbound(data as Lang.Dictionary) as Void {
-        var kind = data["kind"];
-        if (kind instanceof Lang.String && (kind as Lang.String).equals("keyShare")) {
-            // Phone shared the pump's derived secret so the watch can connect directly (bench).
-            var hex = data["pumpKeyHex"];
-            if (hex instanceof Lang.String) {
-                App.Storage.setValue(RemoteComm.KEY_SECRET, hex);
-            }
-            return;
-        }
-        AppState.handle(data);
-        BgComplication.publishFromState();
-        notifyNewAlerts();
-        Ui.requestUpdate();
     }
 
     // When a new pump alert arrives, vibrate and show an actionable confirmation to clear it.

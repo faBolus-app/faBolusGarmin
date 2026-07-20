@@ -1,6 +1,7 @@
-# Connect IQ build config for the PumpX2Garmin app (release; entry ControlX2App).
-# Build:  monkeyc -f monkey.jungle -o bin/PumpX2Garmin.prg -y developer_key.der -d venu3s -w
-# Unit tests use a separate config (test.jungle) with a minimal entry so the test harness
-# isn't blocked by the app's background/timer lifecycle.
+# Connect IQ build config for the shipping ControlX2 Garmin watch app (phone-relay remote).
+# Build:  monkeyc -f monkey.jungle -o bin/ControlX2.iq -y <dev_key.der> -e -r -w
+#
+# The paused direct-to-pump work lives under direct-pump/ and is NOT part of this build
+# (see DIRECT_PUMP_STATUS.md). Its engine is exercised by test.jungle and probe.jungle.
 project.manifest = manifest.xml
-base.sourcePath = source
+base.sourcePath = source/app

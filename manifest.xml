@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- ControlX2 Garmin watch app (Connect IQ). Consolidated into the PumpX2Garmin repo alongside
-     the direct-pump engine (PumpX2 namespace). Today: phone-relay remote to the iPhone host.
-     Being extended with a direct-BLE transport (BluetoothLowEnergy) so it can talk to the pump
-     directly when the phone is away. App id/entry preserved so the iOS ConnectIQ bridge still
-     targets it. Bench PoC only (saline). -->
+<!-- ControlX2 Garmin watch app (Connect IQ): phone-relay remote to the iPhone host (the phone owns
+     the pump connection via PumpX2Kit). App id/entry preserved so the iOS ConnectIQ bridge targets
+     it. A paused direct-to-pump effort lives under direct-pump/ (see DIRECT_PUMP_STATUS.md) and is
+     not part of this build. Bench PoC only (saline). -->
 <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
     <iq:application entry="ControlX2App"
                     id="a1b2c3d4e5f600112233445566778899"
@@ -18,7 +17,6 @@
             <iq:uses-permission id="Communications"/>
             <iq:uses-permission id="ComplicationPublisher"/>
             <iq:uses-permission id="Background"/>
-            <iq:uses-permission id="BluetoothLowEnergy"/>
         </iq:permissions>
         <iq:languages>
             <iq:language>eng</iq:language>

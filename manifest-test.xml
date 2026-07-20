@@ -11,12 +11,10 @@
         <iq:products>
             <iq:product id="venu3s"/>
         </iq:products>
-        <!-- Mirror the app's permissions so the shared source/resources compile; the test
-             isolation comes from the minimal TestEntryApp entry (no background/timers at runtime). -->
+        <!-- Only what the engine + shared resources need: ComplicationPublisher for the
+             complications resource, BluetoothLowEnergy for the engine's BLE client module. -->
         <iq:permissions>
-            <iq:uses-permission id="Communications"/>
             <iq:uses-permission id="ComplicationPublisher"/>
-            <iq:uses-permission id="Background"/>
             <iq:uses-permission id="BluetoothLowEnergy"/>
         </iq:permissions>
         <iq:languages>
