@@ -1,6 +1,6 @@
 # Direct-to-Pump on Garmin — Status & Handoff (paused)
 
-This repo currently ships the **ControlX2 Garmin watch app** as a **phone-relay remote** (talks to
+This repo currently ships the **faBolus Garmin watch app** as a **phone-relay remote** (talks to
 the iPhone host over the Connect IQ mobile SDK; the phone owns the pump connection via PumpX2Kit).
 A parallel effort to make the watch talk to the pump **directly over BLE** is **paused** — the code
 lives under `direct-pump/` and this document explains what works, what's blocked, and how to resume.
@@ -48,7 +48,7 @@ phone-connected). See `HANDOFF_TEST.md` for the procedure.
 - `direct-pump/transport/` — `DirectTransport` (maps the app's command dicts to engine calls;
   status reads, signed bolus with polling, dismiss) + `StatusFeed`. **Coupled to the router version
   of `RemoteComm`; needs rewiring** to be used again.
-- `direct-pump/harness/` — the Gate A / debug UI used during bring-up (`PumpX2GarminApp`,
+- `direct-pump/harness/` — the Gate A / debug UI used during bring-up (`FaBolusGarminApp`,
   `GateAView`, `DirectDebugView`/`Delegate`). Archived; not compiled.
 - `probe/` — a standalone app that drives bond → JPAKE **resume** with a pasted secret (built via
   `probe.jungle`); used for the Milestone 0 handoff probe.
@@ -70,9 +70,9 @@ phone-connected). See `HANDOFF_TEST.md` for the procedure.
    switch, so "seamless" isn't achievable — it's a deliberate re-pair).
 
 ## Build
-- Shipping watch app: `monkeyc -f monkey.jungle -o bin/ControlX2.iq -y <key> -e -r -w`
+- Shipping watch app: `monkeyc -f monkey.jungle -o bin/faBolus.iq -y <key> -e -r -w`
 - Engine unit tests: `monkeyc -f test.jungle ... --unit-test` then `monkeydo ... venu3s -t`
 - Resume probe: `monkeyc -f probe.jungle ...`
 
-The iOS side (ControlX2iOS) is the phone host + Apple Watch app; the bridge contract is
-`ControlX2iOS/schema/command.schema.json`.
+The iOS side (faBolus) is the phone host + Apple Watch app; the bridge contract is
+`faBolus/schema/command.schema.json`.

@@ -1,4 +1,4 @@
-# PumpX2Garmin — Handoff
+# faBolusGarmin — Handoff
 
 You are starting a **new, independent project**: a **standalone Garmin Connect IQ (Monkey C)
 app that talks directly to a Tandem t:slim X2 / Mobi pump over Bluetooth — no phone in the
@@ -35,7 +35,7 @@ do it on the target watch (venu3s) before anything else:
    enforces **one control connection** — you cannot coexist with the phone app.
 
 If CIQ can't establish the bonded connection the pump needs, **standalone Garmin isn't viable**
-and the phone-relay design (already shipped in `ControlX2iOS/garmin`) remains the answer.
+and the phone-relay design (already shipped in `faBolus/garmin`) remains the answer.
 
 ### Gate B — Can you do EC-JPAKE on Monkey C?
 Modern pumps (Mobi, t:slim X2 v7.7+) require **6-digit pairing via EC-JPAKE** (secp256r1 /
@@ -99,7 +99,7 @@ a fresh machine):
 - **`references/controlX2/`** (github.com/jwoglom/controlX2) — Android/**Wear OS** reference. The
   `wear/` module is the closest existing "watch" client; mine it for the connection lifecycle,
   the notification/bolus flows, and `NotificationBundle`.
-- **`ControlX2iOS/garmin/`** (github.com/zgranowitz/ControlX2iOS) — the **phone-relay** Garmin
+- **`faBolus/garmin/`** (github.com/zgranowitz/faBolus) — the **phone-relay** Garmin
   app already built for the venu3s. Reuse its **UI patterns and hard-won venu3s constraints**
   (see §5), the Loop-style screens, the 1-2-3 confirm, the Dexcom-style history plot, the
   complication. This new app replaces its *transport* (direct BLE instead of phone messages),
@@ -134,7 +134,7 @@ HMAC-SHA256). On Monkey C you must replace mbedTLS (Gate B). The oracle's `jpake
 
 ---
 
-## 5. venu3s device constraints (learned the hard way — see ControlX2iOS memory)
+## 5. venu3s device constraints (learned the hard way — see faBolus memory)
 - **Two physical buttons only**; a screen **tap fires `onSelect()` (no coordinates)**, NOT
   `onTap` at the behavior layer — but plain `onTap(clickEvent)` with coordinates **does** work
   and is what the shipped app uses for buttons. Swipes = `onNextPage`/`onPreviousPage`;
@@ -145,7 +145,7 @@ HMAC-SHA256). On Monkey C you must replace mbedTLS (Gate B). The oracle's `jpake
   and alert rows do this). `Selectable`/`onSelectable` proved flaky.
 - Round 390×390 AMOLED. Fonts can’t render Unicode arrows — draw trend arrows as shapes
   (`TrendArrow.mc` in the shipped app).
-- Build: `monkeyc -f monkey.jungle -o bin/ControlX2.iq -y <dev_key.der> -e -r` with the
+- Build: `monkeyc -f monkey.jungle -o bin/faBolus.iq -y <dev_key.der> -e -r` with the
   Connect IQ SDK; sideload/beta via the Connect IQ store. `hidden`/`private` are invalid on
   module functions.
 
@@ -160,7 +160,7 @@ HMAC-SHA256). On Monkey C you must replace mbedTLS (Gate B). The oracle's `jpake
 
 ## 7. Repo layout (suggested)
 ```
-PumpX2Garmin/
+faBolusGarmin/
 ├── HANDOFF.md            (this file)
 ├── README.md            (independent reimplementation, bench-only disclaimers)
 ├── manifest.xml         (Bluetooth + needed permissions; product venu3s)

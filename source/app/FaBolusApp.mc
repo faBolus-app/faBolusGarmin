@@ -12,7 +12,7 @@ using Toybox.Lang;
 // for status/bolus updates, and republishes the BG complication so it shows on the watch face.
 // A background temporal event refreshes the complication roughly every 5 minutes while the app
 // isn't open. Thin remote — the iPhone owns the pump connection.
-class ControlX2App extends App.AppBase {
+class FaBolusApp extends App.AppBase {
     private var _timer as Timer.Timer?;
     private var _lastAlertCount as Lang.Number = 0;
 

@@ -1,5 +1,5 @@
-# Connect IQ build config for the shipping ControlX2 Garmin watch app (phone-relay remote).
-# Build:  monkeyc -f monkey.jungle -o bin/ControlX2.iq -y <dev_key.der> -e -r -w
+# Connect IQ build config for the shipping faBolus Garmin watch app (phone-relay remote).
+# Build:  monkeyc -f monkey.jungle -o bin/faBolus.iq -y <dev_key.der> -e -r -w
 #
 # The paused direct-to-pump work lives under direct-pump/ and is NOT part of this build
 # (see DIRECT_PUMP_STATUS.md). Its engine is exercised by test.jungle and probe.jungle.

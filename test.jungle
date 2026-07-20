@@ -1,5 +1,5 @@
 # Unit-test build for the direct-pump engine (oracle-parity + resume), minimal TestEntryApp entry.
-#   monkeyc -f test.jungle -o bin/PumpX2Garmin-test.prg -y developer_key.der -d venu3s --unit-test -w
-#   monkeydo bin/PumpX2Garmin-test.prg venu3s -t
+#   monkeyc -f test.jungle -o bin/faBolusGarmin-test.prg -y developer_key.der -d venu3s --unit-test -w
+#   monkeydo bin/faBolusGarmin-test.prg venu3s -t
 project.manifest = manifest-test.xml
 base.sourcePath = direct-pump/engine/protocol;direct-pump/engine/auth;direct-pump/engine/messages;direct-pump/engine/ble;tests

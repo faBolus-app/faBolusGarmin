@@ -2,7 +2,7 @@ using Toybox.Lang;
 
 // Builds the schema-v1 `statusRead` reply dict (the same shape the phone sends, consumed by
 // AppState.handle) from values read directly off the pump by DirectTransport. Kept pure so it can
-// be unit-tested without BLE. See ControlX2iOS/schema/command.schema.json for the contract.
+// be unit-tested without BLE. See faBolus/schema/command.schema.json for the contract.
 module StatusFeed {
     const SCHEMA_VERSION = 1;
 

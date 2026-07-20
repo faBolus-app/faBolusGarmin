@@ -4,7 +4,7 @@ using Toybox.Math;
 using Toybox.Time;
 using Toybox.Application.Storage;
 
-// Shared app state for the ControlX2 Garmin remote. Glance data comes from the phone
+// Shared app state for the faBolus Garmin remote. Glance data comes from the phone
 // (statusRead reply); carbs→units is computed locally from the pump's calculator settings so
 // the hold-to-deliver screen can show the exact units.
 module AppState {

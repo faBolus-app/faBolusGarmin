@@ -2,13 +2,13 @@ using Toybox.Application;
 using Toybox.WatchUi;
 using Toybox.Lang;
 
-// App entry point for the standalone direct-to-pump PumpX2Garmin watch app.
+// App entry point for the standalone direct-to-pump faBolusGarmin watch app.
 //
 // Currently boots the Gate A smoke test (BLE scan -> bond -> subscribe -> one CURRENT_STATUS
 // notification), the first GO/NO-GO gate. The protocol/auth foundation under source/protocol and
 // source/auth is byte-exact vs the oracle (see tests/). The full UI (Milestone 6) is layered on
 // once the gates pass. Bench PoC only (saline).
-class PumpX2GarminApp extends Application.AppBase {
+class FaBolusGarminApp extends Application.AppBase {
     private var _gateA as GateAController or Null;
 
     function initialize() {

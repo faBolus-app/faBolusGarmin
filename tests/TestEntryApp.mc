@@ -3,7 +3,7 @@ using Toybox.WatchUi;
 using Toybox.Lang;
 
 // Minimal app entry used ONLY by unit-test builds (test.jungle / manifest-test.xml). The real
-// app (ControlX2App) starts background services + repeating timers, which prevent the unit-test
+// app (FaBolusApp) starts background services + repeating timers, which prevent the unit-test
 // harness from starting/exiting cleanly in the simulator. This entry does nothing so the tests
 // run and the process terminates.
 class TestEntryApp extends Application.AppBase {

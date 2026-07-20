@@ -1,7 +1,7 @@
 using Toybox.WatchUi as Ui;
 using Toybox.Lang;
 
-// Screen carousel for the ControlX2 remote. The swipe order and the first screen are configurable
+// Screen carousel for the faBolus remote. The swipe order and the first screen are configurable
 // (from phone settings, held in AppState.screenOrder / AppState.defaultScreen). Instead of a fixed
 // push/pop stack, screens are swapped with switchToView() so any order works and the default
 // screen is simply the initial view. The bolus screen is a modal push on top (not in this order),

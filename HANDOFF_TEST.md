@@ -20,24 +20,24 @@ before it attempts resume.
 ## Preferred flow — through the shipped app (no sideloading)
 
 Use this when you can push a normal Connect IQ update to the watch but can't sideload from a Mac.
-The direct-to-pump path is built into the real ControlX2 app; the secret is shared from the phone
+The direct-to-pump path is built into the real faBolus app; the secret is shared from the phone
 over the Connect IQ bridge.
 
 ### Prerequisites
 - The bench pump (Mobi / t:slim X2 v7.7+, 6-digit JPAKE), **not currently bonded to any other
   device**.
-- The updated **ControlX2 Garmin app** on the venu3s (built from `monkey.jungle`, includes the
+- The updated **faBolus Garmin app** on the venu3s (built from `monkey.jungle`, includes the
   Direct debug screen) and the updated **iPhone app** (includes "Send pump key to Garmin").
 
 ### Steps
-1. **Pair the pump from the iPhone** (ControlX2 → Connect → 6-digit code); confirm it reads status.
-2. **Share the key to the watch**: ControlX2 → **Settings → Pump → "Send pump key to Garmin
+1. **Pair the pump from the iPhone** (faBolus → Connect → 6-digit code); confirm it reads status.
+2. **Share the key to the watch**: faBolus → **Settings → Pump → "Send pump key to Garmin
    (debug)"**. (Requires the Garmin remote to have been set up once via "Set up Garmin remote".)
    The watch stores the derived secret.
-3. **Free the single bond**: in ControlX2 Disconnect, then **iOS Settings → Bluetooth → forget the
+3. **Free the single bond**: in faBolus Disconnect, then **iOS Settings → Bluetooth → forget the
    pump**. If the Mobi needs pairing-mode entry (charging pad) to accept a new central, note that —
    it's part of the result.
-4. **On the watch**, open the ControlX2 app and **swipe up past the last screen to "Direct
+4. **On the watch**, open the faBolus app and **swipe up past the last screen to "Direct
    (debug)"**, then **tap** it. Watch the status line.
 
 ---
@@ -45,9 +45,9 @@ over the Connect IQ bridge.
 ## Alternative flow — standalone probe (if you can sideload)
 
 The `probe/` app (built via `probe.jungle`) does the same thing with the secret pasted into a
-constant. Read the secret via ControlX2 → Settings → Pump → **"Copy pairing secret (debug)"**, paste
+constant. Read the secret via faBolus → Settings → Pump → **"Copy pairing secret (debug)"**, paste
 into `probe/ProbeController.mc` (`DERIVED_SECRET_HEX`), build
-(`monkeyc -f probe.jungle -o bin/PumpX2Garmin-probe.prg -y developer_key.der -d venu3s -w`), sideload,
+(`monkeyc -f probe.jungle -o bin/faBolusGarmin-probe.prg -y developer_key.der -d venu3s -w`), sideload,
 free the phone bond (step 3 above), then launch the probe.
 
 ## Interpreting the result
@@ -66,7 +66,7 @@ free the phone bond (step 3 above), then launch the probe.
   will need to re-pair afterward).
 
 ## After the test
-- Re-pair the phone to the pump if the secret rotated (ControlX2 → Re-pair with new code).
+- Re-pair the phone to the pump if the secret rotated (faBolus → Re-pair with new code).
 - Delete the copied secret from your Mac/clipboard.
 - The probe is a throwaway build; the shipping app is built from `monkey.jungle`.
 

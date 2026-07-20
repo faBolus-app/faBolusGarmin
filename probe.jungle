@@ -1,5 +1,5 @@
 # Build config for the Milestone 0 handoff-resume probe (standalone entry ProbeApp).
 # Includes only the direct-pump engine + the probe/ harness (see HANDOFF_TEST.md / DIRECT_PUMP_STATUS.md).
-#   monkeyc -f probe.jungle -o bin/PumpX2Garmin-probe.prg -y developer_key.der -d venu3s -w
+#   monkeyc -f probe.jungle -o bin/faBolusGarmin-probe.prg -y developer_key.der -d venu3s -w
 project.manifest = manifest-probe.xml
 base.sourcePath = direct-pump/engine/protocol;direct-pump/engine/auth;direct-pump/engine/messages;direct-pump/engine/ble;probe

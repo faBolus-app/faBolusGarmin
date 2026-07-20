@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1240" role="img" aria-label="Interwoven ribbon logo with insulin-drop negative space">
+  <!-- Background (remove this rect for a transparent logo) -->
+  <rect width="1240" height="1240" fill="#ffffff"/>
+
+  <!--
+    Two constant-width ribbons stroked with round caps.
+    They cross steeply at the top (sharp point of the drop) and sweep out
+    flat through the bottom where they re-cross (round base of the drop),
+    so the teardrop is the negative space enclosed by the ribbon edges.
+    Weave: light over dark at the top crossing, dark over light at the bottom.
+  -->
+  <g fill="none" stroke-width="110" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Dark forest-green ribbon: top-left arm -> right of drop -> bottom-left arm -->
+    <path stroke="#18682F"
+          d="M175,275 C520,360 760,430 760,600 C760,730 430,775 175,955"/>
+
+    <!-- Moss-green ribbon: top-right arm -> left of drop -> bottom-right arm -->
+    <path stroke="#6FB054"
+          d="M1065,275 C720,360 480,430 480,600 C480,730 810,775 1065,955"/>
+
+    <!-- Weave patch: re-draw the dark ribbon's lower half on top so it
+         passes over the moss ribbon at the lower crossing -->
+    <path stroke="#18682F"
+          d="M760,600 C760,730 430,775 175,955"/>
+  </g>
+</svg>
