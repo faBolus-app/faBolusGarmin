@@ -56,6 +56,16 @@ oracle** (31/31 unit tests). This path **is** Tandem-specific and is **paused / 
 only**, pending on-hardware validation. It lives under `direct-pump/`, wired but dormant behind the
 same `RemoteComm` seam; the default host-agnostic phone-relay path does not use it.
 
+### Experimental: direct-to-watch CGM (Dexcom G7)
+An optional engine lets the watch read a **Dexcom G7 / ONE+** glucose value **directly over BLE** as
+a failover when the phone is out of range — a passive listener (it never authenticates, so it can't
+disconnect the official app), with the G7 message decoder ported from the vendored Swift
+`G7SensorKit`. It lives under `direct-cgm/` and is **paused / compile-verified only**
+(`monkeyc -f direct-cgm.jungle …`), pending on-hardware validation; it is **not** in the shipping
+build and not yet wired into `AppState.glucose`. See `direct-cgm/DIRECT_CGM_STATUS.md`. (The
+shipping remote already shows failover glucose whenever the phone relays it.) The Apple Watch
+equivalent — direct G7 BLE when the iPhone is unreachable — is live in the `faBolus` repo.
+
 ## Known limitations (being worked on)
 - **BG complication reads 0.** The published BG complication does not yet update with the live CGM
   value — it currently shows `0` instead of the reading. Fix in progress.
