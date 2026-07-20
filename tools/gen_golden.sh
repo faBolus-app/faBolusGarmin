@@ -11,7 +11,7 @@
 set -euo pipefail
 
 JAVA="${JAVA:-/opt/homebrew/opt/openjdk/bin/java}"
-JAR="${PUMPX2_ORACLE_JAR:-/Users/zgranowitz/Code/zgranowitz/PumpX2Kit/vendor/pumpx2-oracle/cliparser/build/libs/cliparser.jar}"
+JAR="${PUMPX2_ORACLE_JAR:-$HOME/Code/zgranowitz/PumpX2Kit/vendor/pumpx2-oracle/cliparser/build/libs/cliparser.jar}"
 OUT="$(cd "$(dirname "$0")/.." && pwd)/tests/golden_vectors.txt"
 
 # Shared signing constants — identical to PumpX2Kit's OracleParityTests so signed packets match.

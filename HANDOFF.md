@@ -79,10 +79,10 @@ Then (only after that): a UI modeled on the already-built phone-relay Garmin app
 
 ## 2. Reference material (read, don't re-derive)
 
-All paths are siblings under `/Users/zgranowitz/Code/zgranowitz/` (clone the GitHub repos if on
+All paths are siblings under a common parent directory (clone the GitHub repos side by side if on
 a fresh machine):
 
-- **`PumpX2Kit/`** (github.com/zgranowitz/PumpX2Kit, private) — **your primary reference.** A
+- **`PumpX2Kit/`** (github.com/zgranowitz/PumpX2Kit) — **your primary reference.** A
   Swift port of the whole protocol/auth/BLE, validated **byte-exact** against the oracle. Port
   its logic to Monkey C. Key files:
   - `Sources/PumpX2Messages/Core/Packetize.swift` — framing + signing (the spine).

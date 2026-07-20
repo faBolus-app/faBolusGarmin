@@ -12,15 +12,15 @@
   <g fill="none" stroke-width="110" stroke-linecap="round" stroke-linejoin="round">
     <!-- Dark forest-green ribbon: top-left arm -> right of drop -> bottom-left arm -->
     <path stroke="#18682F"
-          d="M175,275 C520,360 760,430 760,600 C760,730 430,775 175,955"/>
+          d="M175,290 C560,380 730,470 745,630 C758,715 690,760 620,762 C470,766 300,875 175,950"/>
 
     <!-- Moss-green ribbon: top-right arm -> left of drop -> bottom-right arm -->
     <path stroke="#6FB054"
-          d="M1065,275 C720,360 480,430 480,600 C480,730 810,775 1065,955"/>
+          d="M1065,290 C680,380 510,470 495,630 C482,715 550,760 620,762 C770,766 940,875 1065,950"/>
 
     <!-- Weave patch: re-draw the dark ribbon's lower half on top so it
          passes over the moss ribbon at the lower crossing -->
     <path stroke="#18682F"
-          d="M760,600 C760,730 430,775 175,955"/>
+          d="M745,630 C758,715 690,760 620,762 C470,766 300,875 175,950"/>
   </g>
 </svg>
