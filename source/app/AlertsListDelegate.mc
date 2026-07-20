@@ -36,6 +36,7 @@ class AlertsListDelegate extends Ui.BehaviorDelegate {
     // page navigation here, so button devices act on the top alert rather than a moving row cursor;
     // repeated presses clear them most-serious first.)
     function onSelect() as Lang.Boolean {
+        if (DeviceProfile.isTouch()) { return false; }   // touch clears via onTap (tap the row)
         if (AppState.alerts.size() == 0) { return true; }
         var a = AppState.alerts[0] as Lang.Dictionary;
         Ui.pushView(new Ui.Confirmation("Clear: " + a["title"] + "?"),

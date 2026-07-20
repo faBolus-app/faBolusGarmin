@@ -32,10 +32,13 @@ class BolusEntryDelegate extends Ui.BehaviorDelegate {
     }
 
     // Buttons: UP = increase, DOWN = decrease, MENU = switch mode, START = deliver.
-    function onPreviousPage() as Lang.Boolean { AppState.adjust(1); Ui.requestUpdate(); return true; }   // UP
-    function onNextPage() as Lang.Boolean { AppState.adjust(-1); Ui.requestUpdate(); return true; }       // DOWN
-    function onMenu() as Lang.Boolean { AppState.toggleMode(); Ui.requestUpdate(); return true; }
-    function onSelect() as Lang.Boolean { return deliver(); }
+    // Gated to button devices — on a touchscreen a tap is ALSO delivered as onSelect/next-page
+    // behaviors, which would otherwise hijack every tap. Returning false lets touch fall through to
+    // onTap (the validated touch path).
+    function onPreviousPage() as Lang.Boolean { if (DeviceProfile.isTouch()) { return false; } AppState.adjust(1); Ui.requestUpdate(); return true; }   // UP
+    function onNextPage() as Lang.Boolean { if (DeviceProfile.isTouch()) { return false; } AppState.adjust(-1); Ui.requestUpdate(); return true; }       // DOWN
+    function onMenu() as Lang.Boolean { if (DeviceProfile.isTouch()) { return false; } AppState.toggleMode(); Ui.requestUpdate(); return true; }
+    function onSelect() as Lang.Boolean { if (DeviceProfile.isTouch()) { return false; } return deliver(); }
 
     private function deliver() as Lang.Boolean {
         AppState.deliverUnits = AppState.computeUnits();
