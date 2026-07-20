@@ -11,7 +11,13 @@
                     type="watch-app"
                     minSdkVersion="5.0.0">
         <iq:products>
+            <!-- Touchscreen watch (hardware-validated). -->
             <iq:product id="venu3s"/>
+            <!-- Button-only watch. -->
+            <iq:product id="fenix7"/>
+            <!-- Cycling computers (no watch face → no complication; see monkey.jungle). -->
+            <iq:product id="edge540"/>
+            <iq:product id="edge1040"/>
         </iq:products>
         <iq:permissions>
             <iq:uses-permission id="Communications"/>

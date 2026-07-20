@@ -10,9 +10,12 @@ A **Garmin (Connect IQ / Monkey C) remote** for bolusing and status viewing. It 
   companion app (e.g. a future Loop integration). Nothing in the default phone-relay path is
   Tandem-specific.
 
-**Supported watches:** currently the **Garmin Venu 3S**. The layout code is device-relative, so
-adding another Garmin watch is mostly manifest + input + icon work — a welcome contribution; see
-[CONTRIBUTING.md](CONTRIBUTING.md#add-support-for-another-garmin-watch).
+**Supported devices:** the **Garmin Venu 3S** is hardware-validated. The app also builds and runs on
+button-only watches (e.g. fenix 7) and **Edge cycling computers** (e.g. edge 540 / 1040) — it
+adapts to touch vs. buttons and watch vs. no-watch-face **at runtime** (`DeviceProfile`), so adding a
+device is usually just a manifest entry. Those non-Venu-3S targets are build-verified and sit behind
+the phone's safety interlock, but aren't hardware-validated yet. See
+[CONTRIBUTING.md](CONTRIBUTING.md#add-support-for-another-garmin-device).
 
 > **Experimental — in development.** Not FDA-cleared; if you build or use it you assume all
 > responsibility. Not affiliated with, endorsed by, or a product of Tandem Diabetes Care, Dexcom,

@@ -60,6 +60,10 @@ class HoldView extends Ui.View {
                 dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
                 dc.drawText(cx, cr[1] + cr[3] / 2, Gfx.FONT_SMALL, "Cancel",
                             Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
+                if (DeviceProfile.isButtons()) {
+                    dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+                    dc.drawText(cx, h * 0.88, Gfx.FONT_XTINY, "START to cancel", Gfx.TEXT_JUSTIFY_CENTER);
+                }
             } else {
                 dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
                 dc.drawText(cx, h * 0.80, Gfx.FONT_XTINY, "BACK to exit", Gfx.TEXT_JUSTIFY_CENTER);
@@ -67,10 +71,12 @@ class HoldView extends Ui.View {
             return;
         }
 
+        var buttons = DeviceProfile.isButtons();
         dc.setColor(0x8AB4FF, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.14, Gfx.FONT_SMALL, AppState.deliverUnits.format("%.2f") + " U", vc);
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.28, Gfx.FONT_XTINY, "Tap 1 - 2 - 3 in order", vc);
+        dc.drawText(cx, h * 0.28, Gfx.FONT_XTINY,
+                    buttons ? "Press START: 1 - 2 - 3" : "Tap 1 - 2 - 3 in order", vc);
 
         var r = radius(w);
         for (var i = 0; i < 3; i += 1) {
@@ -80,6 +86,15 @@ class HoldView extends Ui.View {
             dc.fillCircle(c[0], c[1], r);
             dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
             dc.drawText(c[0], c[1], Gfx.FONT_NUMBER_MEDIUM, (i + 1).toString(), vc);
+        }
+
+        // Button-mode: highlight the next number to press (START activates it, in order).
+        if (buttons && _progress < 3) {
+            var fc = center(_progress, w, h);
+            dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
+            dc.setPenWidth(3);
+            dc.drawCircle(fc[0], fc[1], r + 2);
+            dc.setPenWidth(1);
         }
 
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);

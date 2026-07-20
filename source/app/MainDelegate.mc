@@ -9,7 +9,8 @@ class MainDelegate extends Ui.BehaviorDelegate {
 
     private function openBolus() as Lang.Boolean {
         AppState.reset();
-        Ui.pushView(new BolusEntryView(), new BolusEntryDelegate(), Ui.SLIDE_LEFT);
+        var v = new BolusEntryView();
+        Ui.pushView(v, new BolusEntryDelegate(v), Ui.SLIDE_LEFT);
         return true;
     }
 

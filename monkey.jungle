@@ -1,7 +1,19 @@
-# Connect IQ build config for the shipping faBolus Garmin watch app (phone-relay remote).
+# Connect IQ build config for the shipping faBolus Garmin remote (phone-relay).
 # Build:  monkeyc -f monkey.jungle -o bin/faBolus.iq -y <dev_key.der> -e -r -w
+#
+# Portability: the app auto-adapts to the device at runtime (touch vs buttons, screen shape) via
+# DeviceProfile, so supporting a new watch is usually just adding its <iq:product> to manifest.xml.
+#
+# Complications are watch-only. The complication resource lives in resources-complications/ and is
+# included for all devices by default; devices without a watch face (cycling computers, etc.) must
+# drop it — add a `<device>.resourcePath = resources` line below (see edge540).
 #
 # The paused direct-to-pump work lives under direct-pump/ and is NOT part of this build
 # (see direct-pump/DIRECT_PUMP_STATUS.md). Its engine is exercised by test.jungle and probe.jungle.
 project.manifest = manifest.xml
 base.sourcePath = source/app
+base.resourcePath = resources;resources-complications
+
+# --- Non-complication devices (no watch face): exclude the complication resource ---
+edge540.resourcePath = resources
+edge1040.resourcePath = resources

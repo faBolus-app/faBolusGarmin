@@ -40,8 +40,17 @@ class AlertsListView extends Ui.View {
             dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, rr[1] + rr[3] / 2, Gfx.FONT_XTINY, a["title"], vc);
         }
+        // Button devices: the top (most-serious) row is the target; START opens a confirm to clear it.
+        if (DeviceProfile.isButtons()) {
+            var rr0 = rowRect(0, w, h);
+            dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
+            dc.setPenWidth(2);
+            dc.drawRoundedRectangle(rr0[0], rr0[1], rr0[2], rr0[3], 8);
+            dc.setPenWidth(1);
+        }
         // Hint at the bottom (wider part of the round screen), only when there are alerts.
         dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, "tap a row to clear", vc);
+        dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY,
+                    DeviceProfile.isButtons() ? "press to clear top" : "tap a row to clear", vc);
     }
 }

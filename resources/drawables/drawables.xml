@@ -1,5 +1,6 @@
 <drawables>
-    <!-- Add a 40x40 (approx) launcher_icon.png before building; see garmin/README.md. -->
+    <!-- App launcher icon. Devices want different sizes (e.g. venu3s 70x70); if a device upscales
+         it, add a per-device resources-<device>/drawables/ variant (see CONTRIBUTING). -->
     <bitmap id="LauncherIcon" filename="launcher_icon.png"/>
     <!-- 34x34 SVG for the public BG complication (svg is required for public complications). -->
     <bitmap id="BgComplicationIcon" filename="bg_complication.svg"/>

@@ -3,11 +3,26 @@ using Toybox.Lang;
 using Toybox.System;
 using Toybox.Math;
 
-// Confirm-screen input: tap the numbered circles 1 → 2 → 3 in order. Plain onTap coordinate
-// hit-testing (reliable on the venu3s); the view enforces the sequence.
+// Confirm-screen input, portable across devices:
+//   • Touch  — tap the numbered circles 1 → 2 → 3 in order.
+//   • Buttons — press START three times; each press activates the next number in order.
+// Either way it's three deliberate actions in sequence, and the view enforces the order.
 class HoldDelegate extends Ui.BehaviorDelegate {
     private var _view as HoldView;
     function initialize(view as HoldView) { BehaviorDelegate.initialize(); _view = view; }
+
+    // Buttons: START advances the 1-2-3 sequence, or cancels while delivering.
+    function onSelect() as Lang.Boolean {
+        if (AppState.status != null) {
+            if (AppState.status.equals("delivering") && AppState.pendingRequestId != null) {
+                RemoteComm.send(RemoteComm.cancelBolus(AppState.pendingRequestId));
+                AppState.status = "cancelling"; Ui.requestUpdate();
+            }
+            return true;
+        }
+        _view.tapped(_view.progress() + 1);   // next number in order
+        return true;
+    }
 
     function onTap(evt as Ui.ClickEvent) as Lang.Boolean {
         var c = evt.getCoordinates();

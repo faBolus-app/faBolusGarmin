@@ -32,6 +32,17 @@ class AlertsListDelegate extends Ui.BehaviorDelegate {
         return true;
     }
 
+    // Buttons: START opens a confirm to clear the top (most-serious) alert. (Up/down are used for
+    // page navigation here, so button devices act on the top alert rather than a moving row cursor;
+    // repeated presses clear them most-serious first.)
+    function onSelect() as Lang.Boolean {
+        if (AppState.alerts.size() == 0) { return true; }
+        var a = AppState.alerts[0] as Lang.Dictionary;
+        Ui.pushView(new Ui.Confirmation("Clear: " + a["title"] + "?"),
+                    new AlertConfirmDelegate(a["id"], a["kind"]), Ui.SLIDE_UP);
+        return true;
+    }
+
     // Swipe between screens in the user-configured order.
     function onNextPage() as Lang.Boolean { return Nav.goNext("alerts"); }
     function onPreviousPage() as Lang.Boolean { return Nav.goPrev("alerts"); }
