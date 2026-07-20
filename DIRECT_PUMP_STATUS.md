@@ -5,11 +5,11 @@ the iPhone host over the Connect IQ mobile SDK; the phone owns the pump connecti
 A parallel effort to make the watch talk to the pump **directly over BLE** is **paused** — the code
 lives under `direct-pump/` and this document explains what works, what's blocked, and how to resume.
 
-Bench proof-of-concept only (saline, on a scale, never on a body).
+Experimental — in development; for experimental use only, not FDA-cleared.
 
 ## TL;DR — why it's paused
 Direct watch→pump control is blocked by the pump + platform, not by our code:
-- The **t:slim X2 allows one BLE controller at a time**, and (confirmed on the bench) **generating a
+- The **t:slim X2 allows one BLE controller at a time**, and (confirmed in testing) **generating a
   pairing code for a new device invalidates the old** — i.e. switching between phone and watch
   requires a **full re-pair each time**. There is no "both paired, one active" mode, and the
   shared-secret **resume** shortcut cannot bootstrap a watch that has never paired.
@@ -33,7 +33,7 @@ Direct watch→pump control is blocked by the pump + platform, not by our code:
   pure-Monkey C secp256r1. This is the crux.
 - Live read/bolus over direct BLE — never exercised end-to-end (couldn't get past pairing).
 
-## Bench test that settled it
+## Test that settled it
 With the phone disconnected and the pump put into add-device/pairing mode, the watch **found
 `tslim X2…`, matched, and started pairing** — but the pump then expects a fresh full JPAKE
 handshake (a 6-digit code), which the watch can't perform. Scanning while the pump was NOT in

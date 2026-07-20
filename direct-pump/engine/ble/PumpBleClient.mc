@@ -9,7 +9,7 @@ using Toybox.System;
 // as a serialized queue (BLE allows one operation in flight at a time).
 //
 // This is the Gate A gateway. It compiles against the CIQ API but MUST be validated on venu3s
-// hardware with the bench pump — the simulator cannot exercise real BLE bonding/notifications.
+// hardware with the pump — the simulator cannot exercise real BLE bonding/notifications.
 //
 // Callbacks (set by the owner via method(:fn)):
 //   onReady()                          -> subscriptions established, ready for messages

@@ -1,4 +1,4 @@
-# Milestone 0 — Handoff-Resume Probe (bench procedure)
+# Milestone 0 — Handoff-Resume Probe (test procedure)
 
 **Question this answers:** can a *second* BLE central (the venu3s) establish its own fresh bond to
 the pump and complete **JPAKE resume** (rounds 3–4) using a **derived secret shared from the
@@ -6,9 +6,9 @@ iPhone** — *without* a new 6-digit code — so the watch can take over directl
 away? The answer decides whether the seamless shared-key handoff is possible, or whether the
 achievable model is "one host at a time, switching requires a full re-pair."
 
-> ⚠️ **Bench proof-of-concept only.** Use a dedicated **test pump dispensing saline into a
-> container on a scale — never on a body.** The derived secret is long-term pairing material;
-> treat it like a credential and delete the copy afterward.
+> ⚠️ **Experimental — in development.** For experimental use only; not FDA-cleared, and you assume
+> all responsibility. The derived secret is long-term pairing material; treat it like a credential
+> and delete the copy afterward.
 
 The **Direct (debug)** screen (last in the watch app's swipe rotation) subsumes **Gate A**: its
 status line goes `registering profile → scanning → pairing → connected → bonding → bonded →
@@ -24,7 +24,7 @@ The direct-to-pump path is built into the real faBolus app; the secret is shared
 over the Connect IQ bridge.
 
 ### Prerequisites
-- The bench pump (Mobi / t:slim X2 v7.7+, 6-digit JPAKE), **not currently bonded to any other
+- The pump (Mobi / t:slim X2 v7.7+, 6-digit JPAKE), **not currently bonded to any other
   device**.
 - The updated **faBolus Garmin app** on the venu3s (built from `monkey.jungle`, includes the
   Direct debug screen) and the updated **iPhone app** (includes "Send pump key to Garmin").

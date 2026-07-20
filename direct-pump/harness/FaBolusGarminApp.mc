@@ -7,7 +7,7 @@ using Toybox.Lang;
 // Currently boots the Gate A smoke test (BLE scan -> bond -> subscribe -> one CURRENT_STATUS
 // notification), the first GO/NO-GO gate. The protocol/auth foundation under source/protocol and
 // source/auth is byte-exact vs the oracle (see tests/). The full UI (Milestone 6) is layered on
-// once the gates pass. Bench PoC only (saline).
+// once the gates pass. Experimental.
 class FaBolusGarminApp extends Application.AppBase {
     private var _gateA as GateAController or Null;
 

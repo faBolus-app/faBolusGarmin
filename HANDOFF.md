@@ -6,11 +6,11 @@ loop.** This is Milestone 5 of the larger effort. It shares **no code** with the
 it is a full reimplementation of the pump's protocol + auth + BLE in Monkey C.
 
 > [!WARNING]
-> **Bench proof-of-concept only.** All testing uses a dedicated test pump dispensing **saline
-> into a container on a scale — never on a body.** The dosing path is signed/authorized and is
-> the most safety-critical code; it must be validated byte-exact against the oracle before it
-> ever drives a pump. This is an independent reimplementation, **not** affiliated with or
-> endorsed by Tandem, jwoglom (pumpX2/controlX2), or Garmin.
+> **Experimental — in development.** faBolus Garmin is an independent, open-source project in
+> development for experimental use. It is **not FDA-cleared**; if you build or use it, you assume
+> all responsibility. The dosing path is signed/authorized and is the most safety-critical code;
+> it must be validated byte-exact against the oracle before it ever drives a pump. **Not affiliated
+> with, endorsed by, or a product of Tandem Diabetes Care or Dexcom** (or Garmin).
 
 ---
 
@@ -57,7 +57,7 @@ What's **missing** and is the core research question:
   2. Implement secp256r1 point arithmetic in pure Monkey C (bignum mod p + curve ops). Heavy,
      slow, and error-prone, but it's the realistic path. Validate every step against the oracle.
   3. Reconsider scope: support only the **legacy 16-char pairing** path first (no EC-JPAKE) if
-     the bench pump's firmware allows it — get an end-to-end bonded+authenticated read working,
+     the pump's firmware allows it — get an end-to-end bonded+authenticated read working,
      then tackle JPAKE.
 - **HMAC-SHA1 is needed** for packet signing (see §3) but CIQ HMAC is SHA-256-only. This one is
   easy: implement HMAC-SHA1 yourself from the SHA-1 `Hash` primitive
@@ -70,7 +70,7 @@ building the app around it.
 
 ## 1. What "done" looks like
 A venu3s app that, with no phone: scans → bonds → pairs (6-digit or legacy) → reads status/IOB/
-CGM → delivers a **gravimetrically-verified saline bolus** → cancels mid-delivery — every
+CGM → delivers a **signed bolus** → cancels mid-delivery — every
 outgoing message **byte-exact** vs the cliparser oracle.
 
 Then (only after that): a UI modeled on the already-built phone-relay Garmin app.
@@ -154,15 +154,15 @@ HMAC-SHA256). On Monkey C you must replace mbedTLS (Gate B). The oracle's `jpake
 2. **Gate B** crypto: HMAC-SHA1 from SHA-1; then EC-JPAKE derive == oracle (or legacy pairing).
 3. Port framing (`Packetize`, CRC-16, txId) + a few empty-cargo status reads; **byte-exact vs
    oracle** in a unit test harness (mirror `OracleParityTests`).
-4. Read path end-to-end on the bench pump (status/IOB/CGM).
-5. Signed bolus (permission → initiate → status) + cancel; **gravimetric** validation.
+4. Read path end-to-end on the pump (status/IOB/CGM).
+5. Signed bolus (permission → initiate → status) + cancel; delivery validation.
 6. UI: port the shipped Garmin app's screens (glance, history, details, alerts, 1-2-3 confirm).
 
 ## 7. Repo layout (suggested)
 ```
 faBolusGarmin/
 ├── HANDOFF.md            (this file)
-├── README.md            (independent reimplementation, bench-only disclaimers)
+├── README.md            (independent reimplementation, experimental disclaimers)
 ├── manifest.xml         (Bluetooth + needed permissions; product venu3s)
 ├── monkey.jungle
 ├── source/
@@ -179,7 +179,7 @@ faBolusGarmin/
    exclusive-connection behavior.
 3. **HMAC-SHA1** — easy, but must be byte-verified.
 4. **Performance** — bignum EC math in Monkey C may be too slow on-watch; measure early.
-5. **Firmware/pairing type** to target first (legacy vs JPAKE) — pick based on the bench pump.
+5. **Firmware/pairing type** to target first (legacy vs JPAKE) — pick based on the connected pump.
 
-Start with the two gates. Don't write the pretty UI until a signed saline bolus works on the
-bench, byte-exact against the oracle.
+Start with the two gates. Don't write the pretty UI until a signed bolus works,
+byte-exact against the oracle.

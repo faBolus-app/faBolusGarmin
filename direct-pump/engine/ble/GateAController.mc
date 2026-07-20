@@ -3,8 +3,8 @@ using Toybox.WatchUi;
 
 // Drives the Gate A smoke test: open the BLE client (scan -> bond -> subscribe), and on ready
 // send an ApiVersionRequest to elicit one CURRENT_STATUS notification, proving the full
-// bond+subscribe+notify path on the venu3s with the bench pump. Exposes human-readable status
-// for GateAView. Bench PoC only.
+// bond+subscribe+notify path on the venu3s with the pump. Exposes human-readable status
+// for GateAView. Experimental.
 class GateAController {
     public var status as Lang.String = "idle";
     public var detail as Lang.String = "";

@@ -2,7 +2,7 @@ using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
 
-// Bench debug screen (last in the swipe rotation) for the Milestone 0 handoff test: tap to attempt
+// Debug screen (last in the swipe rotation) for the Milestone 0 handoff test: tap to attempt
 // a direct-to-pump connection using the secret shared from the phone, and watch the live status.
 // Content kept in the central band so the round venu3s bezel doesn't clip it.
 class DirectDebugView extends Ui.View {

@@ -4,7 +4,7 @@ using Toybox.WatchUi;
 // Milestone 0 handoff-resume probe. Drives a *fresh* watch BLE bond to the pump and then attempts
 // JPAKE resume (rounds 3-4 only) using a derivedSecret shared from the phone — WITHOUT a new
 // 6-digit code. Reports exactly how far it gets, so we learn whether a shared-key sequential
-// handoff is possible on this pump. Bench PoC only (saline).
+// handoff is possible on this pump. Experimental.
 //
 // BEFORE BUILDING: paste the phone's derivedSecret hex into DERIVED_SECRET_HEX below (see the
 // handoff-test instructions for how to read it off the iPhone app).

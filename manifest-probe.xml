@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Manifest for the Milestone 0 handoff-resume PROBE build only (probe.jungle). Standalone
      entry (ProbeApp) that bonds to the pump and attempts JPAKE resume with a shared secret.
-     Bench PoC; not shipped. -->
+     Experimental probe; not shipped. -->
 <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
     <iq:application entry="ProbeApp"
                     id="3a9f5c2e7b1d4068a5c6d7e8f9012345"

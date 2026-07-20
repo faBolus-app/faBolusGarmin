@@ -3,7 +3,7 @@ using Toybox.WatchUi;
 using Toybox.Lang;
 
 // Entry point for the Milestone 0 handoff-resume probe build (probe.jungle / manifest-probe.xml).
-// Standalone from the main app so it can be sideloaded on its own for the bench test.
+// Standalone from the main app so it can be sideloaded on its own for the test.
 class ProbeApp extends Application.AppBase {
     private var _probe as ProbeController or Null;
 
