@@ -42,6 +42,17 @@ module RemoteComm {
         };
     }
 
+    // Advanced-control requests (B5): ask the phone to suspend/resume insulin. The phone re-confirms
+    // on-device and only honors them when advanced control is enabled for a Mobi — the watch never
+    // triggers delivery changes unilaterally.
+    function suspendPump(requestId as Lang.String) as Lang.Dictionary {
+        return { "version" => SCHEMA_VERSION, "kind" => "suspendPump", "requestId" => requestId };
+    }
+
+    function resumePump(requestId as Lang.String) as Lang.Dictionary {
+        return { "version" => SCHEMA_VERSION, "kind" => "resumePump", "requestId" => requestId };
+    }
+
     // True when the companion phone is reachable.
     function phoneReachable() as Lang.Boolean {
         return System.getDeviceSettings().phoneConnected;
