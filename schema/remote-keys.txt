@@ -41,3 +41,4 @@ glucoseStaleMinutes
 glucoseHideDelayMinutes
 detailsOrder
 watchChartRanges
+garminComplicationDisplay

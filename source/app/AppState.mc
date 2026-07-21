@@ -42,6 +42,9 @@ module AppState {
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
     const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
     var chartRanges as Lang.Array = [3, 6, 12, 24];
+    // How the BG complication presents: "numericColor" (numeric value + range color + Latin trend
+    // in the unit slot) or "stringTrend" (plain "124 ^" string). Mirrored from the phone.
+    var complicationDisplay as Lang.String = "numericColor";
 
     // Load persisted layout at launch (getInitialView needs defaultScreen before any phone message).
     function loadPrefs() as Void {
@@ -60,6 +63,8 @@ module AppState {
             var sr = sanitizeRanges(cr);
             if (sr.size() > 0) { chartRanges = sr; ensureValidPlotHours(); }
         }
+        var cdp = Storage.getValue("complicationDisplay");
+        if (cdp instanceof Lang.String) { complicationDisplay = cdp; }
     }
 
     // Keep only allowed string ids (de-duped), preserving the phone-chosen subset + order.
@@ -325,6 +330,8 @@ module AppState {
                 var chartSan = sanitizeRanges(chartRaw);
                 if (chartSan.size() > 0) { chartRanges = chartSan; Storage.setValue("watchChartRanges", chartRanges); ensureValidPlotHours(); }
             }
+            var cdisp = data["garminComplicationDisplay"];
+            if (cdisp instanceof Lang.String) { complicationDisplay = cdisp; Storage.setValue("complicationDisplay", complicationDisplay); }
         } else if (kind.equals("bolusStatus")) {
             var rid = data["requestId"] as Lang.String?;
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {

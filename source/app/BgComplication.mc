@@ -50,15 +50,23 @@ module BgComplication {
 
         var stale = (ep <= 0) || ((Time.now().value() - ep) > 360);
         var arrow = stale ? "" : arrowFor(tok);
-        // CGM style: value + trend arrow as a single STRING value (the face's value font
-        // renders the arrow), no unit/ranges. Putting the arrow in :unit made updateComplication
-        // reject the call, freezing the value.
-        var text = stale ? "--" : (value.toString() + arrow);
         try {
-            Complications.updateComplication(COMP_ID, {
-                :value => text,
-                :shortLabel => text
-            });
+            if (AppState.complicationDisplay.equals("stringTrend")) {
+                // Plain string "124 ^" (no range color). For faces that don't range-color.
+                var text = stale ? "--" : (value.toString() + arrow);
+                Complications.updateComplication(COMP_ID, { :value => text, :shortLabel => text });
+            } else {
+                // numericColor (default): numeric :value → Face It range-colors it via <range>; the
+                // Latin trend arrow goes in :unit (appended after the value, e.g. "124 ^"). A String
+                // value + :unit is the invalid combo that froze before — a real Number is required.
+                // Stale: keep the last numeric value but drop the arrow (numeric complications can't
+                // show "--").
+                if (stale) {
+                    Complications.updateComplication(COMP_ID, { :value => value, :unit => "", :shortLabel => value.toString() });
+                } else {
+                    Complications.updateComplication(COMP_ID, { :value => value, :unit => arrow, :shortLabel => value.toString() + arrow });
+                }
+            }
         } catch (e) {
             // Older firmware / complication not registered yet — ignore.
         }
