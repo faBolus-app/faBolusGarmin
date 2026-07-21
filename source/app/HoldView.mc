@@ -71,9 +71,10 @@ class HoldView extends Ui.View {
         if (AppState.status != null) {
             var s = AppState.status as Lang.String;
             var color = Gfx.COLOR_BLUE;
-            if (s.equals("delivered")) {
-                color = Gfx.COLOR_GREEN;
-                // Show the green "delivered" briefly, then return to the first screen.
+            if (s.equals("delivered") || s.equals("cancelled")) {
+                color = s.equals("delivered") ? Gfx.COLOR_GREEN : Gfx.COLOR_ORANGE;
+                // Show the terminal state briefly, then auto-return to the first screen (both
+                // delivered and cancelled — so the screen never lingers after the pump is done).
                 if (!_returnScheduled) {
                     _returnScheduled = true;
                     _homeTimer = new Timer.Timer();
@@ -156,6 +157,7 @@ class HoldView extends Ui.View {
     private function deliver() as Void {
         var reqId = RemoteComm.newRequestId();
         AppState.pendingRequestId = reqId;
+        AppState.sawPhoneBolusing = false;   // reset the lost-echo recovery tracker for this request
         if (!RemoteComm.phoneReachable()) {
             AppState.status = "outOfRange"; AppState.message = "iPhone unreachable"; return;
         }

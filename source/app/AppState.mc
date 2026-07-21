@@ -216,10 +216,13 @@ module AppState {
     var pendingRequestId as Lang.String? = null;
     var status as Lang.String? = null;    // delivering/delivered/failed/...
     var message as Lang.String? = null;
+    // Whether the phone has been seen bolusing since this request started, so a lost/late
+    // terminal echo can be recovered from the connection state (see handle()).
+    var sawPhoneBolusing as Lang.Boolean = false;
 
     function reset() as Void {
         mode = defaultMode; unitsValue = 0.0; carbsValue = 0;
-        pendingRequestId = null; status = null; message = null;
+        pendingRequestId = null; status = null; message = null; sawPhoneBolusing = false;
     }
 
     // Seed glucose/trend from the persisted complication value so the glance shows the last-known
@@ -295,8 +298,20 @@ module AppState {
             var mx = flt(data["maxBolusUnits"]); if (mx != null) { maxUnits = mx; }
             var rv = flt(data["reservoirUnits"]); if (rv != null) { reservoir = rv; }
             var bt = numOrNull(data["batteryPercent"]); if (bt != null) { battery = bt; }
-            var lb = flt(data["lastBolusUnits"]); if (lb != null) { lastBolus = lb; }
             var cn = data["message"] as Lang.String?; if (cn != null) { connection = cn; }
+            // Recover a stuck delivering/cancelling if the phone finished but the terminal bolusStatus
+            // echo was lost/late: once we've seen the phone bolusing and it's no longer bolusing, the
+            // bolus is done. Guarded by sawPhoneBolusing so the pre-bolus push doesn't clear it early.
+            if (bolusing()) {
+                sawPhoneBolusing = true;
+            } else if (sawPhoneBolusing && status != null && (status.equals("delivering") || status.equals("cancelling"))) {
+                status = status.equals("cancelling") ? "cancelled" : "delivered";
+            }
+            // Don't overwrite last-bolus from a routine push while a bolus is in progress — that value
+            // is still the PREVIOUS bolus mid-delivery and would flicker. The bolusStatus echo (or the
+            // recovery above) settles it to the just-delivered amount.
+            var deliveringNow = (status != null && (status.equals("delivering") || status.equals("cancelling")));
+            var lb = flt(data["lastBolusUnits"]); if (lb != null && !deliveringNow) { lastBolus = lb; }
             var ag = flt(data["glucoseAgeSec"]);
             if (ag != null) { readingEpoch = Time.now().value() - ag.toNumber(); }
             // Staleness policy from the phone: glucoseStaleMinutes (>0), glucoseHideDelayMinutes
@@ -337,6 +352,11 @@ module AppState {
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {
                 status = data["status"] as Lang.String?;
                 message = data.hasKey("message") ? data["message"] as Lang.String? : null;
+                // Reflect the actual delivered amount from the outcome echo so "Last bolus" shows the
+                // just-delivered value immediately (e.g. 0.05), not the previous bolus.
+                if (status != null && (status.equals("delivered") || status.equals("cancelled"))) {
+                    var du = flt(data["deliveredUnits"]); if (du != null) { lastBolus = du; }
+                }
             }
         }
     }
