@@ -39,3 +39,5 @@ screenOrder
 defaultScreen
 glucoseStaleMinutes
 glucoseHideDelayMinutes
+detailsOrder
+watchChartRanges

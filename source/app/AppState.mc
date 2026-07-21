@@ -37,6 +37,12 @@ module AppState {
     var defaultScreen as Lang.String = "glance";
     const ALL_SCREENS = ["glance", "alerts", "history", "details"];
 
+    // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
+    // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
+    var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
+    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
+    var chartRanges as Lang.Array = [3, 6, 12, 24];
+
     // Load persisted layout at launch (getInitialView needs defaultScreen before any phone message).
     function loadPrefs() as Void {
         var so = Storage.getValue("screenOrder");
@@ -44,6 +50,55 @@ module AppState {
         var ds = Storage.getValue("defaultScreen");
         if (ds instanceof Lang.String && contains(screenOrder, ds)) { defaultScreen = ds; }
         ensureValidDefault();
+        var dord = Storage.getValue("detailsOrder");
+        if (dord instanceof Lang.Array) {
+            var s = sanitizeAgainst(dord, ALL_DETAILS);
+            if (s.size() > 0) { detailsOrder = s; }
+        }
+        var cr = Storage.getValue("watchChartRanges");
+        if (cr instanceof Lang.Array) {
+            var sr = sanitizeRanges(cr);
+            if (sr.size() > 0) { chartRanges = sr; ensureValidPlotHours(); }
+        }
+    }
+
+    // Keep only allowed string ids (de-duped), preserving the phone-chosen subset + order.
+    function sanitizeAgainst(list as Lang.Array, allow as Lang.Array) as Lang.Array {
+        var out = [];
+        for (var i = 0; i < list.size(); i += 1) {
+            var v = list[i];
+            if (v instanceof Lang.String && contains(allow, v) && !containsStr(out, v)) { out.add(v); }
+        }
+        return out;
+    }
+
+    // Keep only the allowed history ranges {3,6,12,24}, de-duped, preserving order.
+    function sanitizeRanges(list as Lang.Array) as Lang.Array {
+        var allowed = [3, 6, 12, 24];
+        var out = [];
+        for (var i = 0; i < list.size(); i += 1) {
+            var v = list[i];
+            if (v instanceof Lang.Number && containsNum(allowed, v) && !containsNum(out, v)) { out.add(v); }
+        }
+        return out;
+    }
+
+    function containsStr(list as Lang.Array, v as Lang.String) as Lang.Boolean {
+        for (var i = 0; i < list.size(); i += 1) {
+            if (list[i] instanceof Lang.String && (list[i] as Lang.String).equals(v)) { return true; }
+        }
+        return false;
+    }
+    function containsNum(list as Lang.Array, v as Lang.Number) as Lang.Boolean {
+        for (var i = 0; i < list.size(); i += 1) {
+            if (list[i] instanceof Lang.Number && (list[i] as Lang.Number) == v) { return true; }
+        }
+        return false;
+    }
+    function ensureValidPlotHours() as Void {
+        if (chartRanges.size() > 0 && !containsNum(chartRanges, plotHours)) {
+            plotHours = chartRanges[0] as Lang.Number;
+        }
     }
 
     // Keep only known ids (de-duped), preserving the phone-chosen subset + order. Screens the user
@@ -75,10 +130,16 @@ module AppState {
         return false;
     }
 
+    // Advance to the next phone-enabled history range (wrapping). The set comes from the phone's
+    // watchChartRanges; if the current window isn't in it, start at the first.
     function cyclePlotHours() as Void {
-        if (plotHours == 3) { plotHours = 6; }
-        else if (plotHours == 6) { plotHours = 12; }
-        else { plotHours = 3; }   // 3 → 6 → 12 → 3 (no 24 h on the watch)
+        if (chartRanges.size() == 0) { return; }
+        var idx = -1;
+        for (var i = 0; i < chartRanges.size(); i += 1) {
+            if ((chartRanges[i] as Lang.Number) == plotHours) { idx = i; break; }
+        }
+        idx = (idx + 1) % chartRanges.size();
+        plotHours = chartRanges[idx] as Lang.Number;
     }
 
     // A cached BG older than 6 minutes must not be shown (per spec).
@@ -254,6 +315,16 @@ module AppState {
                 Storage.setValue("defaultScreen", ds);
             }
             ensureValidDefault();
+            var detOrderRaw = data["detailsOrder"];
+            if (detOrderRaw instanceof Lang.Array) {
+                var detOrderSan = sanitizeAgainst(detOrderRaw, ALL_DETAILS);
+                if (detOrderSan.size() > 0) { detailsOrder = detOrderSan; Storage.setValue("detailsOrder", detailsOrder); }
+            }
+            var chartRaw = data["watchChartRanges"];
+            if (chartRaw instanceof Lang.Array) {
+                var chartSan = sanitizeRanges(chartRaw);
+                if (chartSan.size() > 0) { chartRanges = chartSan; Storage.setValue("watchChartRanges", chartRanges); ensureValidPlotHours(); }
+            }
         } else if (kind.equals("bolusStatus")) {
             var rid = data["requestId"] as Lang.String?;
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {
