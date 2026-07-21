@@ -43,12 +43,22 @@ class MainView extends Ui.View {
             dc.drawText(cx, h * 0.63, Gfx.FONT_XTINY, age, vc);
         }
 
-        // Bolus button (bottom), label vertically centered.
+        // Bolus button (bottom). While a bolus is delivering it turns into a red "Cancel" (so you
+        // can cancel after leaving the delivery screen); greyed + inert when bolusing isn't possible
+        // (phone unreachable or pump disconnected); otherwise the indigo "Bolus" button.
+        var fill; var label; var labelColor;
+        if (AppState.canCancel()) {
+            fill = Gfx.COLOR_RED; label = "Cancel"; labelColor = Gfx.COLOR_WHITE;
+        } else if (AppState.canBolus()) {
+            fill = 0x5C6BE6; label = "Bolus"; labelColor = Gfx.COLOR_WHITE;   // indigo
+        } else {
+            fill = Gfx.COLOR_DK_GRAY; label = "Bolus"; labelColor = Gfx.COLOR_LT_GRAY;   // disabled
+        }
         var bw = w * 0.52, bh = h * 0.17;
         var bx = cx - bw / 2, by = h * 0.68;
-        dc.setColor(0x5C6BE6, Gfx.COLOR_TRANSPARENT);   // indigo
+        dc.setColor(fill, Gfx.COLOR_TRANSPARENT);
         dc.fillRoundedRectangle(bx, by, bw, bh, 12);
-        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, by + bh / 2, Gfx.FONT_SMALL, "Bolus", vc);
+        dc.setColor(labelColor, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, by + bh / 2, Gfx.FONT_SMALL, label, vc);
     }
 }
