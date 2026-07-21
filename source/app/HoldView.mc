@@ -71,16 +71,18 @@ class HoldView extends Ui.View {
         if (AppState.status != null) {
             var s = AppState.status as Lang.String;
             var color = Gfx.COLOR_BLUE;
-            if (s.equals("delivered") || s.equals("cancelled")) {
-                color = s.equals("delivered") ? Gfx.COLOR_GREEN : Gfx.COLOR_ORANGE;
-                // Show the terminal state briefly, then auto-return to the first screen (both
-                // delivered and cancelled — so the screen never lingers after the pump is done).
+            if (s.equals("delivered")) {
+                color = Gfx.COLOR_GREEN;
+                // Show the green "delivered" briefly, then return to the first screen.
                 if (!_returnScheduled) {
                     _returnScheduled = true;
                     _homeTimer = new Timer.Timer();
                     _homeTimer.start(method(:goHome), 2000, false);
                 }
             }
+            // Cancelled stays on screen (orange, no auto-return) so an accidental cancel isn't missed —
+            // the user backs out deliberately.
+            else if (s.equals("cancelled")) { color = Gfx.COLOR_ORANGE; }
             else if (s.equals("failed") || s.equals("outOfRange")) { color = Gfx.COLOR_RED; }
             dc.setColor(color, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.30, Gfx.FONT_MEDIUM, s, Gfx.TEXT_JUSTIFY_CENTER);
