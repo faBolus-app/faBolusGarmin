@@ -12,6 +12,7 @@
                     minSdkVersion="5.0.0">
         <iq:products>
             <iq:product id="venu3s"/>
+            <iq:product id="fr265s"/>
             <iq:product id="fenix7"/>
         </iq:products>
         <iq:permissions>

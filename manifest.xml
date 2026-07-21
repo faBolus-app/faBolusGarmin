@@ -11,8 +11,10 @@
                     type="watch-app"
                     minSdkVersion="5.0.0">
         <iq:products>
-            <!-- Touchscreen watch (hardware-validated). -->
+            <!-- Touchscreen watches. venu3s is hardware-validated; fr265s (Forerunner 265S, AMOLED
+                 touch, CIQ 5.2) shares the same touch input model. -->
             <iq:product id="venu3s"/>
+            <iq:product id="fr265s"/>
             <!-- Button-only watch. -->
             <iq:product id="fenix7"/>
             <!-- Cycling computers (no watch face → no complication; see monkey.jungle). -->
