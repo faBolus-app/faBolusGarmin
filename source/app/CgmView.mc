@@ -18,18 +18,19 @@ class CgmView extends Ui.View {
         var w = dc.getWidth(), h = dc.getHeight(), cx = w / 2;
         var vc = Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER;
         var stale = AppState.glucoseStale();
+        var isHidden = AppState.glucoseHidden();
 
         // "N M AGO"
         var age = AppState.ageMinutes();
-        var ageStr = (age < 0) ? "--" : (age == 0 ? "NOW" : (age.toString() + "M AGO"));
-        dc.setColor(stale ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        var ageStr = (isHidden || age < 0) ? "--" : (age == 0 ? "NOW" : (age.toString() + "M AGO"));
+        dc.setColor((stale && !isHidden) ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.11, Gfx.FONT_XTINY, ageStr, vc);
 
         // Current reading + trend arrow.
-        var g = AppState.displayGlucose();
-        dc.setColor(stale ? Gfx.COLOR_LT_GRAY : AppState.glucoseColor(), Gfx.COLOR_TRANSPARENT);
+        var g = isHidden ? "--" : AppState.displayGlucose();
+        dc.setColor((stale || isHidden) ? Gfx.COLOR_LT_GRAY : AppState.glucoseColor(), Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.22, Gfx.FONT_NUMBER_MEDIUM, g, vc);
-        if (!stale && !AppState.trend.equals("")) {
+        if (!isHidden && !stale && !AppState.trend.equals("")) {
             var gw = dc.getTextWidthInPixels(g, Gfx.FONT_NUMBER_MEDIUM);
             TrendArrow.draw(dc, cx + gw / 2 + 20, h * 0.22, 11, AppState.trend, AppState.glucoseColor());
         }

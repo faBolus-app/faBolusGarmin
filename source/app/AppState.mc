@@ -22,6 +22,11 @@ module AppState {
     var lastBolus as Lang.Float = -1.0;   // units of the last bolus (-1 = unknown)
     var connection as Lang.String = "";   // e.g. "Connected"
     var readingEpoch as Lang.Number = 0;  // unix sec the current BG was taken (0 = unknown)
+    // Staleness policy, synced from the phone (statusRead). staleSec: age after which the reading is
+    // stale (greyed + not used for carb→unit). hideDelaySec: extra age before hiding ("--"); null =
+    // never hide (always greyed), 0 = hide as soon as stale. Defaults mirror the phone (6 min / never).
+    var staleSec as Lang.Number = 360;
+    var hideDelaySec as Lang.Number or Null = null;
     var history as Lang.Array = [];       // recent mg/dL (Numbers), oldest → newest, for the plot
     var alerts as Lang.Array = [];        // active pump alerts: dicts {id, kind, title}
     var plotHours as Lang.Number = 3;     // history-plot window: 3 → 6 → 12 → 24 → 3
@@ -79,7 +84,13 @@ module AppState {
     // A cached BG older than 6 minutes must not be shown (per spec).
     function glucoseStale() as Lang.Boolean {
         if (glucose == null || readingEpoch <= 0) { return true; }
-        return (Time.now().value() - readingEpoch) > 360;
+        return (Time.now().value() - readingEpoch) > staleSec;
+    }
+    // Past the hide delay → show "--" instead of the greyed value. null delay = never hide.
+    function glucoseHidden() as Lang.Boolean {
+        if (hideDelaySec == null) { return false; }
+        if (readingEpoch <= 0) { return true; }
+        return (Time.now().value() - readingEpoch) > (staleSec + hideDelaySec);
     }
     // Show the number whenever we have one — a stale reading is shown but marked (grayed + age
     // called out), never hidden. "--" only when there's no reading at all.
@@ -162,7 +173,7 @@ module AppState {
         } else if (carbRatio > 0.0) {
             var food = carbsValue.toFloat() / carbRatio;
             var correction = 0.0;
-            if (isf > 0 && glucose != null) {
+            if (isf > 0 && glucose != null && !glucoseStale()) {                    // never correct off a stale BG
                 correction = (glucose - targetBg).toFloat() / isf.toFloat() - iob;  // IOB reduces correction only
                 if (correction < 0.0) { correction = 0.0; }                         // floored, like the t:slim
             }
@@ -199,6 +210,11 @@ module AppState {
             var cn = data["message"] as Lang.String?; if (cn != null) { connection = cn; }
             var ag = flt(data["glucoseAgeSec"]);
             if (ag != null) { readingEpoch = Time.now().value() - ag.toNumber(); }
+            // Staleness policy from the phone: glucoseStaleMinutes (>0), glucoseHideDelayMinutes
+            // (0 = hide when stale, absent = never hide).
+            var sm = numOrNull(data["glucoseStaleMinutes"]); if (sm != null && sm > 0) { staleSec = sm * 60; }
+            var hd = numOrNull(data["glucoseHideDelayMinutes"]);
+            hideDelaySec = (hd != null) ? hd * 60 : null;
             var hs = data["history"]; if (hs instanceof Lang.Array) { history = hs; }
             var al = data["alerts"]; if (al instanceof Lang.Array) { alerts = al; }
             var bm = data["bolusMode"] as Lang.String?; if (bm != null) { defaultMode = bm; }

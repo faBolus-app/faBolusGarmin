@@ -22,22 +22,23 @@ class MainView extends Ui.View {
 
         // Glucose (large, range-colored), vertically centered so the glyph baseline can't
         // collide with the unit label below it.
+        var isHidden = AppState.glucoseHidden();
         var stale = AppState.glucoseStale();
-        var g = AppState.displayGlucose();   // "--" only when there's no reading at all
-        var gColor = stale ? Gfx.COLOR_LT_GRAY : AppState.glucoseColor();
+        var g = isHidden ? "--" : AppState.displayGlucose();   // "--" when hidden or no reading
+        var gColor = (stale || isHidden) ? Gfx.COLOR_LT_GRAY : AppState.glucoseColor();
         dc.setColor(gColor, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.36, Gfx.FONT_NUMBER_HOT, g, vc);
         // Trend arrow (drawn shape, from the phone's direction token) just right of the number;
-        // grayed when the reading is stale.
-        if (!AppState.trend.equals("")) {
+        // grayed when stale, omitted when hidden.
+        if (!isHidden && !AppState.trend.equals("")) {
             var gw = dc.getTextWidthInPixels(g, Gfx.FONT_NUMBER_HOT);
             TrendArrow.draw(dc, cx + gw / 2 + 24, h * 0.36, 13, AppState.trend, gColor);
         }
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.55, Gfx.FONT_XTINY, "mg/dL", vc);
-        // Reading age — always shown; called out in orange when stale.
+        // Reading age — shown while a value is visible; called out in orange when stale.
         var age = AppState.ageLabel();
-        if (!age.equals("")) {
+        if (!isHidden && !age.equals("")) {
             dc.setColor(stale ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.63, Gfx.FONT_XTINY, age, vc);
         }
