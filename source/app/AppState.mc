@@ -81,6 +81,18 @@ module AppState {
         if (glucose == null || readingEpoch <= 0) { return true; }
         return (Time.now().value() - readingEpoch) > 360;
     }
+
+    // The pump is reachable for a bolus when the phone reports it connected (or actively delivering).
+    // "Connecting…", "Scanning…", "Disconnected", "Error", and unknown ("") all block bolusing.
+    function pumpConnected() as Lang.Boolean {
+        return connection.equals("Connected") || connection.find("Deliver") == 0;
+    }
+
+    // Bolusing is only possible when BOTH the phone (which owns the pump link) is reachable and the
+    // pump is connected. The Garmin never touches the pump directly; it relays to the phone.
+    function canBolus() as Lang.Boolean {
+        return RemoteComm.phoneReachable() && pumpConnected();
+    }
     // Show the number whenever we have one — a stale reading is shown but marked (grayed + age
     // called out), never hidden. "--" only when there's no reading at all.
     function displayGlucose() as Lang.String {

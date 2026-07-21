@@ -42,12 +42,14 @@ class MainView extends Ui.View {
             dc.drawText(cx, h * 0.63, Gfx.FONT_XTINY, age, vc);
         }
 
-        // Bolus button (bottom), label vertically centered.
+        // Bolus button (bottom), label vertically centered. Greyed + inert when bolusing isn't
+        // possible (phone unreachable or pump disconnected).
+        var canBolus = AppState.canBolus();
         var bw = w * 0.52, bh = h * 0.17;
         var bx = cx - bw / 2, by = h * 0.68;
-        dc.setColor(0x5C6BE6, Gfx.COLOR_TRANSPARENT);   // indigo
+        dc.setColor(canBolus ? 0x5C6BE6 : Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);   // indigo / disabled
         dc.fillRoundedRectangle(bx, by, bw, bh, 12);
-        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.setColor(canBolus ? Gfx.COLOR_WHITE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, by + bh / 2, Gfx.FONT_SMALL, "Bolus", vc);
     }
 }

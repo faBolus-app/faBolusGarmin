@@ -8,6 +8,9 @@ class MainDelegate extends Ui.BehaviorDelegate {
     function initialize() { BehaviorDelegate.initialize(); }
 
     private function openBolus() as Lang.Boolean {
+        // Inert when bolusing isn't possible (phone unreachable or pump disconnected) — matches the
+        // greyed button in MainView. Swallow the input so nothing opens.
+        if (!AppState.canBolus()) { return true; }
         AppState.reset();
         var v = new BolusEntryView();
         Ui.pushView(v, new BolusEntryDelegate(v), Ui.SLIDE_LEFT);
