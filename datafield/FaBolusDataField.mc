@@ -1,31 +1,22 @@
 using Toybox.WatchUi as Ui;
-using Toybox.Application.Storage;
-using Toybox.Time;
 using Toybox.Lang;
 using Toybox.Activity;
 
-// BG data field. A SimpleDataField shows a label + one value in the activity's data layout, so this
-// renders natively on whatever screen/device the user places it on (watch or Edge).
+// BG data field. A SimpleDataField shows a label + one value in the activity's data layout.
 //
-// Data source: a data field is a separate app with its own storage, so it can't read the remote
-// app's BG directly. The intended feed is the faBolus PUBLIC BG complication — subscribe to it and
-// cache the value into this app's Storage under "bg"/"bgEpoch". That hook is stubbed (see the TODO);
-// until it's wired the field shows "--".
+// LIMITATION: a data field is a separate Connect IQ app with its own storage, and Connect IQ does
+// NOT allow app type 'datafield' to hold the ComplicationSubscriber permission — so a data field
+// CANNOT read the faBolus public BG complication (verified: monkeyc rejects ComplicationSubscriber
+// for datafield). There is no supported cross-app channel for BG here, so this field always shows
+// "--". Use the faBolus WATCH FACE (which can subscribe) or place the public faBolus BG complication
+// directly on a complication-capable watch face instead. Kept as a labeled placeholder.
 class FaBolusDataField extends Ui.SimpleDataField {
     function initialize() {
         SimpleDataField.initialize();
         label = "faBolus BG";
     }
 
-    // TODO(data-field contributor): subscribe to the faBolus public BG complication and cache the
-    // reading into Storage. Connect IQ exposes Complications.getComplications() /
-    // Complications.subscribeToUpdates(id) + registerComplicationChangeCallback(cb) for consumers;
-    // the faBolus complication is published public from source/app/BgComplication.mc.
     function compute(info as Activity.Info) {
-        var bg = Storage.getValue("bg");
-        var ep = Storage.getValue("bgEpoch");
-        var epNum = (ep == null) ? 0 : ep;
-        var stale = (bg == null) || (epNum <= 0) || ((Time.now().value() - epNum) > 360);
-        return stale ? "--" : bg.toString();
+        return "--";
     }
 }

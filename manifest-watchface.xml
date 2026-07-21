@@ -14,7 +14,9 @@
             <iq:product id="venu3s"/>
             <iq:product id="fenix7"/>
         </iq:products>
-        <iq:permissions/>
+        <iq:permissions>
+            <iq:uses-permission id="ComplicationSubscriber"/>
+        </iq:permissions>
         <iq:languages>
             <iq:language>eng</iq:language>
         </iq:languages>
