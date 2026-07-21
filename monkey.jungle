@@ -13,7 +13,14 @@
 project.manifest = manifest.xml
 base.sourcePath = source/app
 base.resourcePath = resources;resources-complications
+# Default build keeps the real complication publisher; drop the no-op stub (see BgComplication.mc).
+base.excludeAnnotations = nocomplications
 
 # --- Non-complication devices (no watch face): exclude the complication resource ---
 edge540.resourcePath = resources
 edge1040.resourcePath = resources
+
+# --- Forerunner 245 (CIQ 3.3, no Complications module): compile out the publisher, use the stub,
+#     and drop the complication resource. The app otherwise runs fully (button confirm path). ---
+fr245.resourcePath = resources
+fr245.excludeAnnotations = complications

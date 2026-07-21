@@ -34,8 +34,10 @@ KEY="$HOME/garmin_dev_key.der"
 "$MONKEYC" -f monkey.jungle   -o bin/faBolus-beta.iq     -y "$KEY" -e -r
 ```
 
-Both bundle all five devices: `venu3s, fr265s, fenix7, edge540, edge1040` (add a device by adding
-its `<iq:product>` to **both** manifests).
+Both bundle all six devices: `venu3s, fr265s, fenix7, fr245, edge540, edge1040` (add a device by
+adding its `<iq:product>` to **both** manifests). `fr245` (Forerunner 245, CIQ 3.3) has no
+Complications module, so its complication publisher is compiled out via `fr245.excludeAnnotations =
+complications` in both jungles (the rest of the app runs normally on its button-confirm path).
 
 ## Companion watch face + data field (separate Connect IQ apps, optional)
 These are their own store submissions (one shared build each — no beta/official split):

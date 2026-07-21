@@ -1,4 +1,3 @@
-using Toybox.Complications;
 using Toybox.Application.Storage;
 using Toybox.Time;
 using Toybox.Lang;
@@ -50,11 +49,20 @@ module BgComplication {
 
         var stale = (ep <= 0) || ((Time.now().value() - ep) > 360);
         var arrow = stale ? "" : arrowFor(tok);
+        pushComplication(value, arrow, stale);
+    }
+
+    // Actual complication write. Split out and annotated so it can be compiled OUT for devices
+    // whose Connect IQ level (< 4.1) lacks the Complications module (e.g. Forerunner 245, CIQ 3.3) —
+    // referencing an absent module is a compile error, so those builds get the no-op stub below via
+    // `<device>.excludeAnnotations = complications` in the jungle.
+    (:complications)
+    function pushComplication(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean) as Void {
         try {
             if (AppState.complicationDisplay.equals("stringTrend")) {
                 // Plain string "124 ^" (no range color). For faces that don't range-color.
                 var text = stale ? "--" : (value.toString() + arrow);
-                Complications.updateComplication(COMP_ID, { :value => text, :shortLabel => text });
+                Toybox.Complications.updateComplication(COMP_ID, { :value => text, :shortLabel => text });
             } else {
                 // numericColor (default): numeric :value → Face It range-colors it; the Latin trend
                 // arrow goes in :unit (appended after the value, e.g. "124 ^"). A String value +
@@ -63,7 +71,7 @@ module BgComplication {
                 // works on faces that read runtime ranges. Stale: keep the last numeric value but
                 // drop the arrow (numeric complications can't show "--").
                 var bands = [0, 70, 180, 250, 400];   // glucose color bands (mg/dL)
-                Complications.updateComplication(COMP_ID, {
+                Toybox.Complications.updateComplication(COMP_ID, {
                     :value => value,
                     :unit => (stale ? "" : arrow),
                     :ranges => bands,
@@ -73,6 +81,11 @@ module BgComplication {
         } catch (e) {
             // Older firmware / complication not registered yet — ignore.
         }
+    }
+
+    // No-op stub for devices without the Complications module (excludeAnnotations = complications).
+    (:nocomplications)
+    function pushComplication(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean) as Void {
     }
 
     function publishFromState() as Void {

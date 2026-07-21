@@ -10,14 +10,16 @@
                     launcherIcon="@Drawables.LauncherIcon"
                     name="@Strings.AppName"
                     type="watch-app"
-                    minSdkVersion="5.0.0">
+                    minSdkVersion="3.3.0">
         <iq:products>
             <!-- Touchscreen watches. venu3s is hardware-validated; fr265s (Forerunner 265S, AMOLED
                  touch, CIQ 5.2) shares the same touch input model. -->
             <iq:product id="venu3s"/>
             <iq:product id="fr265s"/>
-            <!-- Button-only watch. -->
+            <!-- Button-only watches. fr245 (Forerunner 245, MIP, CIQ 3.3) has no Complications
+                 module → its complication publisher is compiled out (see official.jungle). -->
             <iq:product id="fenix7"/>
+            <iq:product id="fr245"/>
             <!-- Cycling computers (no watch face → no complication; see monkey.jungle). -->
             <iq:product id="edge540"/>
             <iq:product id="edge1040"/>
