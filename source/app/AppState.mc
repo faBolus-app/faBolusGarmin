@@ -82,16 +82,21 @@ module AppState {
         return (Time.now().value() - readingEpoch) > 360;
     }
 
-    // The pump is reachable for a bolus when the phone reports it connected (or actively delivering).
-    // "Connecting…", "Scanning…", "Disconnected", "Error", and unknown ("") all block bolusing.
+    // The pump is reachable when the phone reports it connected or actively delivering.
+    // "Connecting…", "Scanning…", "Disconnected", "Error", and unknown ("") mean not reachable.
     function pumpConnected() as Lang.Boolean {
-        return connection.equals("Connected") || connection.find("Deliver") == 0;
+        return connection.equals("Connected") || bolusing();
     }
 
-    // Bolusing is only possible when BOTH the phone (which owns the pump link) is reachable and the
-    // pump is connected. The Garmin never touches the pump directly; it relays to the phone.
+    // A bolus is currently being delivered ("Delivering…").
+    function bolusing() as Lang.Boolean {
+        return connection.find("Deliver") == 0;
+    }
+
+    // A new bolus is only possible when the phone (which owns the pump link) is reachable, the pump
+    // is connected, and no bolus is already in flight. The Garmin never touches the pump directly.
     function canBolus() as Lang.Boolean {
-        return RemoteComm.phoneReachable() && pumpConnected();
+        return RemoteComm.phoneReachable() && pumpConnected() && !bolusing();
     }
     // Show the number whenever we have one — a stale reading is shown but marked (grayed + age
     // called out), never hidden. "--" only when there's no reading at all.
