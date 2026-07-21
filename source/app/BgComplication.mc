@@ -56,16 +56,19 @@ module BgComplication {
                 var text = stale ? "--" : (value.toString() + arrow);
                 Complications.updateComplication(COMP_ID, { :value => text, :shortLabel => text });
             } else {
-                // numericColor (default): numeric :value → Face It range-colors it via <range>; the
-                // Latin trend arrow goes in :unit (appended after the value, e.g. "124 ^"). A String
-                // value + :unit is the invalid combo that froze before — a real Number is required.
-                // Stale: keep the last numeric value but drop the arrow (numeric complications can't
-                // show "--").
-                if (stale) {
-                    Complications.updateComplication(COMP_ID, { :value => value, :unit => "", :shortLabel => value.toString() });
-                } else {
-                    Complications.updateComplication(COMP_ID, { :value => value, :unit => arrow, :shortLabel => value.toString() + arrow });
-                }
+                // numericColor (default): numeric :value → Face It range-colors it; the Latin trend
+                // arrow goes in :unit (appended after the value, e.g. "124 ^"). A String value +
+                // :unit is the invalid combo that froze before — a real Number is required. Pass
+                // :ranges at publish time too (not only the static <range> resource) so coloring
+                // works on faces that read runtime ranges. Stale: keep the last numeric value but
+                // drop the arrow (numeric complications can't show "--").
+                var bands = [0, 70, 180, 250, 400];   // glucose color bands (mg/dL)
+                Complications.updateComplication(COMP_ID, {
+                    :value => value,
+                    :unit => (stale ? "" : arrow),
+                    :ranges => bands,
+                    :shortLabel => (stale ? value.toString() : value.toString() + arrow)
+                });
             }
         } catch (e) {
             // Older firmware / complication not registered yet — ignore.
