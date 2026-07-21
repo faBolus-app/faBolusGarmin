@@ -1,5 +1,7 @@
 <strings>
+    <!-- AppName = the official store app; AppNameBeta = the second (beta) store listing. -->
     <string id="AppName">faBolus</string>
+    <string id="AppNameBeta">faBolus (Beta)</string>
     <string id="ComplicationLong">Blood Glucose</string>
     <string id="ComplicationShort">BG</string>
     <string id="ComplicationFaceIt">faBolus BG</string>

@@ -1,0 +1,10 @@
+# Connect IQ build config for the OFFICIAL faBolus store listing (distinct app id).
+# Identical build to monkey.jungle (beta) but with manifest-official.xml.
+# Build:  monkeyc -f official.jungle -o bin/faBolus-official.iq -y <store_key.der> -e -r -w
+project.manifest = manifest-official.xml
+base.sourcePath = source/app
+base.resourcePath = resources;resources-complications
+
+# --- Non-complication devices (no watch face): exclude the complication resource ---
+edge540.resourcePath = resources
+edge1040.resourcePath = resources
