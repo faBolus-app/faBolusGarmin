@@ -98,6 +98,12 @@ module AppState {
     function canBolus() as Lang.Boolean {
         return RemoteComm.phoneReachable() && pumpConnected() && !bolusing();
     }
+
+    // A bolus started from this watch is in flight and can be cancelled from the glance (e.g. after
+    // the user left the delivery screen). Needs the request id we issued so the phone can correlate.
+    function canCancel() as Lang.Boolean {
+        return bolusing() && pendingRequestId != null;
+    }
     // Show the number whenever we have one — a stale reading is shown but marked (grayed + age
     // called out), never hidden. "--" only when there's no reading at all.
     function displayGlucose() as Lang.String {
