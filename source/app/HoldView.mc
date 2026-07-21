@@ -1,6 +1,7 @@
 using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
+using Toybox.Timer;
 
 // Confirm screen. Two deliberate-input models, chosen by device:
 //   • Touch (venu3s): tap the numbered targets 1 → 2 → 3 in order (a wrong tap resets).
@@ -11,8 +12,26 @@ class HoldView extends Ui.View {
     private var _progress as Lang.Number = 0;      // touch: correct taps so far (0..3)
     public var btnArmed as Lang.Boolean = false;   // buttons: UP-hold completed
     public var btnProgress as Lang.Float = 0.0;    // buttons: current hold fill (0..1)
+    // After a successful delivery, auto-return to the configured first screen (once).
+    private var _homeTimer as Timer.Timer or Null = null;
+    private var _returnScheduled as Lang.Boolean = false;
 
     function initialize() { View.initialize(); }
+
+    // Cancel the auto-return timer if we leave the screen before it fires.
+    function onHide() as Void { stopHomeTimer(); }
+    private function stopHomeTimer() as Void {
+        if (_homeTimer != null) { _homeTimer.stop(); _homeTimer = null; }
+    }
+
+    // Fired 2 s after "delivered": dismiss the bolus flow and open the user's first screen.
+    function goHome() as Void {
+        stopHomeTimer();
+        AppState.reset();
+        Ui.popView(Ui.SLIDE_IMMEDIATE);                     // drop this (Hold) view → Bolus entry
+        var vd = Nav.initialView();                         // the configured first screen
+        Ui.switchToView(vd[0], vd[1], Ui.SLIDE_RIGHT);      // replace Bolus entry with it
+    }
 
     // Circle centers/radius (pixels) for the touch 1-2-3 targets, shared with the delegate.
     static function center(i, w, h) {
@@ -52,7 +71,15 @@ class HoldView extends Ui.View {
         if (AppState.status != null) {
             var s = AppState.status as Lang.String;
             var color = Gfx.COLOR_BLUE;
-            if (s.equals("delivered")) { color = Gfx.COLOR_GREEN; }
+            if (s.equals("delivered")) {
+                color = Gfx.COLOR_GREEN;
+                // Show the green "delivered" briefly, then return to the first screen.
+                if (!_returnScheduled) {
+                    _returnScheduled = true;
+                    _homeTimer = new Timer.Timer();
+                    _homeTimer.start(method(:goHome), 2000, false);
+                }
+            }
             else if (s.equals("failed") || s.equals("outOfRange")) { color = Gfx.COLOR_RED; }
             dc.setColor(color, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.30, Gfx.FONT_MEDIUM, s, Gfx.TEXT_JUSTIFY_CENTER);
