@@ -1,20 +1,17 @@
 <complications>
-    <!-- A single public complication publishing the current blood glucose (with a trend hint in
-         the value string). `public` lets Garmin "Face It" faces and other CIQ watch faces show
-         it. id is stable across versions. Ranges are the glucose color bands (mg/dL) so a
-         subscribing face can range-color the value: low / in-range / high / urgent-high. -->
+    <!-- A single public STRING complication publishing the current blood glucose + a trend hint as
+         text (e.g. "124 ^"). `public` lets Garmin "Face It" faces and other CIQ watch faces show it.
+         id is stable across versions.
+         NOTE: this must NOT declare numeric <range> bands — a <range> makes it a *numeric*
+         complication, and the publisher sends a String value, so faces couldn't use it and fell
+         back to the range floor 0 (the "BG reads 0" bug). As a string complication the published
+         text is shown verbatim. (Range-coloring is sacrificed; the value carries the trend arrow
+         instead.) The published string uses Latin/ASCII only — Face It can't rely on Unicode glyphs. -->
     <complication id="0" access="public"
                   longLabel="@Strings.ComplicationLong"
                   shortLabel="@Strings.ComplicationShort"
                   icon="@Drawables.BgComplicationIcon"
                   glancePreview="true">
         <faceIt defaultText="@Strings.ComplicationFaceIt" />
-        <range>
-            <value>0</value>
-            <value>70</value>
-            <value>180</value>
-            <value>250</value>
-            <value>400</value>
-        </range>
     </complication>
 </complications>

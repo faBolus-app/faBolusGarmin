@@ -13,17 +13,18 @@ module BgComplication {
     const KEY_TREND = "trend";   // direction token: flat/up/down/upup/downdown/up45/down45
     const KEY_EPOCH = "bgEpoch"; // unix sec the BG was taken (for 6-min staleness)
 
-    // Real Unicode trend arrow. Published inside the VALUE string (not the unit): the face's
-    // value font has arrow glyphs (typical CGM complications use this), while the unit font doesn't.
+    // Latin/ASCII trend arrow published inside the VALUE string. Face It / published complication
+    // strings must use Latin characters (A-Z, a-z, 0-9, punctuation) — Unicode arrow glyphs (↑ → …)
+    // fail to render on many faces, which (together with the numeric-<range> bug) is why BG showed 0.
     function arrowFor(token as Lang.String?) as Lang.String {
         if (token == null) { return ""; }
-        if (token.equals("up")) { return "↑"; }
-        if (token.equals("upup")) { return "⇈"; }
-        if (token.equals("up45")) { return "↗"; }
-        if (token.equals("down")) { return "↓"; }
-        if (token.equals("downdown")) { return "⇊"; }
-        if (token.equals("down45")) { return "↘"; }
-        if (token.equals("flat")) { return "→"; }
+        if (token.equals("up")) { return "^"; }
+        if (token.equals("upup")) { return "^^"; }
+        if (token.equals("up45")) { return "/"; }
+        if (token.equals("down")) { return "v"; }
+        if (token.equals("downdown")) { return "vv"; }
+        if (token.equals("down45")) { return "\\"; }
+        if (token.equals("flat")) { return "->"; }
         return "";
     }
 
