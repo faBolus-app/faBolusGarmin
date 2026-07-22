@@ -58,28 +58,31 @@ module BgComplication {
     // `<device>.excludeAnnotations = complications` in the jungle.
     (:complications)
     function pushComplication(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean) as Void {
+        // The complication resource declares a numeric <range>, so :value MUST be a Number (a String
+        // value made faces fall back to the range floor 0 — the original "reads 0" bug).
+        //
+        // Step 1 — guaranteed minimal update: write ONLY the numeric value. This is the field every
+        // firmware accepts, so the current BG always lands even if the richer params below are
+        // rejected. Previously everything was one call, so a single unsupported param (:unit/:ranges/
+        // :shortLabel on some firmware) threw and the silent catch left the complication at 0.
         try {
-            if (AppState.complicationDisplay.equals("stringTrend")) {
-                // Plain string "124 ^" (no range color). For faces that don't range-color.
-                var text = stale ? "--" : (value.toString() + arrow);
-                Toybox.Complications.updateComplication(COMP_ID, { :value => text, :shortLabel => text });
-            } else {
-                // numericColor (default): numeric :value → Face It range-colors it; the Latin trend
-                // arrow goes in :unit (appended after the value, e.g. "124 ^"). A String value +
-                // :unit is the invalid combo that froze before — a real Number is required. Pass
-                // :ranges at publish time too (not only the static <range> resource) so coloring
-                // works on faces that read runtime ranges. Stale: keep the last numeric value but
-                // drop the arrow (numeric complications can't show "--").
-                var bands = [0, 70, 180, 250, 400];   // glucose color bands (mg/dL)
-                Toybox.Complications.updateComplication(COMP_ID, {
-                    :value => value,
-                    :unit => (stale ? "" : arrow),
-                    :ranges => bands,
-                    :shortLabel => (stale ? value.toString() : value.toString() + arrow)
-                });
-            }
+            Toybox.Complications.updateComplication(COMP_ID, { :value => value });
         } catch (e) {
-            // Older firmware / complication not registered yet — ignore.
+            return;   // Complications not registered yet / unsupported — nothing further to try.
+        }
+        // Step 2 — best-effort enrichment (trend arrow + optional color bands + label), in its OWN
+        // try so a param a given watch rejects can't wipe the value written in step 1. numericColor
+        // (default) adds the color :ranges; stringTrend omits them (no color). Stale keeps the last
+        // numeric value but drops the arrow (a numeric complication can't render "--").
+        try {
+            var label = stale ? value.toString() : value.toString() + arrow;
+            var params = { :value => value, :unit => (stale ? "" : arrow), :shortLabel => label };
+            if (!AppState.complicationDisplay.equals("stringTrend")) {
+                params[:ranges] = [0, 70, 180, 250, 400];   // glucose color bands (mg/dL)
+            }
+            Toybox.Complications.updateComplication(COMP_ID, params);
+        } catch (e) {
+            // Enrichment rejected on this firmware — the numeric value from step 1 still stands.
         }
     }
 
