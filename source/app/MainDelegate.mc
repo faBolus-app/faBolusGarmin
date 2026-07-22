@@ -5,11 +5,19 @@ using Toybox.Lang;
 // Glance input: tap the Bolus button (only) to open bolus entry. The top physical button
 // (SELECT) is also a shortcut. Tapping elsewhere on the glance does nothing.
 class MainDelegate extends Ui.BehaviorDelegate {
-    function initialize() { BehaviorDelegate.initialize(); }
+    private var _showBolus as Lang.Boolean;
+    private var _screenId as Lang.String;
+    function initialize(showBolus as Lang.Boolean, screenId as Lang.String) {
+        BehaviorDelegate.initialize();
+        _showBolus = showBolus;
+        _screenId = screenId;
+    }
 
     // Bolus-button press: cancel an in-flight bolus, open bolus entry, or do nothing (disabled) —
     // matching the button's appearance in MainView.
     private function pressBolusButton() as Lang.Boolean {
+        // No bolus button on the CGM-only screen or in read-only mode: swallow the input.
+        if (!_showBolus || AppState.readOnly) { return true; }
         if (AppState.canCancel()) {
             RemoteComm.send(RemoteComm.cancelBolus(AppState.pendingRequestId as Lang.String));
             AppState.status = "cancelling";
@@ -46,6 +54,6 @@ class MainDelegate extends Ui.BehaviorDelegate {
     }
 
     // Swipe between screens in the user-configured order (default: glance → alerts → history → details).
-    function onNextPage() as Lang.Boolean { return Nav.goNext("glance"); }
-    function onPreviousPage() as Lang.Boolean { return Nav.goPrev("glance"); }
+    function onNextPage() as Lang.Boolean { return Nav.goNext(_screenId); }
+    function onPreviousPage() as Lang.Boolean { return Nav.goPrev(_screenId); }
 }

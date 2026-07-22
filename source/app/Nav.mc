@@ -12,7 +12,9 @@ module Nav {
         if (id.equals("alerts"))  { return [new AlertsListView(), new AlertsListDelegate()]; }
         if (id.equals("history")) { return [new CgmView(), new CgmDelegate()]; }
         if (id.equals("details")) { return [new DetailsView(), new DetailsDelegate()]; }
-        return [new MainView(), new MainDelegate()];
+        // CGM-only glance: same current-glucose screen, no bolus button (user's choice, via screen order).
+        if (id.equals("glucose")) { return [new MainView(false), new MainDelegate(false, "glucose")]; }
+        return [new MainView(true), new MainDelegate(true, "glance")];
     }
 
     // The first screen shown at launch.

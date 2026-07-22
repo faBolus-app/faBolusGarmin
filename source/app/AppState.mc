@@ -35,7 +35,12 @@ module AppState {
     // The swipe order of the screens and which one opens first. Ids: glance/alerts/history/details.
     var screenOrder as Lang.Array = ["glance", "alerts", "history", "details"];
     var defaultScreen as Lang.String = "glance";
-    const ALL_SCREENS = ["glance", "alerts", "history", "details"];
+    // "glucose" = a current-glucose screen with no bolus button (users can add it to the order instead
+    // of, or alongside, the bolus "glance").
+    const ALL_SCREENS = ["glance", "glucose", "alerts", "history", "details"];
+
+    // Read-only mode pushed from the phone ("remotesReadOnly"): hide the bolus button everywhere.
+    var readOnly as Lang.Boolean = false;
 
     // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
@@ -321,6 +326,7 @@ module AppState {
             hideDelaySec = (hd != null) ? hd * 60 : null;
             var hs = data["history"]; if (hs instanceof Lang.Array) { history = hs; }
             var al = data["alerts"]; if (al instanceof Lang.Array) { alerts = al; }
+            var ro = data["remotesReadOnly"]; if (ro instanceof Lang.Boolean) { readOnly = ro; }
             var bm = data["bolusMode"] as Lang.String?; if (bm != null) { defaultMode = bm; }
             var bi = flt(data["bolusIncrement"]); if (bi != null && bi > 0.0) { stepU = bi; }
             var ci = numOrNull(data["carbIncrement"]); if (ci != null && ci > 0) { stepC = ci; }

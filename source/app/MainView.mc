@@ -3,9 +3,11 @@ using Toybox.Graphics as Gfx;
 using Toybox.System;
 using Toybox.Lang;
 
-// Glance: current glucose + mg/dL, and a single Bolus button. Nothing else.
+// Glance: current glucose + mg/dL, and (optionally) a single Bolus button. `showBolus` is false for
+// the dedicated CGM-only screen; the button is also hidden when the phone put Garmin in read-only mode.
 class MainView extends Ui.View {
-    function initialize() { View.initialize(); }
+    private var _showBolus as Lang.Boolean;
+    function initialize(showBolus as Lang.Boolean) { View.initialize(); _showBolus = showBolus; }
 
     function onUpdate(dc as Gfx.Dc) as Void {
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
@@ -43,9 +45,12 @@ class MainView extends Ui.View {
             dc.drawText(cx, h * 0.63, Gfx.FONT_XTINY, age, vc);
         }
 
-        // Bolus button (bottom). While a bolus is delivering it turns into a red "Cancel" (so you
-        // can cancel after leaving the delivery screen); greyed + inert when bolusing isn't possible
-        // (phone unreachable or pump disconnected); otherwise the indigo "Bolus" button.
+        // Bolus button (bottom) — omitted on the CGM-only screen and in read-only mode.
+        if (!_showBolus || AppState.readOnly) { return; }
+
+        // While a bolus is delivering it turns into a red "Cancel" (so you can cancel after leaving the
+        // delivery screen); greyed + inert when bolusing isn't possible (phone unreachable or pump
+        // disconnected); otherwise the indigo "Bolus" button.
         var fill; var label; var labelColor;
         if (AppState.canCancel()) {
             fill = Gfx.COLOR_RED; label = "Cancel"; labelColor = Gfx.COLOR_WHITE;

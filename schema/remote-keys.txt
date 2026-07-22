@@ -42,3 +42,4 @@ glucoseHideDelayMinutes
 detailsOrder
 watchChartRanges
 garminComplicationDisplay
+remotesReadOnly
