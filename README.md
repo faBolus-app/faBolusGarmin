@@ -91,3 +91,8 @@ with `faBolus/schema/command.schema.json` — see [CONTRIBUTING.md](CONTRIBUTING
   remotes and hosts fit together and how to host the remotes from another app.
 - [`PumpX2Kit`](https://github.com/faBolus-app/PumpX2Kit) — the Swift Tandem protocol / auth / BLE
   core; the reference the direct-pump engine ports from.
+
+## License & trademark
+
+Code is MIT-licensed (see [LICENSE](LICENSE)). **faBolus™** is a trademark of Tia Geri — the license
+covers the source code, not the name or branding. See [NOTICE.md](NOTICE.md) for details.
