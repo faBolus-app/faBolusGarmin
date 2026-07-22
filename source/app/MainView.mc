@@ -9,6 +9,14 @@ class MainView extends Ui.View {
     private var _showBolus as Lang.Boolean;
     function initialize(showBolus as Lang.Boolean) { View.initialize(); _showBolus = showBolus; }
 
+    // Pull a fresh status every time the glance appears (open, resume, or swipe back to it). This
+    // self-heals a stale connection string — e.g. a transient "Disconnected" left from an overnight
+    // reconnect whose recovery push never reached the watch — that would otherwise leave the Bolus
+    // button stuck greyed until the next 15s poll happened to land.
+    function onShow() as Void {
+        RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRequestId()));
+    }
+
     function onUpdate(dc as Gfx.Dc) as Void {
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
         dc.clear();

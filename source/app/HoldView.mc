@@ -86,7 +86,14 @@ class HoldView extends Ui.View {
             else if (s.equals("failed") || s.equals("outOfRange")) { color = Gfx.COLOR_RED; }
             dc.setColor(color, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.30, Gfx.FONT_MEDIUM, s, Gfx.TEXT_JUSTIFY_CENTER);
-            if (AppState.message != null) {
+            // On a terminal outcome, show how much insulin actually went in — the amount the phone
+            // reported (deliveredUnits → AppState.lastBolus). Especially important on "cancelled",
+            // where the user needs to know the partial dose delivered before the cancel landed.
+            if ((s.equals("cancelled") || s.equals("delivered")) && AppState.lastBolus >= 0.0) {
+                dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+                dc.drawText(cx, h * 0.44, Gfx.FONT_XTINY,
+                            AppState.lastBolus.format("%.2f") + " U delivered", Gfx.TEXT_JUSTIFY_CENTER);
+            } else if (AppState.message != null) {
                 dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
                 dc.drawText(cx, h * 0.44, Gfx.FONT_XTINY, AppState.message, Gfx.TEXT_JUSTIFY_CENTER);
             }
