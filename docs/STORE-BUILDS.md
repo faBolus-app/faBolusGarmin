@@ -39,6 +39,25 @@ adding its `<iq:product>` to **both** manifests). `fr245` (Forerunner 245, CIQ 3
 Complications module, so its complication publisher is compiled out via `fr245.excludeAnnotations =
 complications` in both jungles (the rest of the app runs normally on its button-confirm path).
 
+## Personal beta (self-compilers) — a unique app id per person
+
+The Connect IQ store requires a **unique app id for every beta listing**, even a private one under your
+own account — so two people can't both upload the shared beta id above. To publish your own private
+beta and sideload it to your watch via the store:
+
+```sh
+./scripts/beta-build.sh
+```
+
+It generates a fresh app id the **first** time (saved in `.beta-app-id`, gitignored) and reuses it on
+every later build — regenerating would orphan your listing and unpair your phone. It writes a local
+manifest + jungle with that id and builds `bin/faBolus-beta-personal.iq`. Override the SDK/key paths
+with `MONKEYC=… KEY=… ./scripts/beta-build.sh` (defaults to `~/garmin_dev_key.der`).
+
+Then point the **iPhone app** at the same id: the script prints a `GARMIN_BETA_APP_ID` value — set it
+in `faBolus/LocalConfig.xcconfig`, rebuild the iPhone app, and choose the **beta** Garmin target in the
+app's debug panel. Upload the `.iq` to the Connect IQ dashboard as your private beta listing.
+
 ## Companion watch face + data field (separate Connect IQ apps, optional)
 These are their own store submissions (one shared build each — no beta/official split):
 

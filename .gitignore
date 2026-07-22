@@ -11,3 +11,8 @@ developer_key.der
 *.pem
 
 # Generated golden vectors are committed; the JDK/oracle used to regenerate them is not.
+
+# Personal beta build (scripts/beta-build.sh) — unique per builder, never committed
+.beta-app-id
+manifest-beta-local.xml
+beta-local.jungle
