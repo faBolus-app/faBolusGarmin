@@ -12,7 +12,8 @@ There are **two store listings of the same app**, built from the same source wit
 - **Beta** → a fresh version of the existing "faBolus (Beta)" listing.
 
 The iPhone app's developer panel (Settings → About → tap disclaimer 7× → Debug → Garmin target app)
-selects which one it pairs with; it **defaults to Official**.
+selects which one it pairs with; it **defaults to Beta** (the official listing is dormant for now —
+select Official there only if you specifically need it).
 
 ## Prerequisites
 - Connect IQ SDK (currently 9.2.0). `MONKEYC` below points at its `bin/monkeyc`.
