@@ -39,24 +39,31 @@ adding its `<iq:product>` to **both** manifests). `fr245` (Forerunner 245, CIQ 3
 Complications module, so its complication publisher is compiled out via `fr245.excludeAnnotations =
 complications` in both jungles (the rest of the app runs normally on its button-confirm path).
 
-## Personal beta (self-compilers) — a unique app id per person
+## Personal beta (a unique app id per person) — one command
 
-The Connect IQ store requires a **unique app id for every beta listing**, even a private one under your
-own account — so two people can't both upload the shared beta id above. To publish your own private
-beta and sideload it to your watch via the store:
+The Connect IQ store requires a **unique app id for every beta listing**, even a private one on your
+own account — so two people can't both upload the shared beta id above. To publish your own:
 
 ```sh
 ./scripts/beta-build.sh
 ```
 
-It generates a fresh app id the **first** time (saved in `.beta-app-id`, gitignored) and reuses it on
-every later build — regenerating would orphan your listing and unpair your phone. It writes a local
-manifest + jungle with that id and builds `bin/faBolus-beta-personal.iq`. Override the SDK/key paths
-with `MONKEYC=… KEY=… ./scripts/beta-build.sh` (defaults to `~/garmin_dev_key.der`).
+That's it. The script:
+1. Generates your personal app id the **first** time (saved in `.beta-app-id`, gitignored) and reuses
+   it on every later build — regenerating would orphan your listing and unpair your phone.
+2. Builds a store-ready **`bin/faBolus-beta-personal.iq`** signed with your key, and reveals it in Finder.
+3. **Automatically points the iPhone app at your id** — writes `GARMIN_BETA_APP_ID` into
+   `../faBolus/LocalConfig.xcconfig` and regenerates its Xcode project. No files to edit, and no
+   debug-panel toggle: a build configured with a personal beta id targets it automatically.
 
-Then point the **iPhone app** at the same id: the script prints a `GARMIN_BETA_APP_ID` value — set it
-in `faBolus/LocalConfig.xcconfig`, rebuild the iPhone app, and choose the **beta** Garmin target in the
-app's debug panel. Upload the `.iq` to the Connect IQ dashboard as your private beta listing.
+It checks the two Garmin prerequisites first (the Connect IQ SDK and your signing key at
+`~/garmin_dev_key.der`) with setup guidance if either is missing. Override paths with
+`MONKEYC=… KEY=… FABOLUS_DIR=… ./scripts/beta-build.sh`.
+
+**Two manual steps remain** (Garmin/Apple don't allow automating them):
+- In Xcode, open `faBolus.xcodeproj` and Run to put the updated app on your iPhone.
+- Upload the revealed `.iq` at the Connect IQ dashboard, then install it to your watch from the Garmin
+  Connect IQ Store app.
 
 ## Companion watch face + data field (separate Connect IQ apps, optional)
 These are their own store submissions (one shared build each — no beta/official split):
