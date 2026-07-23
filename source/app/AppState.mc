@@ -37,7 +37,7 @@ module AppState {
     var defaultScreen as Lang.String = "glance";
     // "glucose" = a current-glucose screen with no bolus button (users can add it to the order instead
     // of, or alongside, the bolus "glance").
-    const ALL_SCREENS = ["glance", "glucose", "alerts", "history", "details"];
+    const ALL_SCREENS = ["glance", "glucose", "clock", "bolusonly", "alerts", "history", "details"];
 
     // Read-only mode pushed from the phone ("remotesReadOnly"): hide the bolus button everywhere.
     var readOnly as Lang.Boolean = false;
@@ -313,7 +313,9 @@ module AppState {
         var kind = data["kind"] as Lang.String?;
         if (kind == null) { return; }
         if (kind.equals("statusRead")) {
-            glucose = numOrNull(data["bgMgdl"]);
+            // Guard the assignment (audit): a partial statusRead that omits bgMgdl must NOT null out the
+            // last-known glucose (which would blank the value + disable correction dosing). Keep last.
+            var bg = numOrNull(data["bgMgdl"]); if (bg != null) { glucose = bg; }
             var t = data["trend"] as Lang.String?; if (t != null) { trend = t; }
             var i = flt(data["units"]); if (i != null) { iob = i; }
             var cr = flt(data["carbRatio"]); if (cr != null) { carbRatio = cr; }
@@ -338,6 +340,9 @@ module AppState {
             var lb = flt(data["lastBolusUnits"]); if (lb != null && !deliveringNow) { lastBolus = lb; }
             var ag = flt(data["glucoseAgeSec"]);
             if (ag != null) { readingEpoch = Time.now().value() - ag.toNumber(); }
+            // A fresh bgMgdl with no age is "now" — otherwise it would inherit the previous reading's
+            // epoch, immediately age out (lose its arrow) and be barred from correction dosing (audit).
+            else if (bg != null) { readingEpoch = Time.now().value(); }
             // Staleness policy from the phone: glucoseStaleMinutes (>0), glucoseHideDelayMinutes
             // (0 = hide when stale, absent = never hide).
             var sm = numOrNull(data["glucoseStaleMinutes"]); if (sm != null && sm > 0) { staleSec = sm * 60; }

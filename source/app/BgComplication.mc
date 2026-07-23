@@ -3,9 +3,15 @@ using Toybox.Time;
 using Toybox.Lang;
 
 // Publishes the current blood glucose to complication index 0 (see
-// resources/complications/complications.xml). The value is a String like "124 ^" so Face It /
-// CIQ faces render it verbatim; the trend is stored as a direction token (from the phone) and
-// converted to a Latin-safe arrow here, since complication text can't rely on Unicode glyphs.
+// resources-complications/complications/complications.xml). Publishes a NUMERIC :value (matching the
+// complication's numeric <range>, so Face It can range-color it) with the trend in the :unit slot as a
+// Latin-safe arrow (from the phone's direction token; Unicode arrow glyphs fail to render on many faces).
+// LIMITATION (audit): a numeric/ranged complication cannot render "--", so when a reading goes stale we
+// drop the arrow but the last NUMBER still shows (and keeps its range color). The complication also
+// refreshes only while the app is foreground (15 s) or via throttled background temporal events (≥5 min,
+// system-coalesced), and not at all while the phone/BLE is unreachable — so it can lag the CGM and does
+// NOT itself flag staleness. The in-app screens (and the "value + trend" string display mode) are the
+// staleness-aware surfaces.
 module BgComplication {
     const COMP_ID = 0;
     const KEY_BG = "bg";
@@ -33,8 +39,9 @@ module BgComplication {
         if (epoch > 0) { Storage.setValue(KEY_EPOCH, epoch); }
     }
 
-    // Publish the reading. Falls back to the persisted value/token/epoch when bg is null. A
-    // reading older than 6 minutes is shown as "--" so a stale value is never displayed.
+    // Publish the reading. Falls back to the persisted value/token/epoch when bg is null. When the
+    // reading is stale (older than the phone-synced staleSec, default 6 min) the trend arrow is dropped;
+    // the numeric value itself still shows (see the LIMITATION above — numeric complications can't do "--").
     function publish(bg as Lang.Number?, token as Lang.String?, epoch as Lang.Number) as Void {
         if (!(Toybox has :Complications)) { return; }
         var value = bg;
@@ -47,7 +54,7 @@ module BgComplication {
         }
         if (value == null) { return; }
 
-        var stale = (ep <= 0) || ((Time.now().value() - ep) > 360);
+        var stale = (ep <= 0) || ((Time.now().value() - ep) > AppState.staleSec);
         var arrow = stale ? "" : arrowFor(tok);
         pushComplication(value, arrow, stale);
     }

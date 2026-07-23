@@ -14,6 +14,10 @@ module Nav {
         if (id.equals("details")) { return [new DetailsView(), new DetailsDelegate()]; }
         // CGM-only glance: same current-glucose screen, no bolus button (user's choice, via screen order).
         if (id.equals("glucose")) { return [new MainView(false), new MainDelegate(false, "glucose")]; }
+        // Clock (analog/digital, tap-to-toggle) + glucose, no bolus button.
+        if (id.equals("clock")) { return [new ClockView(), new ClockDelegate()]; }
+        // Just the bolus button, nothing else.
+        if (id.equals("bolusonly")) { return [new BolusOnlyView(), new BolusOnlyDelegate()]; }
         return [new MainView(true), new MainDelegate(true, "glance")];
     }
 
