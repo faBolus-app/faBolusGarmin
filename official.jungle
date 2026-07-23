@@ -4,6 +4,9 @@
 project.manifest = manifest-official.xml
 base.sourcePath = source/app
 base.resourcePath = resources;resources-complications
+# EatingSenseKit barrel (wrist accel/gyro capture → imu_window to the phone). Same as monkey.jungle;
+# built from the faBolusNudge SDK (ondevice/garmin/EatingSense) via barrelbuild, copied to barrels/.
+base.barrelPath = barrels/EatingSense.barrel
 # Default build keeps the real complication publisher; drop the no-op stub (see BgComplication.mc).
 base.excludeAnnotations = nocomplications
 
