@@ -13,6 +13,10 @@
 project.manifest = manifest.xml
 base.sourcePath = source/app
 base.resourcePath = resources;resources-complications
+# EatingSenseKit barrel (reusable wrist accel/gyro capture) — built from the faBolusNudge SDK
+# (ondevice/garmin/EatingSense) via barrelbuild and copied to barrels/. Streams imu_window messages to
+# the phone, which runs the eating model. Advisory; degrades gracefully where raw streaming is absent.
+base.barrelPath = barrels/EatingSense.barrel
 # Default build keeps the real complication publisher; drop the no-op stub (see BgComplication.mc).
 base.excludeAnnotations = nocomplications
 

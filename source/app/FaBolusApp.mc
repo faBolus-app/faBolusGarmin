@@ -15,8 +15,9 @@ using Toybox.Lang;
 class FaBolusApp extends App.AppBase {
     private var _timer as Timer.Timer?;
     private var _lastAlertCount as Lang.Number = 0;
+    private var _eating as EatingRelay?;   // wrist eating-sensing relay (phone-gated)
 
-    function initialize() { AppBase.initialize(); }
+    function initialize() { AppBase.initialize(); _eating = new EatingRelay(); }
 
     function onStart(state as Lang.Dictionary?) as Void {
         Comm.registerForPhoneAppMessages(method(:onPhoneMessage));
@@ -31,6 +32,7 @@ class FaBolusApp extends App.AppBase {
 
     function onStop(state as Lang.Dictionary?) as Void {
         if (_timer != null) { _timer.stop(); }
+        if (_eating != null) { _eating.stop(); }
     }
 
     function getInitialView() {
@@ -68,6 +70,14 @@ class FaBolusApp extends App.AppBase {
     function onPhoneMessage(msg as Comm.PhoneAppMessage) as Void {
         var data = msg.data;
         if (data instanceof Lang.Dictionary) {
+            // Phone toggles wrist eating-sensing (out-of-band, not a RemoteCommand). Advisory feature.
+            var type = data["type"];
+            if (type != null && (type as Lang.String).equals("eating_sense")) {
+                if (_eating != null) {
+                    if (data["on"] == true) { _eating.start(); } else { _eating.stop(); }
+                }
+                return;
+            }
             AppState.handle(data as Lang.Dictionary);
             BgComplication.publishFromState();
             notifyNewAlerts();

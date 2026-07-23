@@ -16,3 +16,4 @@ developer_key.der
 .beta-app-id
 manifest-beta-local.xml
 beta-local.jungle
+barrels/*.barrel
