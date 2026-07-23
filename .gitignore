@@ -17,3 +17,4 @@ developer_key.der
 manifest-beta-local.xml
 beta-local.jungle
 barrels/*.barrel
+.DS_Store
