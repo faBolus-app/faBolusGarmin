@@ -70,42 +70,26 @@ module BgComplication {
         } catch (e) {
             return;   // Complications not registered yet / unsupported — nothing further to try.
         }
-        // Step 2 — best-effort enrichment (trend arrow + optional color bands + label), in its OWN
-        // try so a param a given watch rejects can't wipe the value written in step 1. numericColor
-        // (default) adds the color :ranges; stringTrend omits them (no color). Stale keeps the last
-        // numeric value but drops the arrow (a numeric complication can't render "--").
-        //
-        // The trend arrow rides in the "unit" slot, but the SDK typedef (api.mir) says :unit while the
-        // HTML doc example says :units — and it's unverified which the runtime honors (docs #3). An
-        // UNSUPPORTED symbol key THROWS (that's the original "reads 0" bug), so we can't just send both
-        // in one dict. Instead try :unit; if THAT firmware rejects it, retry with :units. Whichever the
-        // runtime accepts wins; step 1's numeric value stands regardless. Still worth confirming which
-        // key actually renders in the Connect IQ simulator / on a watch (that's SIM/device, not pump-bench).
-        var label = stale ? value.toString() : value.toString() + arrow;
-        var colorMode = !AppState.complicationDisplay.equals("stringTrend");
-        var arrowStr = stale ? "" : arrow;
+        // Step 2 — enrichment: trend arrow + optional range breakpoints + label. Resolved against the
+        // SDK's own type source (`Sdks/.../bin/api.mir`, `Complications.Data` typedef line ~8407):
+        // the accepted keys are exactly :value, :unit (SINGULAR), :shortLabel, :ranges. `:units` (plural)
+        // appears ONLY in a typo-ridden Core-Topics doc example and is NOT an SDK key — so no cascade is
+        // needed. Unknown keys are ignored at runtime (not thrown); the ONLY documented throw is
+        // OperationNotAllowedException, when COMP_ID isn't yet owned by this app. `:ranges` are numeric
+        // breakpoints the CONSUMER (Face It / watch face) colors by — a publisher can't set the color
+        // itself. The real "reads 0" fix is the NUMERIC :value in step 1 (a String value fell back to the
+        // range floor). Stale keeps the last numeric value but drops the arrow (numeric can't render "--").
         try {
-            enrich(value, arrowStr, label, colorMode, :unit);
-        } catch (e) {
-            try {
-                enrich(value, arrowStr, label, colorMode, :units);
-            } catch (e2) {
-                // Both unit-key spellings rejected on this firmware — the numeric value from step 1 stands.
+            var label = stale ? value.toString() : value.toString() + arrow;
+            var params = { :value => value, :unit => (stale ? "" : arrow), :shortLabel => label };
+            if (!AppState.complicationDisplay.equals("stringTrend")) {
+                params[:ranges] = [0, 70, 180, 250, 400];   // glucose range breakpoints (mg/dL)
             }
+            Toybox.Complications.updateComplication(COMP_ID, params);
+        } catch (e) {
+            // OperationNotAllowedException (id not owned yet) — retry value-only so the number still lands.
+            try { Toybox.Complications.updateComplication(COMP_ID, { :value => value }); } catch (e2) {}
         }
-    }
-
-    // One enrichment write with the trend arrow under the given unit-key symbol (:unit or :units).
-    // Throws (propagated to the caller's cascade) if this firmware rejects any param in the dict.
-    (:complications)
-    function enrich(value as Lang.Number, arrow as Lang.String, label as Lang.String,
-                    colorMode as Lang.Boolean, unitKey as Lang.Symbol) as Void {
-        var params = { :value => value, :shortLabel => label };
-        params[unitKey] = arrow;
-        if (colorMode) {
-            params[:ranges] = [0, 70, 180, 250, 400];   // glucose color bands (mg/dL)
-        }
-        Toybox.Complications.updateComplication(COMP_ID, params);
     }
 
     // No-op stub for devices without the Complications module (excludeAnnotations = complications).
