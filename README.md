@@ -1,3 +1,10 @@
+> [!CAUTION]
+> **Not a medical device — do not use it for treatment decisions.** faBolusGarmin is experimental
+> software under active development. It is **not FDA-cleared or approved** and has **not** been
+> clinically validated. **Do not rely on it to make or carry out any insulin-dosing, treatment, or other
+> clinical decision.** It is for software development and evaluation only — always confirm every reading
+> and dose directly on your pump and CGM, and talk to your healthcare provider about your therapy.
+
 # faBolusGarmin
 
 A **Garmin (Connect IQ / Monkey C) remote** for bolusing and status viewing. It speaks a small,
@@ -28,8 +35,10 @@ answers them. Safety interlocks are enforced on both sides — an explicit confi
 (1-2-3 / hold) *and* the host's own confirmation + max-bolus clamp. The watch confirm is a second
 factor, never the only one.
 
-- `source/app/` — the UI (glance / bolus / confirm / history / alerts, complication, `TrendArrow`,
-  `AppState`, `Nav`). Entry: `FaBolusApp`.
+- `source/app/` — the UI. The swipeable screens are user-orderable from the phone: **glance** (glucose +
+  bolus), **glucose-only** (no button), **clock** (analog/digital + glucose, tap to switch, no button),
+  **bolus-only** (just the button), **history**, **alerts** — plus the bolus/confirm modal flow, the
+  complication, `TrendArrow`, `AppState`, and the `Nav` carousel. Entry: `FaBolusApp`.
 - `source/app/DeviceProfile.mc` — the device seam. Screens read it (`isTouch()`, `isButtons()`,
   `hasComplications()`) and adapt at runtime:
   - **Touch** devices: tap the controls; confirm by tapping **1 → 2 → 3**.
@@ -65,12 +74,6 @@ disconnect the official app), with the G7 message decoder ported from the vendor
 build and not yet wired into `AppState.glucose`. See `direct-cgm/DIRECT_CGM_STATUS.md`. (The
 shipping remote already shows failover glucose whenever the phone relays it.) The Apple Watch
 equivalent — direct G7 BLE when the iPhone is unreachable — is live in the `faBolus` repo.
-
-## Known limitations (being worked on)
-- **BG complication reads 0.** The published BG complication does not yet update with the live CGM
-  value — it currently shows `0` instead of the reading. Fix in progress.
-- **Alert clear doesn't reach the pump.** Clearing an alert currently removes it from the phone and
-  watch UI **but does not clear it on the pump itself**. Fix in progress.
 
 ## Build & test
 ```
