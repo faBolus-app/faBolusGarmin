@@ -171,6 +171,13 @@ class HoldView extends Ui.View {
             AppState.status = "outOfRange"; AppState.message = "iPhone unreachable"; return;
         }
         AppState.status = "delivering";
-        RemoteComm.send(RemoteComm.bolusRequest(AppState.deliverUnits, reqId));
+        // Carbs mode: send carbsGrams (+ bg + this watch's estimate) so the phone is the single
+        // calculator and can run the divergence guard. Units mode: send the units as before.
+        if (AppState.mode.equals("carbs")) {
+            var bg = AppState.glucoseStale() ? null : AppState.glucose;
+            RemoteComm.send(RemoteComm.bolusRequestCarbs(AppState.carbsValue, bg, AppState.deliverUnits, reqId));
+        } else {
+            RemoteComm.send(RemoteComm.bolusRequest(AppState.deliverUnits, reqId));
+        }
     }
 }

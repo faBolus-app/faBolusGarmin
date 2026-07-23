@@ -23,6 +23,22 @@ module RemoteComm {
         };
     }
 
+    // Builds a CARB bolus request: the phone (host) is the single calculator — it recomputes the dose
+    // from carbsGrams and delivers. We include this watch's own estimate (remoteEstimateUnits) so the
+    // phone can reject the bolus if the two diverge (stale-settings guard). bg omitted when stale/unknown.
+    function bolusRequestCarbs(carbs as Lang.Number, bg as Lang.Number?, estimate as Lang.Float,
+                               requestId as Lang.String) as Lang.Dictionary {
+        var d = {
+            "version" => SCHEMA_VERSION,
+            "kind" => "bolusRequest",
+            "requestId" => requestId,
+            "carbsGrams" => carbs,
+            "remoteEstimateUnits" => estimate
+        };
+        if (bg != null) { d["bgMgdl"] = bg; }
+        return d;
+    }
+
     function cancelBolus(requestId as Lang.String) as Lang.Dictionary {
         return { "version" => SCHEMA_VERSION, "kind" => "cancelBolus", "requestId" => requestId };
     }
