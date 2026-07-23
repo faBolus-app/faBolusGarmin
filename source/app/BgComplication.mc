@@ -74,16 +74,38 @@ module BgComplication {
         // try so a param a given watch rejects can't wipe the value written in step 1. numericColor
         // (default) adds the color :ranges; stringTrend omits them (no color). Stale keeps the last
         // numeric value but drops the arrow (a numeric complication can't render "--").
+        //
+        // The trend arrow rides in the "unit" slot, but the SDK typedef (api.mir) says :unit while the
+        // HTML doc example says :units — and it's unverified which the runtime honors (docs #3). An
+        // UNSUPPORTED symbol key THROWS (that's the original "reads 0" bug), so we can't just send both
+        // in one dict. Instead try :unit; if THAT firmware rejects it, retry with :units. Whichever the
+        // runtime accepts wins; step 1's numeric value stands regardless. Still worth confirming which
+        // key actually renders in the Connect IQ simulator / on a watch (that's SIM/device, not pump-bench).
+        var label = stale ? value.toString() : value.toString() + arrow;
+        var colorMode = !AppState.complicationDisplay.equals("stringTrend");
+        var arrowStr = stale ? "" : arrow;
         try {
-            var label = stale ? value.toString() : value.toString() + arrow;
-            var params = { :value => value, :unit => (stale ? "" : arrow), :shortLabel => label };
-            if (!AppState.complicationDisplay.equals("stringTrend")) {
-                params[:ranges] = [0, 70, 180, 250, 400];   // glucose color bands (mg/dL)
-            }
-            Toybox.Complications.updateComplication(COMP_ID, params);
+            enrich(value, arrowStr, label, colorMode, :unit);
         } catch (e) {
-            // Enrichment rejected on this firmware — the numeric value from step 1 still stands.
+            try {
+                enrich(value, arrowStr, label, colorMode, :units);
+            } catch (e2) {
+                // Both unit-key spellings rejected on this firmware — the numeric value from step 1 stands.
+            }
         }
+    }
+
+    // One enrichment write with the trend arrow under the given unit-key symbol (:unit or :units).
+    // Throws (propagated to the caller's cascade) if this firmware rejects any param in the dict.
+    (:complications)
+    function enrich(value as Lang.Number, arrow as Lang.String, label as Lang.String,
+                    colorMode as Lang.Boolean, unitKey as Lang.Symbol) as Void {
+        var params = { :value => value, :shortLabel => label };
+        params[unitKey] = arrow;
+        if (colorMode) {
+            params[:ranges] = [0, 70, 180, 250, 400];   // glucose color bands (mg/dL)
+        }
+        Toybox.Complications.updateComplication(COMP_ID, params);
     }
 
     // No-op stub for devices without the Complications module (excludeAnnotations = complications).
