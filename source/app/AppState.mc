@@ -259,24 +259,43 @@ module AppState {
     }
 
     // The units that will actually be delivered (rounded to 0.05, clamped to the pump max).
-    // Mirrors the t:slim / iPhone calculator EXACTLY so a carb bolus from the watch matches the
-    // pump: food = carbs / carbRatio, plus a correction that is reduced by IOB and *floored at 0*
-    // (IOB reduces only the correction, never the carb coverage), then the whole floored at 0.
-    // Units mode is a manual fixed dose (no correction / IOB).
+    // A wrist-side preview only: the phone (host) recomputes the authoritative dose with the same
+    // oracle-backed calculator and runs the divergence guard before delivery.
+    //
+    // This is a hand-port of faBolusCore/BolusMath.estimate() — the faithful Tandem oracle logic
+    // (audit C-01). Keep it in lockstep with that Swift/Java source. The key correctness point:
+    //   • food = carbs / carbRatio
+    //   • fromBG = (glucose - target) / isf   (SIGNED — a below-target BG is negative and REDUCES the dose)
+    //   • fromIOB = -iob (only when iob > 0)   — IOB offsets a BG correction, never a bare carb dose
+    //   • at/above target: add (fromBG + fromIOB) only if that sum is positive
+    //   • below target: apply (fromBG + fromIOB) if it keeps the total positive, else floor total at 0
+    // The old code floored the *correction* at 0 before combining, which dropped every below-target
+    // reduction and over-recommended. Units mode is a manual fixed dose (no correction / IOB).
     function computeUnits() as Lang.Float {
         var total;
         if (mode.equals("units")) {
             total = unitsValue;
         } else if (carbRatio > 0.0) {
-            var food = carbsValue.toFloat() / carbRatio;
-            var correction = 0.0;
-            if (isf > 0 && glucose != null && !glucoseStale()) {                    // never correct off a stale BG
-                correction = (glucose - targetBg).toFloat() / isf.toFloat() - iob;  // IOB reduces correction only
-                if (correction < 0.0) { correction = 0.0; }                         // floored, like the t:slim
+            var fromCarbs = carbsValue.toFloat() / carbRatio;
+            var fromBG = 0.0;
+            if (isf > 0 && glucose != null && !glucoseStale()) {   // never correct off a stale BG
+                fromBG = (glucose - targetBg).toFloat() / isf.toFloat();   // signed
             }
-            total = food + correction;
+            var fromIOB = (iob > 0.0) ? -iob : 0.0;
+            total = fromCarbs;
+            if (fromBG >= 0.0) {                        // at or above target
+                var corr = fromBG + fromIOB;
+                if (corr > 0.0) { total += corr; }      // else IOB cancels the correction → add nothing
+            } else {                                    // below target — correction reduces the dose
+                var corr = fromBG + fromIOB;
+                if (total + corr > 0.0) { total += corr; }
+                else { total = 0.0; }                   // would go negative → floor the total at 0
+            }
         } else {
-            total = carbsValue.toFloat() / 10.0 - iob;   // fallback when no carb ratio — matches iPhone
+            // Fallback when the carb ratio is unknown: carbs-only at an assumed 10 g/U (no correction
+            // off an unknown ISF/target; no bare-carb IOB subtraction, matching the oracle). The phone
+            // recomputes authoritatively and requires confirmation of assumed values.
+            total = carbsValue.toFloat() / 10.0;
         }
         total = Math.round(total * 20.0) / 20.0;   // 0.05 u steps
         if (total < 0.0) { total = 0.0; }
