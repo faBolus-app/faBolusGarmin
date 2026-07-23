@@ -9,6 +9,12 @@ using Toybox.Lang;
 class BolusEntryView extends Ui.View {
     function initialize() { View.initialize(); }
 
+    // Poll once on entering the bolus screen: ask the phone to force a fresh CGM read so the estimate
+    // is current (not continuously — battery). The phone also re-reads + runs the guard at delivery.
+    function onShow() as Void {
+        RemoteComm.send(RemoteComm.statusReadFresh(RemoteComm.newRequestId()));
+    }
+
     // Shared geometry (pixels), so touch hit-testing matches what's drawn. [x,y,w,h] / [cx,cy].
     static function chipRect(w, h) { return [w / 2 - w * 0.24, h * 0.09, w * 0.48, h * 0.14]; }
     static function deliverRect(w, h) { return [w / 2 - w * 0.28, h * 0.74, w * 0.56, h * 0.15]; }

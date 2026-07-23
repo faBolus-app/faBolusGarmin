@@ -47,6 +47,12 @@ module RemoteComm {
         return { "version" => SCHEMA_VERSION, "kind" => "statusRead", "requestId" => requestId };
     }
 
+    // statusRead that asks the phone to force a fresh CGM read before replying — sent when the bolus
+    // screen opens so the estimate is off the newest value. (The phone also re-reads at delivery.)
+    function statusReadFresh(requestId as Lang.String) as Lang.Dictionary {
+        return { "version" => SCHEMA_VERSION, "kind" => "statusRead", "requestId" => requestId, "forceGlucose" => true };
+    }
+
     // Clears a pump alert on the phone (which sends the signed dismiss to the pump).
     function dismissAlert(requestId as Lang.String, alertId as Lang.Number, alertKind as Lang.Number) as Lang.Dictionary {
         return {
