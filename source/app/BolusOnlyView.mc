@@ -19,16 +19,16 @@ class BolusOnlyView extends Ui.View {
         var w = dc.getWidth(), h = dc.getHeight(), cx = w / 2;
         var vc = Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER;
 
-        if (AppState.readOnly) {
-            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, h / 2, Gfx.FONT_SMALL, "Read-only", vc);
-            return;
-        }
-
-        // Same three states as MainView's button (cancel / bolus / disabled).
+        // GA (round-2): read-only must never hide the ability to CANCEL an in-flight bolus. Draw the red
+        // Cancel whenever canCancel() is true, even in read-only; only when there's nothing to cancel does
+        // read-only fall back to the "Read-only" placeholder.
         var fill; var label; var labelColor;
         if (AppState.canCancel()) {
             fill = Gfx.COLOR_RED; label = "Cancel"; labelColor = Gfx.COLOR_WHITE;
+        } else if (AppState.readOnly) {
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h / 2, Gfx.FONT_SMALL, "Read-only", vc);
+            return;
         } else if (AppState.canBolus()) {
             fill = 0x5C6BE6; label = "Bolus"; labelColor = Gfx.COLOR_WHITE;   // indigo
         } else {

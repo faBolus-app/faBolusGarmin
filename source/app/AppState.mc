@@ -353,17 +353,18 @@ module AppState {
             var rv = fltRange(data["reservoirUnits"], 0.0, 1000.0); if (rv != null) { reservoir = rv; }
             var bt = numRange(data["batteryPercent"], 0, 100); if (bt != null) { battery = bt; }
             var cn = strCap(data["message"], 120); if (cn != null) { connection = cn; }
-            // GA-03: the AUTHORITATIVE terminal outcome is the phone's bolusStatus echo (by requestId),
-            // handled below — including the FB-02 "unknown" status when the pump outcome is genuinely
-            // indeterminate. If we've seen the phone bolusing and it's no longer bolusing but the terminal
-            // echo never arrived, do NOT fabricate "delivered" from the connection string (the old bug):
-            // surface "unknown" and point the user to pump history. A cancel we initiated is the one case
-            // we can still call "cancelled" (the user asked for it and we sent the cancel).
+            // GA-03 / round-2: the AUTHORITATIVE terminal outcome is the phone's bolusStatus echo (by
+            // requestId), handled below — including the FB-02 "unknown" status when the pump outcome is
+            // genuinely indeterminate. If we've seen the phone bolusing and it's no longer bolusing but the
+            // terminal echo never arrived, do NOT fabricate an outcome from the connection string. That
+            // applies to a cancel too: a cancel REQUEST we sent is not a confirmed cancellation — the pump
+            // may have finished the dose first. On a lost echo, surface "unknown" (delivering OR cancelling)
+            // and point the user to pump/t:connect history; only an authoritative echo may show
+            // delivered/cancelled.
             if (bolusing()) {
                 sawPhoneBolusing = true;
-            } else if (sawPhoneBolusing && status != null && status.equals("cancelling")) {
-                status = "cancelled";
-            } else if (sawPhoneBolusing && status != null && status.equals("delivering")) {
+            } else if (sawPhoneBolusing && status != null &&
+                       (status.equals("delivering") || status.equals("cancelling"))) {
                 status = "unknown";
                 if (message == null) { message = "Outcome unknown — check the pump/t:connect history."; }
             }

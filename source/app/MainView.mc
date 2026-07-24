@@ -53,15 +53,17 @@ class MainView extends Ui.View {
             dc.drawText(cx, h * 0.63, Gfx.FONT_XTINY, age, vc);
         }
 
-        // Bolus button (bottom) — omitted on the CGM-only screen and in read-only mode.
-        if (!_showBolus || AppState.readOnly) { return; }
+        // Bolus button (bottom) — omitted on the CGM-only screen.
+        if (!_showBolus) { return; }
 
-        // While a bolus is delivering it turns into a red "Cancel" (so you can cancel after leaving the
-        // delivery screen); greyed + inert when bolusing isn't possible (phone unreachable or pump
-        // disconnected); otherwise the indigo "Bolus" button.
+        // GA (round-2): read-only blocks STARTING a bolus but must NEVER hide the ability to CANCEL an
+        // in-flight one. So draw the red Cancel whenever canCancel() is true — before considering
+        // read-only. When there's nothing to cancel and we're read-only, draw no bolus control at all.
         var fill; var label; var labelColor;
         if (AppState.canCancel()) {
             fill = Gfx.COLOR_RED; label = "Cancel"; labelColor = Gfx.COLOR_WHITE;
+        } else if (AppState.readOnly) {
+            return;   // read-only + nothing in flight → no bolus button
         } else if (AppState.canBolus()) {
             fill = 0x5C6BE6; label = "Bolus"; labelColor = Gfx.COLOR_WHITE;   // indigo
         } else {
