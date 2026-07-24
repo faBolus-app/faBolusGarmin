@@ -41,6 +41,13 @@ class BolusEntryDelegate extends Ui.BehaviorDelegate {
     function onSelect() as Lang.Boolean { if (DeviceProfile.isTouch()) { return false; } return deliver(); }
 
     private function deliver() as Lang.Boolean {
+        // FB-01: never deliver a carb bolus when the calculator inputs haven't synced from the phone —
+        // the wrist would otherwise dose off an unverified assumption. Block + tell the user.
+        if (!AppState.carbCalcAvailable()) {
+            AppState.message = "Calculator unavailable — open faBolus on the phone.";
+            Ui.requestUpdate();
+            return true;
+        }
         AppState.deliverUnits = AppState.computeUnits();
         if (AppState.deliverUnits < 0.05) { return true; }   // nothing to deliver
         var v = new HoldView();

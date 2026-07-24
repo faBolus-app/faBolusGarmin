@@ -84,6 +84,8 @@ class HoldView extends Ui.View {
             // the user backs out deliberately.
             else if (s.equals("cancelled")) { color = Gfx.COLOR_ORANGE; }
             else if (s.equals("failed") || s.equals("outOfRange")) { color = Gfx.COLOR_RED; }
+            // FB-02/GA-03: sent but outcome not known — caution color, stays on screen (no auto-return).
+            else if (s.equals("unknown")) { color = Gfx.COLOR_YELLOW; }
             dc.setColor(color, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.30, Gfx.FONT_MEDIUM, s, Gfx.TEXT_JUSTIFY_CENTER);
             // On a terminal outcome, show how much insulin actually went in — the amount the phone

@@ -16,14 +16,18 @@ class MainDelegate extends Ui.BehaviorDelegate {
     // Bolus-button press: cancel an in-flight bolus, open bolus entry, or do nothing (disabled) —
     // matching the button's appearance in MainView.
     private function pressBolusButton() as Lang.Boolean {
-        // No bolus button on the CGM-only screen or in read-only mode: swallow the input.
-        if (!_showBolus || AppState.readOnly) { return true; }
+        // No bolus button on the CGM-only screen: swallow the input.
+        if (!_showBolus) { return true; }
+        // GA-02: read-only must block STARTING a bolus, but NEVER block CANCELLING one already in
+        // flight — cancel is a safety action. So check canCancel() BEFORE the read-only gate.
         if (AppState.canCancel()) {
             RemoteComm.send(RemoteComm.cancelBolus(AppState.pendingRequestId as Lang.String));
             AppState.status = "cancelling";
             Ui.requestUpdate();
             return true;
         }
+        // Read-only (or a hidden button): don't open bolus entry.
+        if (AppState.readOnly) { return true; }
         // Inert when bolusing isn't possible (phone unreachable or pump disconnected) — matches the
         // greyed button. Swallow the input so nothing opens.
         if (!AppState.canBolus()) { return true; }

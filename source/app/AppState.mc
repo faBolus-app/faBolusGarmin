@@ -292,10 +292,10 @@ module AppState {
                 else { total = 0.0; }                   // would go negative → floor the total at 0
             }
         } else {
-            // Fallback when the carb ratio is unknown: carbs-only at an assumed 10 g/U (no correction
-            // off an unknown ISF/target; no bare-carb IOB subtraction, matching the oracle). The phone
-            // recomputes authoritatively and requires confirmation of assumed values.
-            total = carbsValue.toFloat() / 10.0;
+            // FB-01: the carb ratio hasn't arrived from the phone. Do NOT silently assume 10 g/U (that
+            // is an unverified guess that could misdose). Return 0 — `carbCalcAvailable()` is false, so
+            // the UI shows "calculator unavailable" and blocks the bolus until the phone syncs settings.
+            total = 0.0;
         }
         total = Math.round(total * 20.0) / 20.0;   // 0.05 u steps
         if (total < 0.0) { total = 0.0; }
@@ -306,6 +306,13 @@ module AppState {
     function valueLabel() as Lang.String {
         if (mode.equals("units")) { return unitsValue.format("%.2f") + " U"; }
         return carbsValue.toString() + " g";
+    }
+
+    // FB-01: a carb bolus can only be estimated on the wrist once the pump's carb ratio has synced from
+    // the phone. Units mode never needs it. When false the UI shows "calculator unavailable" and blocks
+    // the bolus (we do NOT fall back to an assumed 10 g/U).
+    function carbCalcAvailable() as Lang.Boolean {
+        return !mode.equals("carbs") || carbRatio > 0.0;
     }
 
     // Route an inbound phone message.
@@ -325,13 +332,19 @@ module AppState {
             var rv = flt(data["reservoirUnits"]); if (rv != null) { reservoir = rv; }
             var bt = numOrNull(data["batteryPercent"]); if (bt != null) { battery = bt; }
             var cn = data["message"] as Lang.String?; if (cn != null) { connection = cn; }
-            // Recover a stuck delivering/cancelling if the phone finished but the terminal bolusStatus
-            // echo was lost/late: once we've seen the phone bolusing and it's no longer bolusing, the
-            // bolus is done. Guarded by sawPhoneBolusing so the pre-bolus push doesn't clear it early.
+            // GA-03: the AUTHORITATIVE terminal outcome is the phone's bolusStatus echo (by requestId),
+            // handled below — including the FB-02 "unknown" status when the pump outcome is genuinely
+            // indeterminate. If we've seen the phone bolusing and it's no longer bolusing but the terminal
+            // echo never arrived, do NOT fabricate "delivered" from the connection string (the old bug):
+            // surface "unknown" and point the user to pump history. A cancel we initiated is the one case
+            // we can still call "cancelled" (the user asked for it and we sent the cancel).
             if (bolusing()) {
                 sawPhoneBolusing = true;
-            } else if (sawPhoneBolusing && status != null && (status.equals("delivering") || status.equals("cancelling"))) {
-                status = status.equals("cancelling") ? "cancelled" : "delivered";
+            } else if (sawPhoneBolusing && status != null && status.equals("cancelling")) {
+                status = "cancelled";
+            } else if (sawPhoneBolusing && status != null && status.equals("delivering")) {
+                status = "unknown";
+                if (message == null) { message = "Outcome unknown — check the pump/t:connect history."; }
             }
             // Don't overwrite last-bolus from a routine push while a bolus is in progress — that value
             // is still the PREVIOUS bolus mid-delivery and would flicker. The bolusStatus echo (or the
