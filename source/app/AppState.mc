@@ -277,17 +277,29 @@ module AppState {
     //   • below target: apply (fromBG + fromIOB) if it keeps the total positive, else floor total at 0
     // The old code floored the *correction* at 0 before combining, which dropped every below-target
     // reduction and over-recommended. Units mode is a manual fixed dose (no correction / IOB).
+    // GA-04: the oracle's BolusCalcUnits.doublePrecision — BigDecimal.setScale(2, HALF_UP): round to two
+    // decimals, ties AWAY from zero (so it matches faBolusCore/BolusMath.dp on every component). Monkey C's
+    // Math.round is not HALF_UP for negatives, so we floor(|v|*100 + 0.5) and re-apply the sign.
+    function dp2(v as Lang.Float) as Lang.Float {
+        if (v >= 0.0) { return Math.floor(v * 100.0 + 0.5) / 100.0; }
+        return -(Math.floor(-v * 100.0 + 0.5) / 100.0);
+    }
+
     function computeUnits() as Lang.Float {
         var total;
         if (mode.equals("units")) {
             total = unitsValue;
         } else if (carbRatio > 0.0) {
-            var fromCarbs = carbsValue.toFloat() / carbRatio;
+            // GA-04: round EACH component to two decimals (half-up) before combining — exactly as the
+            // oracle-backed host does. Combining unrounded components then rounding only the total drifted
+            // by one 0.05 U pump increment on ~1.5% of inputs, and the host's 0.10 U tolerance accepted it,
+            // so the delivered dose could differ from the number shown on the hold screen.
+            var fromCarbs = dp2(carbsValue.toFloat() / carbRatio);
             var fromBG = 0.0;
             if (isf > 0 && glucose != null && !glucoseStale()) {   // never correct off a stale BG
-                fromBG = (glucose - targetBg).toFloat() / isf.toFloat();   // signed
+                fromBG = dp2((glucose - targetBg).toFloat() / isf.toFloat());   // signed
             }
-            var fromIOB = (iob > 0.0) ? -iob : 0.0;
+            var fromIOB = (iob > 0.0) ? dp2(-iob) : 0.0;
             total = fromCarbs;
             if (fromBG >= 0.0) {                        // at or above target
                 var corr = fromBG + fromIOB;
@@ -297,6 +309,7 @@ module AppState {
                 if (total + corr > 0.0) { total += corr; }
                 else { total = 0.0; }                   // would go negative → floor the total at 0
             }
+            total = dp2(total);                         // oracle dp() on the combined total too
         } else {
             // FB-01: the carb ratio hasn't arrived from the phone. Do NOT silently assume 10 g/U (that
             // is an unverified guess that could misdose). Return 0 — `carbCalcAvailable()` is false, so
