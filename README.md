@@ -31,9 +31,12 @@ the phone's safety interlock, but aren't hardware-validated yet. See
 ## How it fits together
 The watch is a **thin remote**: it renders status and sends confirmed commands
 (`statusRead` / `bolusRequest` / `cancelBolus` / `dismissAlert`) as the JSON contract; a **host**
-answers them. Safety interlocks are enforced on both sides — an explicit confirm on the watch
-(1-2-3 / hold) *and* the host's own confirmation + max-bolus clamp. The watch confirm is a second
-factor, never the only one.
+answers them. The bolus is confirmed by **one explicit gesture on the watch** (1-2-3 / hold). The host
+does not add a separate confirmation gesture today; instead it independently **recomputes the dose from
+the carbs, rejects it if it diverges from the estimate the watch showed, and clamps to the max-bolus
+limit** (defense in depth, not a second human confirmation). A bound two-phase host-nonce confirmation
+is planned (see `reaudit-remediation-plan` GA-01); until it lands, do not describe the watch gesture as
+one of *two* confirmations.
 
 - `source/app/` — the UI. The swipeable screens are user-orderable from the phone: **glance** (glucose +
   bolus), **glucose-only** (no button), **clock** (analog/digital + glucose, tap to switch, no button),
