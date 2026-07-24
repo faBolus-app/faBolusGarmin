@@ -3,36 +3,18 @@
 > The Garmin (Connect IQ / Monkey C) remote for faBolus. It's a thin remote: it relays confirmed
 > bolus/status/control commands to the iPhone host over the Connect IQ transport (the phone owns the
 > pump). A separate experimental `direct-pump/` engine talks to the pump directly and is the most
-> safety-critical code. Experimental, not FDA-cleared. This file orients an LLM adding a screen,
-> fixing the command mirror, or producing store builds.
+> safety-critical code. Experimental, not FDA-cleared.
 
-## Command contract (keep in sync with the phone)
-- `RemoteCommand` is mirrored here in Monkey C from faBolus's `schema/command.schema.json`
-  (the source of truth). If you change fields, update the mirror and run `scripts/check-schema-drift.sh`.
-  The phone-only kinds (auth/sealed/approval) are intentionally NOT in this shared schema.
+This file is intentionally thin (a map, not a manual) to avoid drifting out of sync. For the real
+working guidance, use:
 
-## Layout
-- `source/` — the app (nav/carousel, screens: glance/alerts/history/details, bolus with the
-  1-2-3 / button-hold confirm), plus `direct-cgm/` and `direct-pump/` engines.
-- `direct-pump/` — **most safety-critical**: signs + sends pump commands directly (mirrors PumpX2Kit's
-  signed path). Treat like insulin-delivery code; keep byte parity with the reference.
-- Jungles + manifests select what's built: `monkey.jungle`/`manifest.xml` (Beta listing),
-  `official.jungle`/`manifest-official.xml` (Official listing), `test.jungle` (unit tests),
-  `probe.jungle`, `datafield.jungle`, `watchface.jungle`, `direct-cgm.jungle`.
-- Devices: `venu3s` (touch) + button devices (fenix7, fr265s, fr245, edge540, edge1040). Input differs
-  per device — touch (onTap) vs button (UP/DOWN + two-button-hold confirm). `fr245` has no
-  Complications module (compiled out via `fr245.excludeAnnotations`).
-- `tests/`, `tools/gen_golden.sh` — parity/golden tests.
+- **`AGENTS.md`** — canonical working guide: the `source/` layout + jungles/manifests/devices, the
+  command-mirror rule, adding a screen, and conventions.
+- **`README.md`** — architecture, supported devices, and the `direct-pump` / `direct-cgm` status.
+- **`docs/STORE-BUILDS.md`** — authoritative build / sign / publish steps (sideload key + both store
+  listings; `monkeyc` lives in the Connect IQ SDK's `bin/`).
+- Contract: the Monkey C `RemoteCommand` mirrors faBolus's `schema/command.schema.json` (source of
+  truth); run `scripts/check-schema-drift.sh` after changing fields.
 
-## Build (see docs/STORE-BUILDS.md for the authoritative steps)
-- SDK: Connect IQ (currently 9.2.0); `monkeyc` lives in the SDK's `bin/`.
-- Sideload (on-device test): `monkeyc -f monkey.jungle -o bin/faBolus.prg -y developer_key.der -d venu3s`
-  (omit `-e -r`; uses the **sideload** key `developer_key.der`).
-- Store packages (`-e -r`, signed with the **store** key `~/garmin_dev_key.der`, NOT the sideload key):
-  - Official: `monkeyc -f official.jungle -o bin/faBolus-official.iq -y ~/garmin_dev_key.der -e -r`
-  - Beta: `monkeyc -f monkey.jungle -o bin/faBolus-beta.iq -y ~/garmin_dev_key.der -e -r`
-  - Build BOTH every release; upload each `.iq` to its Connect IQ store listing.
-
-## Conventions
-- Match the phone's command semantics exactly; the phone is the authority. Device-specific input/UI
-  differences live behind per-device checks. Note anything unverified on-hardware.
+Match the phone's command semantics exactly — the phone is the authority; note anything unverified
+on-hardware.
