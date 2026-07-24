@@ -13,6 +13,9 @@ working guidance, use:
 - **`README.md`** — architecture, supported devices, and the `direct-pump` / `direct-cgm` status.
 - **`docs/STORE-BUILDS.md`** — authoritative build / sign / publish steps (sideload key + both store
   listings; `monkeyc` lives in the Connect IQ SDK's `bin/`).
+- **`docs/SECURITY.md`** — remote-bolus threat notes: the open GA-01 gesture-proof item (bench/product-
+  gated) + the controls (idempotency ledger, divergence guard, inbound validation, child/read-only) that
+  already mitigate its sub-threats.
 - Contract: the Monkey C `RemoteCommand` mirrors faBolus's `schema/command.schema.json` (source of
   truth); run `scripts/check-schema-drift.sh` after changing fields.
 
