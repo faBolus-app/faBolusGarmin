@@ -70,6 +70,12 @@ module AppState {
         }
         var cdp = Storage.getValue("complicationDisplay");
         if (cdp instanceof Lang.String) { complicationDisplay = cdp; }
+        // GA-08: restore the staleness policy so a restart / background launch honors the phone-synced
+        // value instead of silently reverting to the 6-min default until the next statusRead.
+        var ss = Storage.getValue("staleSec");
+        if (ss instanceof Lang.Number && ss > 0) { staleSec = ss; }
+        var hd = Storage.getValue("hideDelaySec");
+        hideDelaySec = (hd instanceof Lang.Number && hd >= 0) ? hd : null;   // absent/null = never hide
     }
 
     // Keep only allowed string ids (de-duped), preserving the phone-chosen subset + order.
@@ -322,16 +328,18 @@ module AppState {
         if (kind.equals("statusRead")) {
             // Guard the assignment (audit): a partial statusRead that omits bgMgdl must NOT null out the
             // last-known glucose (which would blank the value + disable correction dosing). Keep last.
-            var bg = numOrNull(data["bgMgdl"]); if (bg != null) { glucose = bg; }
-            var t = data["trend"] as Lang.String?; if (t != null) { trend = t; }
-            var i = flt(data["units"]); if (i != null) { iob = i; }
-            var cr = flt(data["carbRatio"]); if (cr != null) { carbRatio = cr; }
-            var isfv = numOrNull(data["isf"]); if (isfv != null) { isf = isfv; }
-            var tb = numOrNull(data["targetBg"]); if (tb != null) { targetBg = tb; }
-            var mx = flt(data["maxBolusUnits"]); if (mx != null) { maxUnits = mx; }
-            var rv = flt(data["reservoirUnits"]); if (rv != null) { reservoir = rv; }
-            var bt = numOrNull(data["batteryPercent"]); if (bt != null) { battery = bt; }
-            var cn = data["message"] as Lang.String?; if (cn != null) { connection = cn; }
+            // GA-09: every field is range/finite-validated before it mutates state; a bad value returns
+            // null and the last good reading is kept (see numRange/fltRange/validTrend/strCap).
+            var bg = numRange(data["bgMgdl"], 0, 600); if (bg != null) { glucose = bg; }
+            var t = validTrend(data["trend"]); if (t != null) { trend = t; }
+            var i = fltRange(data["units"], 0.0, 100.0); if (i != null) { iob = i; }
+            var cr = fltRange(data["carbRatio"], 1.0, 300.0); if (cr != null) { carbRatio = cr; }
+            var isfv = numRange(data["isf"], 1, 1000); if (isfv != null) { isf = isfv; }
+            var tb = numRange(data["targetBg"], 40, 400); if (tb != null) { targetBg = tb; }
+            var mx = fltRange(data["maxBolusUnits"], 0.0, 100.0); if (mx != null) { maxUnits = mx; }
+            var rv = fltRange(data["reservoirUnits"], 0.0, 1000.0); if (rv != null) { reservoir = rv; }
+            var bt = numRange(data["batteryPercent"], 0, 100); if (bt != null) { battery = bt; }
+            var cn = strCap(data["message"], 120); if (cn != null) { connection = cn; }
             // GA-03: the AUTHORITATIVE terminal outcome is the phone's bolusStatus echo (by requestId),
             // handled below — including the FB-02 "unknown" status when the pump outcome is genuinely
             // indeterminate. If we've seen the phone bolusing and it's no longer bolusing but the terminal
@@ -350,23 +358,29 @@ module AppState {
             // is still the PREVIOUS bolus mid-delivery and would flicker. The bolusStatus echo (or the
             // recovery above) settles it to the just-delivered amount.
             var deliveringNow = (status != null && (status.equals("delivering") || status.equals("cancelling")));
-            var lb = flt(data["lastBolusUnits"]); if (lb != null && !deliveringNow) { lastBolus = lb; }
-            var ag = flt(data["glucoseAgeSec"]);
+            var lb = fltRange(data["lastBolusUnits"], 0.0, 100.0); if (lb != null && !deliveringNow) { lastBolus = lb; }
+            var ag = fltRange(data["glucoseAgeSec"], 0.0, 86400.0);
             if (ag != null) { readingEpoch = Time.now().value() - ag.toNumber(); }
             // A fresh bgMgdl with no age is "now" — otherwise it would inherit the previous reading's
             // epoch, immediately age out (lose its arrow) and be barred from correction dosing (audit).
             else if (bg != null) { readingEpoch = Time.now().value(); }
             // Staleness policy from the phone: glucoseStaleMinutes (>0), glucoseHideDelayMinutes
             // (0 = hide when stale, absent = never hide).
-            var sm = numOrNull(data["glucoseStaleMinutes"]); if (sm != null && sm > 0) { staleSec = sm * 60; }
-            var hd = numOrNull(data["glucoseHideDelayMinutes"]);
+            var sm = numRange(data["glucoseStaleMinutes"], 1, 720); if (sm != null) { staleSec = sm * 60; }
+            var hd = numRange(data["glucoseHideDelayMinutes"], 0, 1440);
             hideDelaySec = (hd != null) ? hd * 60 : null;
-            var hs = data["history"]; if (hs instanceof Lang.Array) { history = hs; }
-            var al = data["alerts"]; if (al instanceof Lang.Array) { alerts = al; }
+            // GA-08: persist the staleness policy so the glance / complication (separate launch contexts)
+            // and a cold restart honor it before the next statusRead arrives.
+            Storage.setValue("staleSec", staleSec);
+            if (hideDelaySec != null) { Storage.setValue("hideDelaySec", hideDelaySec); }
+            else { Storage.deleteValue("hideDelaySec"); }
+            var hs = data["history"]; if (hs instanceof Lang.Array) { history = sanitizeHistory(hs); }
+            var al = data["alerts"]; if (al instanceof Lang.Array) { alerts = sanitizeAlerts(al); }
             var ro = data["remotesReadOnly"]; if (ro instanceof Lang.Boolean) { readOnly = ro; }
-            var bm = data["bolusMode"] as Lang.String?; if (bm != null) { defaultMode = bm; }
-            var bi = flt(data["bolusIncrement"]); if (bi != null && bi > 0.0) { stepU = bi; }
-            var ci = numOrNull(data["carbIncrement"]); if (ci != null && ci > 0) { stepC = ci; }
+            var bm = data["bolusMode"] as Lang.String?;
+            if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
+            var bi = fltRange(data["bolusIncrement"], 0.01, 5.0); if (bi != null) { stepU = bi; }
+            var ci = numRange(data["carbIncrement"], 1, 100); if (ci != null) { stepC = ci; }
             var so = data["screenOrder"];
             if (so instanceof Lang.Array) {
                 screenOrder = sanitizeOrder(so);
@@ -389,26 +403,84 @@ module AppState {
                 if (chartSan.size() > 0) { chartRanges = chartSan; Storage.setValue("watchChartRanges", chartRanges); ensureValidPlotHours(); }
             }
             var cdisp = data["garminComplicationDisplay"];
-            if (cdisp instanceof Lang.String) { complicationDisplay = cdisp; Storage.setValue("complicationDisplay", complicationDisplay); }
+            if (cdisp instanceof Lang.String && ((cdisp as Lang.String).equals("numericColor") || (cdisp as Lang.String).equals("stringTrend"))) {
+                complicationDisplay = cdisp; Storage.setValue("complicationDisplay", complicationDisplay);
+            }
         } else if (kind.equals("bolusStatus")) {
-            var rid = data["requestId"] as Lang.String?;
+            var rid = strCap(data["requestId"], 64);
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {
-                status = data["status"] as Lang.String?;
-                message = data.hasKey("message") ? data["message"] as Lang.String? : null;
+                // GA-09: only adopt a recognized status token, and cap the message length.
+                var st = data["status"];
+                if (st instanceof Lang.String && containsStr(STATUS_TOKENS, st as Lang.String)) { status = st; }
+                message = data.hasKey("message") ? strCap(data["message"], 160) : null;
                 // Reflect the actual delivered amount from the outcome echo so "Last bolus" shows the
                 // just-delivered value immediately (e.g. 0.05), not the previous bolus.
                 if (status != null && (status.equals("delivered") || status.equals("cancelled"))) {
-                    var du = flt(data["deliveredUnits"]); if (du != null) { lastBolus = du; }
+                    var du = fltRange(data["deliveredUnits"], 0.0, 100.0); if (du != null) { lastBolus = du; }
                 }
             }
         }
     }
+    const STATUS_TOKENS = ["delivering", "delivered", "cancelled", "cancelling", "failed", "unknown"];
 
     function isNum(v) as Lang.Boolean {
         return v instanceof Lang.Number || v instanceof Lang.Float || v instanceof Lang.Double;
     }
     function numOrNull(v) as Lang.Number? { return isNum(v) ? v.toNumber() : null; }
     function flt(v) as Lang.Float? { return isNum(v) ? v.toFloat() : null; }
+
+    // GA-09: inbound-payload validation. A malformed / hostile phone message must not poison global
+    // state — every physiological field is bounds- and finiteness-checked, strings are length-capped,
+    // and nested arrays are size-capped with per-element validation. A rejected field returns null so
+    // the caller KEEPS the last good value rather than adopting garbage.
+    function isFiniteNum(v) as Lang.Boolean {
+        if (!isNum(v)) { return false; }
+        return v == v && v < 1.0e12 && v > -1.0e12;   // v==v rejects NaN; the bounds reject ±Inf / absurd
+    }
+    function numRange(v, lo as Lang.Number, hi as Lang.Number) as Lang.Number? {
+        if (!isFiniteNum(v)) { return null; }
+        var n = v.toNumber();
+        return (n < lo || n > hi) ? null : n;
+    }
+    function fltRange(v, lo as Lang.Float, hi as Lang.Float) as Lang.Float? {
+        if (!isFiniteNum(v)) { return null; }
+        var f = v.toFloat();
+        return (f < lo || f > hi) ? null : f;
+    }
+    function strCap(v, max as Lang.Number) as Lang.String? {
+        if (!(v instanceof Lang.String)) { return null; }
+        var s = v as Lang.String;
+        return (s.length() > max) ? s.substring(0, max) : s;
+    }
+    const TREND_TOKENS = ["flat", "up", "down", "upup", "downdown", "up45", "down45", ""];
+    function validTrend(v) as Lang.String? {
+        if (!(v instanceof Lang.String)) { return null; }
+        return containsStr(TREND_TOKENS, v as Lang.String) ? v : null;
+    }
+    // Keep the newest ≤288 finite readings in [0,600]; drop everything else.
+    function sanitizeHistory(arr as Lang.Array) as Lang.Array {
+        var out = [];
+        var n = arr.size();
+        var start = (n > 288) ? n - 288 : 0;
+        for (var k = start; k < n; k += 1) {
+            var v = numRange(arr[k], 0, 600);
+            if (v != null) { out.add(v); }
+        }
+        return out;
+    }
+    // Keep ≤50 well-formed alert dicts (each must have id/kind/title of the right type).
+    function sanitizeAlerts(arr as Lang.Array) as Lang.Array {
+        var out = [];
+        var lim = (arr.size() > 50) ? 50 : arr.size();
+        for (var k = 0; k < lim; k += 1) {
+            var e = arr[k];
+            if (e instanceof Lang.Dictionary
+                && isNum(e["id"]) && isNum(e["kind"]) && (e["title"] instanceof Lang.String)) {
+                out.add({ "id" => e["id"], "kind" => e["kind"], "title" => strCap(e["title"], 80) });
+            }
+        }
+        return out;
+    }
 
     function glucoseColor() as Gfx.ColorValue {
         if (glucose == null) { return Gfx.COLOR_LT_GRAY; }

@@ -24,7 +24,11 @@ class FaBolusGlanceView extends Ui.GlanceView {
         var bg = Storage.getValue("bg");
         var ep = Storage.getValue("bgEpoch");
         var epNum = (ep == null) ? 0 : ep;
-        var stale = (bg == null) || (epNum <= 0) || ((Time.now().value() - epNum) > 360);
+        // GA-08: honor the phone-synced, persisted staleness window (not a hardcoded 6 min) so the glance
+        // matches the in-app screens. Falls back to 360 s only until the first statusRead persists it.
+        var ss = Storage.getValue("staleSec");
+        var staleSec = (ss instanceof Lang.Number && ss > 0) ? ss : 360;
+        var stale = (bg == null) || (epNum <= 0) || ((Time.now().value() - epNum) > staleSec);
         var text = stale ? "--" : (bg.toString() + " mg/dL");
         dc.setColor(stale ? Gfx.COLOR_LT_GRAY : 0x8AB4FF, Gfx.COLOR_TRANSPARENT);
         dc.drawText(0, h * 0.70, Gfx.FONT_MEDIUM, text, vl);

@@ -50,8 +50,12 @@ class MainDelegate extends Ui.BehaviorDelegate {
         return true;   // swallow taps elsewhere so the glance doesn't jump to bolus
     }
 
-    function onSelect() as Lang.Boolean { return pressBolusButton(); }
+    // GA-06: on a touch device a tap is ALSO delivered as onSelect/onKey. Suppress the physical-button
+    // handlers there (return false → fall through to the validated onTap path) so a single tap can't
+    // double-route into pressBolusButton().
+    function onSelect() as Lang.Boolean { if (DeviceProfile.isTouch()) { return false; } return pressBolusButton(); }
     function onKey(evt as Ui.KeyEvent) as Lang.Boolean {
+        if (DeviceProfile.isTouch()) { return false; }
         var k = evt.getKey();
         if (k == Ui.KEY_ENTER || k == Ui.KEY_START) { return pressBolusButton(); }
         return false;

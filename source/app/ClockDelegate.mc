@@ -15,7 +15,9 @@ class ClockDelegate extends Ui.BehaviorDelegate {
     }
 
     function onTap(evt as Ui.ClickEvent) as Lang.Boolean { return toggleStyle(); }
-    function onSelect() as Lang.Boolean { return toggleStyle(); }
+    // GA-06: a touch tap fires onTap AND onSelect; suppress the button handler on touch so a tap can't
+    // toggle twice (which would cancel itself out). Physical-button devices keep SELECT → toggle.
+    function onSelect() as Lang.Boolean { if (DeviceProfile.isTouch()) { return false; } return toggleStyle(); }
 
     function onNextPage() as Lang.Boolean { return Nav.goNext("clock"); }
     function onPreviousPage() as Lang.Boolean { return Nav.goPrev("clock"); }

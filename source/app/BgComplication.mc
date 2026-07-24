@@ -87,9 +87,19 @@ module BgComplication {
         // itself. The real "reads 0" fix is the NUMERIC :value in step 1 (a String value fell back to the
         // range floor). Stale keeps the last numeric value but drops the arrow (numeric can't render "--").
         try {
-            var label = stale ? value.toString() : value.toString() + arrow;
+            // GA-08: in "stringTrend" mode the surface is the STRING shortLabel — it carries the value +
+            // Latin trend arrow, and "--" when stale (the one place we can honestly show staleness, since
+            // the numeric :value can't render "--"). In "numericColor" mode the label keeps the last number
+            // and we attach range breakpoints for the face to color by.
+            var stringMode = AppState.complicationDisplay.equals("stringTrend");
+            var label;
+            if (stringMode) {
+                label = stale ? "--" : (value.toString() + arrow);
+            } else {
+                label = stale ? value.toString() : (value.toString() + arrow);
+            }
             var params = { :value => value, :unit => (stale ? "" : arrow), :shortLabel => label };
-            if (!AppState.complicationDisplay.equals("stringTrend")) {
+            if (!stringMode) {
                 params[:ranges] = [0, 70, 180, 250, 400];   // glucose range breakpoints (mg/dL)
             }
             Toybox.Complications.updateComplication(COMP_ID, params);
