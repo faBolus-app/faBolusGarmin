@@ -512,6 +512,26 @@ module AppState {
         return out;
     }
 
+    // Alert identity = kind + "-" + id. This is the (kind, id) pair the dismiss path already keys on
+    // (see AlertConfirmDelegate / RemoteComm.dismissAlert) — NOT a new schema field. It's the stable
+    // handle the notifier uses to tell a genuinely NEW alert from a re-fetch of one already surfaced.
+    function alertIdentity(a as Lang.Dictionary) as Lang.String {
+        return a["kind"].toString() + "-" + a["id"].toString();
+    }
+
+    // The set of alert identities the wearer has already been notified about, persisted (as an Array of
+    // identity strings) so it survives background↔foreground transitions and a cold launch — a NEW
+    // alert is one whose identity isn't in this set. GA: a plain count comparison missed an alarm that
+    // replaced another at the same count and re-fired on every reshuffle; identity tracking fixes both.
+    const KEY_SEEN_ALERTS = "seenAlerts";
+    function loadSeenAlerts() as Lang.Array {
+        var s = Storage.getValue(KEY_SEEN_ALERTS);
+        return (s instanceof Lang.Array) ? s : [];
+    }
+    function saveSeenAlerts(seen as Lang.Array) as Void {
+        Storage.setValue(KEY_SEEN_ALERTS, seen);
+    }
+
     function glucoseColor() as Gfx.ColorValue {
         if (glucose == null) { return Gfx.COLOR_LT_GRAY; }
         return rangeColor(glucose as Lang.Number);
