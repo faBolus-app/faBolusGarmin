@@ -1,10 +1,18 @@
 name: CI
 
 on:
+  # `main`, not `master`. This repo's default branch was renamed and these triggers were not, so CI
+  # has fired ZERO times since — the workflow was present, watched a branch that no longer receives
+  # pushes, and reported nothing. An absent check reads the same as a passing one on the repo page,
+  # which is exactly why this went unnoticed for the whole life of the branch.
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
+  # Manual re-validation. This job checks out faBolus for the contract schema, so it can be broken by
+  # a commit in a DIFFERENT repo with no trigger here to notice. v3 §1.2's cross-repo reconciliation
+  # step needs to re-run this after faBolus moves.
+  workflow_dispatch:
 
 jobs:
   schema-drift:
