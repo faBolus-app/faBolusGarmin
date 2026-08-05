@@ -6,9 +6,9 @@ on:
   # pushes, and reported nothing. An absent check reads the same as a passing one on the repo page,
   # which is exactly why this went unnoticed for the whole life of the branch.
   push:
-    branches: [main]
+    branches: [main, experimental]
   pull_request:
-    branches: [main]
+    branches: [main, experimental]
   # Manual re-validation. This job checks out faBolus for the contract schema, so it can be broken by
   # a commit in a DIFFERENT repo with no trigger here to notice. v3 §1.2's cross-repo reconciliation
   # step needs to re-run this after faBolus moves.
@@ -22,10 +22,32 @@ jobs:
       - name: Check out faBolusGarmin
         uses: actions/checkout@v4
 
-      - name: Check out faBolus (for the contract schema)
+      # Branch-aware (v3 §1.2): check out faBolus at the branch matching this Garmin branch when one
+      # exists — an `experimental` Garmin remote validates against the `experimental` faBolus schema —
+      # else `main`. The dangerous failure is a silent fallback that greens a mismatch, so the resolved
+      # ref AND its SHA are logged. (Only one job here, so the resolver is inline rather than a shared
+      # job as in faBolus's workflow.)
+      - name: Resolve faBolus ref (match this branch, else main)
+        id: fbref
+        run: |
+          set -euo pipefail
+          WANT="${{ github.head_ref || github.ref_name }}"
+          REPO="https://github.com/faBolus-app/faBolus.git"
+          if [ -n "$WANT" ] && git ls-remote --exit-code --heads "$REPO" "$WANT" >/dev/null 2>&1; then
+            REF="$WANT"; HOW="matched the Garmin branch '$WANT'"
+          else
+            REF="main"; HOW="fell back to main (no faBolus branch named '${WANT:-<none>}')"
+          fi
+          SHA="$(git ls-remote "$REPO" "refs/heads/$REF" | cut -f1)"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "faBolus → $REF @ $SHA  ($HOW)"
+          echo "::notice title=faBolus checkout::$REF @ ${SHA:0:12} — $HOW"
+
+      - name: Check out faBolus (for the contract schema, branch-aware)
         uses: actions/checkout@v4
         with:
           repository: faBolus-app/faBolus
+          ref: ${{ steps.fbref.outputs.ref }}
           path: _faBolus
 
       - name: Check the Garmin remote against the schema
