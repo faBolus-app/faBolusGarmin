@@ -34,6 +34,13 @@ class BgServiceDelegate extends System.ServiceDelegate {
         if (data instanceof Lang.Dictionary) {
             AppState.handle(data as Lang.Dictionary);
             BgComplication.publishFromState();
+            // A background service process CANNOT vibrate or pushView, so it must not surface a new
+            // alert itself. Instead it hands the freshly-parsed alerts to the main app; the main app's
+            // onBackgroundData re-runs the new-alert check and surfaces it at the next foreground
+            // moment. Forward ONLY the compact alerts list — NOT the full status (its history array can
+            // be large) — to stay within the background-data payload limit.
+            Background.exit(AppState.alerts);
+            return;
         }
         Background.exit(null);
     }

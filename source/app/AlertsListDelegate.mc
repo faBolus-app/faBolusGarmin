@@ -19,13 +19,11 @@ class AlertsListDelegate extends Ui.BehaviorDelegate {
         for (var i = 0; i < shown; i += 1) {
             if (inRect(c, AlertsListView.rowRect(i, w, h))) {
                 var a = AppState.alerts[i] as Lang.Dictionary;
-                RemoteComm.send(RemoteComm.dismissAlert(RemoteComm.newRequestId(), a["id"], a["kind"]));
-                var kept = [];
-                for (var j = 0; j < AppState.alerts.size(); j += 1) {
-                    if (j != i) { kept.add(AppState.alerts[j]); }
-                }
-                AppState.alerts = kept;
-                Ui.requestUpdate();
+                // Confirm before clearing — SYMMETRIC with the button path (onSelect). Clearing a pump
+                // alert is a real action (the phone sends a signed dismiss to the pump), so a touch must
+                // go through the same AlertConfirmDelegate the buttons use, not fire-and-clear on tap.
+                Ui.pushView(new Ui.Confirmation("Clear: " + a["title"] + "?"),
+                            new AlertConfirmDelegate(a["id"], a["kind"]), Ui.SLIDE_UP);
                 return true;
             }
         }
