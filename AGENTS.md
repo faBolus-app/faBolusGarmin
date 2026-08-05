@@ -27,6 +27,13 @@ truth). Change fields → update the mirror → run `scripts/check-schema-drift.
   `fr245.excludeAnnotations = complications`).
 - `tests/`, `tools/gen_golden.sh` — parity/golden tests.
 
+## Build + test before a PR
+- **`./scripts/build-and-test.sh`** compiles every jungle and runs the 29-case Monkey C unit suite in
+  the simulator. Run it before any PR touching Garmin code. It is a **local** gate: CI has no SDK and
+  no display, so CI's Garmin coverage is only the schema-drift contract check (see
+  `.github/workflows/ci.yml`). The script parses the simulator's `PASSED (…failed=0, errors=0)` line —
+  `monkeydo`'s exit code lies (nonzero even when all tests pass).
+
 ## Build (authoritative: `docs/STORE-BUILDS.md`)
 - SDK: Connect IQ (9.2.0); `monkeyc` is in the SDK's `bin/`.
 - **Sideload (on-device test):** `monkeyc -f monkey.jungle -o bin/faBolus.prg -y developer_key.der -d venu3s` (no `-e -r`; sideload key).

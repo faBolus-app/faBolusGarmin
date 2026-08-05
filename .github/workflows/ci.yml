@@ -14,6 +14,14 @@ on:
   # step needs to re-run this after faBolus moves.
   workflow_dispatch:
 
+# CI's Garmin coverage is the CONTRACT check below, and only that, by design. The build + unit-test
+# harness (scripts/build-and-test.sh) is a LOCAL developer gate, because three independent walls make a
+# faithful Garmin build/test in CI impossible: (1) the Connect IQ SDK is license-gated with no
+# unattended installer and an EULA that bars caching it here; (2) `monkeydo` runs the unit tests in the
+# GUI simulator, which needs a display GitHub runners don't have; (3) the shipping jungles need the
+# private, git-ignored EatingSense.barrel. Faking a green Garmin build badge would be worse than an
+# honest, scoped gate. The full matrix (5 barrel-free jungles + the shipping jungle for venu3s AND
+# fr245 + the 29-case unit suite) is verified locally — see AGENTS.md.
 jobs:
   schema-drift:
     name: Monkey C ↔ contract schema drift
