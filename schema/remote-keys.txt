@@ -16,6 +16,7 @@ requestId
 units
 carbsGrams
 remoteEstimateUnits
+sentAt
 forceGlucose
 alertId
 alertKind

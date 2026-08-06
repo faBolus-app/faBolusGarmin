@@ -1,6 +1,7 @@
 using Toybox.Communications as Comm;
 using Toybox.Lang;
 using Toybox.System;
+using Toybox.Time;
 
 // Phone↔remote command builder + transport. Mirrors the faBolus contract
 // (faBolus/schema/command.schema.json, source of truth; Swift mirror in faBolusCore/RemoteCommand.swift).
@@ -14,12 +15,16 @@ module RemoteComm {
     const SCHEMA_VERSION = 1;
 
     // Builds a units-only bolus request dictionary matching the schema.
+    // `sentAt` is the wall-clock send-time stamp (Unix seconds); the host refuses a delivery-authorizing
+    // command that arrives too late (stale bolus = double-dose hazard). Time.now().value() is real
+    // wall-clock — NOT System.getTimer() (monotonic device-uptime), which newRequestId() uses.
     function bolusRequest(units as Lang.Float, requestId as Lang.String) as Lang.Dictionary {
         return {
             "version" => SCHEMA_VERSION,
             "kind" => "bolusRequest",
             "requestId" => requestId,
-            "units" => units
+            "units" => units,
+            "sentAt" => Time.now().value()
         };
     }
 
@@ -33,7 +38,8 @@ module RemoteComm {
             "kind" => "bolusRequest",
             "requestId" => requestId,
             "carbsGrams" => carbs,
-            "remoteEstimateUnits" => estimate
+            "remoteEstimateUnits" => estimate,
+            "sentAt" => Time.now().value()   // freshness stamp — see bolusRequest()
         };
         if (bg != null) { d["bgMgdl"] = bg; }
         return d;
@@ -71,8 +77,15 @@ module RemoteComm {
         return { "version" => SCHEMA_VERSION, "kind" => "suspendPump", "requestId" => requestId };
     }
 
+    // resumePump is insulin-INCREASING (delivery-authorizing), so it carries the freshness stamp too.
+    // suspendPump above is insulin-REDUCING and deliberately NOT gated — no stamp.
     function resumePump(requestId as Lang.String) as Lang.Dictionary {
-        return { "version" => SCHEMA_VERSION, "kind" => "resumePump", "requestId" => requestId };
+        return {
+            "version" => SCHEMA_VERSION,
+            "kind" => "resumePump",
+            "requestId" => requestId,
+            "sentAt" => Time.now().value()
+        };
     }
 
     // True when the companion phone is reachable.
