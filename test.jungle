@@ -1,5 +1,13 @@
-# Unit-test build for the direct-pump engine (oracle-parity + resume), minimal TestEntryApp entry.
+# Unit-test build for the direct-pump engine (oracle-parity + resume) + the AppState statusRead parse
+# (E5 history-epochs invariant), minimal TestEntryApp entry.
 #   monkeyc -f test.jungle -o bin/faBolusGarmin-test.prg -y developer_key.der -d venu3s --unit-test -w
 #   monkeydo bin/faBolusGarmin-test.prg venu3s -t
+#
+# The AppState parse tests (tests/HistoryEpochsTest.mc) need AppState.mc compiled in. AppState's only
+# app-code dependencies are RemoteComm.mc and BgComplication.mc (verified: every other capitalized ref
+# is comment-only), so we pull in exactly those three files — NOT the whole source/app tree, which would
+# drag in EatingRelay.mc and its private EatingSense barrel (absent here / in CI). excludeAnnotations
+# drops BgComplication's no-op stub so only the real (:complications) publisher compiles on venu3s.
 project.manifest = manifest-test.xml
-base.sourcePath = direct-pump/engine/protocol;direct-pump/engine/auth;direct-pump/engine/messages;direct-pump/engine/ble;tests
+base.sourcePath = direct-pump/engine/protocol;direct-pump/engine/auth;direct-pump/engine/messages;direct-pump/engine/ble;source/app/AppState.mc;source/app/RemoteComm.mc;source/app/BgComplication.mc;tests
+base.excludeAnnotations = nocomplications

@@ -28,6 +28,11 @@ module AppState {
     var staleSec as Lang.Number = 360;
     var hideDelaySec as Lang.Number or Null = null;
     var history as Lang.Array = [];       // recent mg/dL (Numbers), oldest → newest, for the plot
+    // E5: per-point Unix-sec source timestamps, aligned 1:1 with `history` (same size, oldest →
+    // newest). Empty ⇒ the phone sent no (or misaligned) epochs and the plot falls back to assumed
+    // ~5-min index spacing. INVARIANT after parsing: historyEpochs.size() == history.size() (1:1) OR
+    // historyEpochs is empty — never a partial/off-by-one array (see the lockstep parse in handle()).
+    var historyEpochs as Lang.Array = [];
     var alerts as Lang.Array = [];        // active pump alerts: dicts {id, kind, title}
     var plotHours as Lang.Number = 3;     // history-plot window: 3 → 6 → 12 → 24 → 3
 
@@ -404,7 +409,24 @@ module AppState {
             Storage.setValue("staleSec", staleSec);
             if (hideDelaySec != null) { Storage.setValue("hideDelaySec", hideDelaySec); }
             else { Storage.deleteValue("hideDelaySec"); }
-            var hs = data["history"]; if (hs instanceof Lang.Array) { history = sanitizeHistory(hs); }
+            // E5: parse history and its per-point epochs in LOCKSTEP so the two arrays are guaranteed
+            // equal-length and 1:1 aligned. sanitizeHistory drops out-of-range mg/dL, which would
+            // misalign a separately-sanitized epochs array — so when epochs are present AND the raw
+            // arrays are the same length, sanitize them as PAIRS (keep index k only if BOTH the reading
+            // and the epoch are valid). Otherwise fall back to the mg/dL-only path and clear epochs, so
+            // the invariant (aligned-or-empty) always holds.
+            var hs = data["history"];
+            if (hs instanceof Lang.Array) {
+                var es = data["historyEpochs"];
+                if (es instanceof Lang.Array && (es as Lang.Array).size() == hs.size()) {
+                    var pair = sanitizeHistoryPairs(hs, es);
+                    history = pair[0];
+                    historyEpochs = pair[1];
+                } else {
+                    history = sanitizeHistory(hs);
+                    historyEpochs = [];   // no/misaligned epochs → fall back to assumed spacing
+                }
+            }
             var al = data["alerts"]; if (al instanceof Lang.Array) { alerts = sanitizeAlerts(al); }
             var ro = data["remotesReadOnly"]; if (ro instanceof Lang.Boolean) { readOnly = ro; }
             var bm = data["bolusMode"] as Lang.String?;
@@ -497,6 +519,25 @@ module AppState {
             if (v != null) { out.add(v); }
         }
         return out;
+    }
+    // E5: keep the newest ≤288 (mg/dL, epoch) PAIRS where BOTH the reading is finite in [0,600] AND
+    // the epoch is a finite Number > 0. Sanitizing as PAIRS (never independently) is the whole point:
+    // an out-of-range reading drops its epoch too, so a surviving reading can never shift onto the
+    // wrong timestamp. Callers pass equal-length raw arrays. Returns [historyOut, epochsOut], always
+    // of equal size (the aligned-pair invariant). Reuses numRange/isFiniteNum.
+    function sanitizeHistoryPairs(hs as Lang.Array, es as Lang.Array) as Lang.Array {
+        var histOut = [];
+        var epOut = [];
+        var n = hs.size();
+        var start = (n > 288) ? n - 288 : 0;
+        for (var k = start; k < n; k += 1) {
+            var v = numRange(hs[k], 0, 600);
+            if (v != null && isFiniteNum(es[k])) {
+                var e = es[k].toNumber();
+                if (e > 0) { histOut.add(v); epOut.add(e); }
+            }
+        }
+        return [histOut, epOut];
     }
     // Keep ≤50 well-formed alert dicts (each must have id/kind/title of the right type).
     function sanitizeAlerts(arr as Lang.Array) as Lang.Array {

@@ -1,6 +1,7 @@
 using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
+using Toybox.Time;
 
 // CGM history screen (swipe up from the glance): "Nm ago", the current reading + trend,
 // and a 3-hour glucose plot with 100/200/300/400 gridlines. Data comes from the phone
@@ -54,14 +55,44 @@ class CgmView extends Ui.View {
             dc.drawText(plotR + w * 0.02, y, Gfx.FONT_XTINY, v.toString(), Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER);
         }
 
-        // Data dots (CGM-style), oldest → newest across the width. Window to the selected
-        // hours (~12 points/hour at 5-min spacing); newest points are at the end of the array.
+        // Data dots (CGM-style). E5: when the phone sent per-point source timestamps (historyEpochs,
+        // aligned 1:1 with history — enforced by the AppState parse), position each reading on a REAL
+        // time x-axis so a data GAP renders as a horizontal gap, not evenly-spaced dots. When epochs
+        // are unavailable/misaligned (historyEpochs empty), fall back to the exact prior uniform-index
+        // spacing (~12 points/hour at 5-min spacing; newest points at the end of the array).
         var full = AppState.history;
-        var total = full.size();
-        var want = AppState.plotHours * 12;
-        var start = (total > want) ? (total - want) : 0;
-        var n = total - start;
-        if (n >= 1) {
+        var epochs = AppState.historyEpochs;
+        var size = full.size();
+        var startIdx = (size > 288) ? (size - 288) : 0;   // ≤288 safety bound
+        var timed = (epochs.size() == size) && (size > 0);
+        var drawn = 0;
+        if (timed) {
+            // Real-time x-axis: window = [now - plotHours*3600, now]; only points inside it are drawn.
+            var now = Time.now().value();
+            var winStart = now - AppState.plotHours * 3600;
+            var winSpan = now - winStart;
+            if (winSpan < 1) { winSpan = 1; }   // guard divide-by-zero
+            for (var k = startIdx; k < size; k += 1) {
+                var val = full[k];
+                var ep = epochs[k];
+                if (!(val instanceof Lang.Number) && !(val instanceof Lang.Float)) { continue; }
+                if (!(ep instanceof Lang.Number) && !(ep instanceof Lang.Float)) { continue; }
+                var t = ep.toNumber();
+                if (t < winStart || t > now) { continue; }   // outside the visible window
+                var vv = val.toFloat();
+                if (vv < VMIN) { vv = VMIN; }
+                if (vv > VMAX) { vv = VMAX; }
+                var px = plotL + (t - winStart).toFloat() / winSpan.toFloat() * (plotR - plotL);
+                var py = plotB - ((vv - VMIN) / (VMAX - VMIN)) * plotH;
+                dc.setColor(AppState.rangeColor(val.toNumber()), Gfx.COLOR_TRANSPARENT);
+                dc.fillCircle(px, py, 2);
+                drawn += 1;
+            }
+        } else if (size >= 1) {
+            // Fallback (no aligned epochs): uniform index spacing over the newest plotHours*12 points.
+            var want = AppState.plotHours * 12;
+            var start = (size > want) ? (size - want) : 0;
+            var n = size - start;
             var span = (n > 1) ? (plotR - plotL) / (n - 1) : 0;
             for (var k = 0; k < n; k += 1) {
                 var val = full[start + k];
@@ -73,8 +104,10 @@ class CgmView extends Ui.View {
                 var py = plotB - ((vv - VMIN) / (VMAX - VMIN)) * plotH;
                 dc.setColor(AppState.rangeColor(val.toNumber()), Gfx.COLOR_TRANSPARENT);
                 dc.fillCircle(px, py, 2);
+                drawn += 1;
             }
-        } else {
+        }
+        if (drawn == 0) {
             dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, (plotT + plotB) / 2, Gfx.FONT_XTINY, "no history", vc);
         }

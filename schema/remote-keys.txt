@@ -28,6 +28,7 @@ bgMgdl
 glucoseAgeSec
 glucoseEpochSec
 history
+historyEpochs
 alerts
 lastBolusUnits
 reservoirUnits
