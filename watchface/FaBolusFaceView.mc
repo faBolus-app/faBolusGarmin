@@ -108,11 +108,15 @@ class FaBolusFaceView extends Ui.WatchFace {
         if (a.equals("vv")) { return "⇊"; }   // ⇊
         return "";
     }
+    // Closed clinical band convention (70…180 in-range, 181…250 high, > 250 urgent), matching
+    // AppState.rangeColor and faBolusCore.GlucoseThresholds so 180 colors in-range and 250 high on every
+    // surface. This watch face is a separate Connect IQ app with its own compile island (AppState is not
+    // in scope), so the bounds are inlined — kept numerically identical to the canonical bands.
     private function bandColor(n as Lang.Number) as Lang.Number {
-        if (n < 70)  { return Gfx.COLOR_RED; }
-        if (n < 180) { return Gfx.COLOR_GREEN; }
-        if (n < 250) { return Gfx.COLOR_YELLOW; }
-        return Gfx.COLOR_ORANGE;
+        if (n < 70)   { return Gfx.COLOR_RED; }     // < 70
+        if (n <= 180) { return Gfx.COLOR_GREEN; }   // 70…180 in-range
+        if (n <= 250) { return Gfx.COLOR_YELLOW; }  // 181…250 high
+        return Gfx.COLOR_ORANGE;                    // > 250 urgent
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {
