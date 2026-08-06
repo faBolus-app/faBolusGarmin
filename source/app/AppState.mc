@@ -8,6 +8,14 @@ using Toybox.Application.Storage;
 // (statusRead reply); carbs→units is computed locally from the pump's calculator settings so
 // the hold-to-deliver screen can show the exact units.
 module AppState {
+    // Clinical glucose display bands (mg/dL), mirroring faBolusCore.GlucoseThresholds — the Battelino
+    // 2019 international Time-in-Range consensus (70…180 in-range, 181…250 high, > 250 very-high).
+    // Kept numerically identical across every surface; the closed-convention edges (180 in-range, 250
+    // high) match the phone's coloring and its TIR stat. RangeColorTest pins those edges.
+    const GLUCOSE_LOW = 70;
+    const GLUCOSE_HIGH = 180;
+    const GLUCOSE_VERY_HIGH = 250;
+
     // HUD data (from phone)
     var glucose as Lang.Number? = null;   // mg/dL
     var trend as Lang.String = "";
@@ -638,11 +646,12 @@ module AppState {
         return rangeColor(glucose as Lang.Number);
     }
 
-    // Range color for an arbitrary mg/dL value (used by the history plot).
+    // Range color for an arbitrary mg/dL value (used by the number + the history plot). Closed
+    // clinical convention (GLUCOSE_* / faBolusCore.GlucoseThresholds): 180 colors in-range, 250 high.
     function rangeColor(g as Lang.Number) as Gfx.ColorValue {
-        if (g < 70) { return Gfx.COLOR_RED; }
-        if (g < 180) { return Gfx.COLOR_GREEN; }
-        if (g < 250) { return Gfx.COLOR_YELLOW; }
-        return Gfx.COLOR_ORANGE;
+        if (g < GLUCOSE_LOW) { return Gfx.COLOR_RED; }         // < 70
+        if (g <= GLUCOSE_HIGH) { return Gfx.COLOR_GREEN; }     // 70…180 in-range
+        if (g <= GLUCOSE_VERY_HIGH) { return Gfx.COLOR_YELLOW; } // 181…250 high
+        return Gfx.COLOR_ORANGE;                               // > 250 urgent
     }
 }

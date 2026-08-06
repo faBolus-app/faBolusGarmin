@@ -100,7 +100,8 @@ module BgComplication {
             }
             var params = { :value => value, :unit => (stale ? "" : arrow), :shortLabel => label };
             if (!stringMode) {
-                params[:ranges] = [0, 70, 180, 250, 400];   // glucose range breakpoints (mg/dL)
+                // Glucose range breakpoints (mg/dL) — the same canonical bands as AppState.rangeColor.
+                params[:ranges] = [0, AppState.GLUCOSE_LOW, AppState.GLUCOSE_HIGH, AppState.GLUCOSE_VERY_HIGH, 400];
             }
             Toybox.Complications.updateComplication(COMP_ID, params);
         } catch (e) {
