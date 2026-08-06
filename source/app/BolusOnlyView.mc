@@ -22,7 +22,7 @@ class BolusOnlyView extends Ui.View {
         // GA (round-2): read-only must never hide the ability to CANCEL an in-flight bolus. Draw the red
         // Cancel whenever canCancel() is true, even in read-only; only when there's nothing to cancel does
         // read-only fall back to the "Read-only" placeholder.
-        var fill; var label; var labelColor;
+        var fill; var label; var labelColor; var disabled = false;
         if (AppState.canCancel()) {
             fill = Gfx.COLOR_RED; label = "Cancel"; labelColor = Gfx.COLOR_WHITE;
         } else if (AppState.readOnly) {
@@ -32,7 +32,7 @@ class BolusOnlyView extends Ui.View {
         } else if (AppState.canBolus()) {
             fill = 0x5C6BE6; label = "Bolus"; labelColor = Gfx.COLOR_WHITE;   // indigo
         } else {
-            fill = Gfx.COLOR_DK_GRAY; label = "Bolus"; labelColor = Gfx.COLOR_LT_GRAY;
+            fill = Gfx.COLOR_DK_GRAY; label = "Bolus"; labelColor = Gfx.COLOR_LT_GRAY; disabled = true;
         }
         var bw = w * 0.60, bh = h * 0.28;
         var bx = cx - bw / 2, by = h / 2 - bh / 2;
@@ -40,5 +40,14 @@ class BolusOnlyView extends Ui.View {
         dc.fillRoundedRectangle(bx, by, bw, bh, 14);
         dc.setColor(labelColor, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, by + bh / 2, Gfx.FONT_MEDIUM, label, vc);
+        // P12 (group D exit): say WHY the button is disabled (pump not connected / bolus in progress /
+        // phone not connected) under the grayed button, instead of a silent gray control.
+        if (disabled) {
+            var why = AppState.bolusBlockLabel();
+            if (!why.equals("")) {
+                dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+                dc.drawText(cx, by + bh + (h * 0.07), Gfx.FONT_XTINY, why, vc);
+            }
+        }
     }
 }

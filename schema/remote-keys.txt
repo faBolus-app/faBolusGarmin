@@ -49,3 +49,5 @@ detailsOrder
 watchChartRanges
 garminComplicationDisplay
 remotesReadOnly
+canBolus
+bolusBlockReason

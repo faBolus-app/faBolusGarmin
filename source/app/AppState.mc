@@ -47,6 +47,14 @@ module AppState {
     // Read-only mode pushed from the phone ("remotesReadOnly"): hide the bolus button everywhere.
     var readOnly as Lang.Boolean = false;
 
+    // P12 group D: the host's authoritative "may a remote start a bolus right now?" (schema `canBolus`),
+    // plus its reason token (`bolusBlockReason`: "pumpNotLinked" | "bolusInFlight" | "accessDenied").
+    // null until the host sends them (older host) → pumpBolusAllowed() falls back to deriving from the
+    // connection string. Lets the START gate stop treating a substring match of the localized display
+    // string ("Delivering…") as load-bearing safety logic.
+    var hostCanBolus as Lang.Boolean or Null = null;
+    var hostBolusBlockReason as Lang.String or Null = null;
+
     // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
@@ -186,10 +194,43 @@ module AppState {
         return connection.find("Deliver") == 0;
     }
 
-    // A new bolus is only possible when the phone (which owns the pump link) is reachable, the pump
-    // is connected, and no bolus is already in flight. The Garmin never touches the pump directly.
+    // Whether the PUMP side permits a new bolus — the host's authoritative flag when present (schema
+    // `canBolus`: pump linked AND not mid-delivery AND remotes not read-only), otherwise derived from
+    // the connection string. Excludes phone reachability (the Garmin's own local link), so it is
+    // deterministically unit-testable; canBolus() ANDs in reachability. P12 group D: this is what
+    // stops the START gate from depending on a substring match of the localized display string.
+    function pumpBolusAllowed() as Lang.Boolean {
+        if (hostCanBolus != null) { return hostCanBolus; }
+        return pumpConnected() && !bolusing();
+    }
+
+    // A new bolus is only possible when the phone (which owns the pump link) is reachable AND the pump
+    // side permits it. The Garmin never touches the pump directly.
     function canBolus() as Lang.Boolean {
-        return RemoteComm.phoneReachable() && pumpConnected() && !bolusing();
+        return RemoteComm.phoneReachable() && pumpBolusAllowed();
+    }
+
+    // Pure token → short display text mapping (deterministic → unit-testable). "" for null/unknown.
+    function bolusReasonText(reason as Lang.String or Null) as Lang.String {
+        if (reason == null) { return ""; }
+        if (reason.equals("pumpNotLinked")) { return "Pump not connected"; }
+        if (reason.equals("bolusInFlight")) { return "Bolus in progress"; }
+        if (reason.equals("accessDenied")) { return "Read-only"; }
+        if (reason.equals("remoteUnreachable")) { return "Phone not connected"; }
+        return "";
+    }
+
+    // A short user-facing reason the bolus button is disabled, so the bolus screen can say WHY (P12
+    // exit: every disabled control shows a reason). Prefers the host's reason token; falls back to the
+    // connection string / reachability for an older host. "" when a bolus IS possible.
+    function bolusBlockLabel() as Lang.String {
+        if (canBolus()) { return ""; }
+        if (!RemoteComm.phoneReachable()) { return "Phone not connected"; }
+        var t = bolusReasonText(hostBolusBlockReason);
+        if (!t.equals("")) { return t; }
+        if (bolusing()) { return "Bolus in progress"; }
+        if (!pumpConnected()) { return "Pump not connected"; }
+        return "Unavailable";
     }
 
     // A bolus started from this watch is in flight and can be cancelled from the glance (e.g. after
@@ -429,6 +470,9 @@ module AppState {
             }
             var al = data["alerts"]; if (al instanceof Lang.Array) { alerts = sanitizeAlerts(al); }
             var ro = data["remotesReadOnly"]; if (ro instanceof Lang.Boolean) { readOnly = ro; }
+            // P12 group D: the host's semantic bolus availability + reason token (see hostCanBolus).
+            var cb = data["canBolus"]; if (cb instanceof Lang.Boolean) { hostCanBolus = cb; }
+            var cbr = data["bolusBlockReason"]; if (cbr instanceof Lang.String) { hostBolusBlockReason = strCap(cbr, 40); }
             var bm = data["bolusMode"] as Lang.String?;
             if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
             var bi = fltRange(data["bolusIncrement"], 0.01, 5.0); if (bi != null) { stepU = bi; }
