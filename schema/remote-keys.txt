@@ -51,3 +51,4 @@ garminComplicationDisplay
 remotesReadOnly
 canBolus
 bolusBlockReason
+supportsRemoteAlertDismiss

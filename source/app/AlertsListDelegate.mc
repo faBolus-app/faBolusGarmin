@@ -22,7 +22,7 @@ class AlertsListDelegate extends Ui.BehaviorDelegate {
                 // Confirm before clearing — SYMMETRIC with the button path (onSelect). Clearing a pump
                 // alert is a real action (the phone sends a signed dismiss to the pump), so a touch must
                 // go through the same AlertConfirmDelegate the buttons use, not fire-and-clear on tap.
-                Ui.pushView(new Ui.Confirmation("Clear: " + a["title"] + "?"),
+                Ui.pushView(new Ui.Confirmation(AppState.alertActionWord() + ": " + a["title"] + "?"),
                             new AlertConfirmDelegate(a["id"], a["kind"]), Ui.SLIDE_UP);
                 return true;
             }
@@ -37,7 +37,7 @@ class AlertsListDelegate extends Ui.BehaviorDelegate {
         if (DeviceProfile.isTouch()) { return false; }   // touch clears via onTap (tap the row)
         if (AppState.alerts.size() == 0) { return true; }
         var a = AppState.alerts[0] as Lang.Dictionary;
-        Ui.pushView(new Ui.Confirmation("Clear: " + a["title"] + "?"),
+        Ui.pushView(new Ui.Confirmation(AppState.alertActionWord() + ": " + a["title"] + "?"),
                     new AlertConfirmDelegate(a["id"], a["kind"]), Ui.SLIDE_UP);
         return true;
     }

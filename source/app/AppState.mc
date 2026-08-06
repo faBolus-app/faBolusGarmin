@@ -47,6 +47,12 @@ module AppState {
     // Read-only mode pushed from the phone ("remotesReadOnly"): hide the bolus button everywhere.
     var readOnly as Lang.Boolean = false;
 
+    // P13 capability channel ("supportsRemoteAlertDismiss"): whether the pump firmware honors a REMOTE
+    // alert dismissal. t:slim X2 silently rejects it (dismiss only snoozes locally); Mobi clears it on
+    // the pump. Drives the confirm verb (alertActionWord). Safe default false => "Snooze" (honest — the
+    // dismiss won't clear on the pump); the statusRead that carries an alert also carries this flag.
+    var supportsRemoteAlertDismiss as Lang.Boolean = false;
+
     // P12 group D: the host's authoritative "may a remote start a bolus right now?" (schema `canBolus`),
     // plus its reason token (`bolusBlockReason`: "pumpNotLinked" | "bolusInFlight" | "accessDenied").
     // null until the host sends them (older host) → pumpBolusAllowed() falls back to deriving from the
@@ -218,6 +224,13 @@ module AppState {
         if (reason.equals("accessDenied")) { return "Read-only"; }
         if (reason.equals("remoteUnreachable")) { return "Phone not connected"; }
         return "";
+    }
+
+    // P13 capability channel: the verb for the alert-dismiss confirmation — "Clear" when the pump honors
+    // a REMOTE dismissal (Mobi), "Snooze" when it doesn't (t:slim, where it only snoozes locally), so the
+    // Garmin prompt is honest and matches the phone. Pure/deterministic → unit-testable.
+    function alertActionWord() as Lang.String {
+        return supportsRemoteAlertDismiss ? "Clear" : "Snooze";
     }
 
     // A short user-facing reason the bolus button is disabled, so the bolus screen can say WHY (P12
@@ -470,6 +483,9 @@ module AppState {
             }
             var al = data["alerts"]; if (al instanceof Lang.Array) { alerts = sanitizeAlerts(al); }
             var ro = data["remotesReadOnly"]; if (ro instanceof Lang.Boolean) { readOnly = ro; }
+            // P13 capability channel: whether a remote dismiss clears on the pump (Mobi) or only snoozes
+            // locally (t:slim) — drives the alert confirm verb. Strict guard: a non-boolean is ignored.
+            var sd = data["supportsRemoteAlertDismiss"]; if (sd instanceof Lang.Boolean) { supportsRemoteAlertDismiss = sd; }
             // P12 group D: the host's semantic bolus availability + reason token (see hostCanBolus).
             var cb = data["canBolus"]; if (cb instanceof Lang.Boolean) { hostCanBolus = cb; }
             var cbr = data["bolusBlockReason"]; if (cbr instanceof Lang.String) { hostBolusBlockReason = strCap(cbr, 40); }
