@@ -60,3 +60,16 @@ jobs:
 
       - name: Check the Garmin remote against the schema
         run: SCHEMA=_faBolus/schema/command.schema.json ./scripts/check-schema-drift.sh
+
+  # SBOM / license provenance. Independent of the schema-drift job above: it reads only local files (no
+  # sibling checkout, no SDK), asserting the attribution chain (LICENSE / NOTICE.md / THIRD_PARTY.md /
+  # docs/SBOM.md), that every declared barrel dependency is documented, and that NOTICE upstreams have an
+  # SBOM row. It cannot break the contract check, and vice versa.
+  sbom:
+    name: SBOM / license provenance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out faBolusGarmin
+        uses: actions/checkout@v4
+      - name: Check the SBOM / attribution chain
+        run: ./scripts/check-sbom.sh
