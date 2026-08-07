@@ -209,7 +209,10 @@ class HoldView extends Ui.View {
         // Carbs mode: send carbsGrams (+ bg + this watch's estimate) so the phone is the single
         // calculator and can run the divergence guard. Units mode: send the units as before.
         if (AppState.mode.equals("carbs")) {
-            var bg = AppState.glucoseStale() ? null : AppState.glucose;
+            // AB4 (Addendum B): fresh → the reading; stale → included only on the explicit per-attempt
+            // "include" choice, else nil-dropped (carbs-only). bgForBolus() encapsulates that decision;
+            // a nil result omits bgMgdl on the wire, so the phone recomputes carbs-only in lockstep.
+            var bg = AppState.bgForBolus();
             RemoteComm.send(RemoteComm.bolusRequestCarbs(AppState.carbsValue, bg, AppState.deliverUnits, reqId));
         } else {
             RemoteComm.send(RemoteComm.bolusRequest(AppState.deliverUnits, reqId));

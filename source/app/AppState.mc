@@ -208,6 +208,37 @@ module AppState {
         return (Time.now().value() - readingEpoch) > (staleSec + hideDelaySec);
     }
 
+    // AB4 (Addendum B): the three stale-CGM choices, mirroring faBolusCore StaleBolusChoice. Kept as
+    // module consts + pure predicates HERE (not on the view) so the safety-critical semantics are
+    // unit-testable — the view/delegate aren't compiled into the test binary (see test.jungle).
+    const STALE_INCLUDE = 0;      // dose the correction off the stale-but-REAL reading (insulin-INCREASING)
+    const STALE_CARBS_ONLY = 1;   // today's silent behavior — drop the stale BG, carbs-only, now acknowledged
+    const STALE_CANCEL = 2;       // pure UI back-out — compose/send NOTHING
+
+    // Mirror of StaleBolusPrompt.proceeds: every path composes + sends EXCEPT cancel, which sends nothing.
+    function staleChoiceProceeds(opt as Lang.Number) as Lang.Boolean { return opt != STALE_CANCEL; }
+    // Mirror of StaleBolusPrompt.bgForCalculation: only "include" carries the stale reading into the dose.
+    function staleChoiceIncludesBg(opt as Lang.Number) as Lang.Boolean { return opt == STALE_INCLUDE; }
+
+    // AB4 (Addendum B): mirror of StaleBolusPrompt.shouldWarn — show the three-way stale-CGM choice only
+    // when there IS a reading value AND it is stale at compose. No reading at all is simply carbs-only
+    // (nothing to include); a fresh reading composes normally. Same staleness the UI grays (glucoseStale).
+    // (Garmin: only carbs mode has a correction term, so the delegate additionally gates on carbs mode.)
+    function staleBolusShouldWarn() as Lang.Boolean {
+        return glucose != null && glucoseStale();
+    }
+
+    // AB4 (Addendum B): the BG (mg/dL) to feed the correction / send with a carb bolus — mirror of
+    // StaleBolusPrompt.bgForCalculation composed with freshness. Fresh → the reading. Stale → included
+    // ONLY when the wearer made the explicit per-attempt "include" choice this compose (includeStaleBg);
+    // otherwise nil-dropped to carbs-only. No reading → nil. A nil result means the carb request omits
+    // bgMgdl (RemoteComm.bolusRequestCarbs), so the phone recomputes carbs-only too.
+    function bgForBolus() as Lang.Number? {
+        if (glucose == null) { return null; }
+        if (!glucoseStale()) { return glucose; }
+        return includeStaleBg ? glucose : null;
+    }
+
     // The pump is reachable when the phone reports it connected or actively delivering.
     // "Connecting…", "Scanning…", "Disconnected", "Error", and unknown ("") mean not reachable.
     function pumpConnected() as Lang.Boolean {
@@ -313,6 +344,10 @@ module AppState {
     var defaultMode as Lang.String = "carbs";
     var unitsValue as Lang.Float = 0.0;
     var carbsValue as Lang.Number = 0;
+    // AB4 (Addendum B): per-attempt choice to include a STALE CGM reading in the correction. Off by
+    // default and cleared by reset() before every compose, so it is NEVER sticky and NEVER a default —
+    // set true only when the wearer explicitly picks "include" in the three-way stale prompt this attempt.
+    var includeStaleBg as Lang.Boolean = false;
     var stepU as Lang.Float = 0.05;       // bolus increment (from phone settings)
     var stepC as Lang.Number = 5;         // carb increment (from phone settings)
     const MAX_CARBS = 200;
@@ -330,6 +365,7 @@ module AppState {
     function reset() as Void {
         mode = defaultMode; unitsValue = 0.0; carbsValue = 0;
         pendingRequestId = null; status = null; message = null; sawPhoneBolusing = false;
+        includeStaleBg = false;   // AB4: the stale-BG include choice is per-attempt — never carried over
     }
 
     // G5 (Garmin half): a one-time, plain-language notice shown the first time the wearer opens the
@@ -405,7 +441,10 @@ module AppState {
             // so the delivered dose could differ from the number shown on the hold screen.
             var fromCarbs = dp2(carbsValue.toFloat() / carbRatio);
             var fromBG = 0.0;
-            if (isf > 0 && glucose != null && !glucoseStale()) {   // never correct off a stale BG
+            // AB4 (Addendum B): a stale BG is dropped from the correction (carbs-only) UNLESS the wearer
+            // made the explicit, per-attempt "include" choice this compose (includeStaleBg) — never sticky,
+            // never default. Fresh always corrects. Keeps the wrist preview in lockstep with bgForBolus().
+            if (isf > 0 && glucose != null && (!glucoseStale() || includeStaleBg)) {
                 fromBG = dp2((glucose - targetBg).toFloat() / isf.toFloat());   // signed
             }
             var fromIOB = (iob > 0.0) ? dp2(-iob) : 0.0;

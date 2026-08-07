@@ -48,10 +48,26 @@ class BolusEntryDelegate extends Ui.BehaviorDelegate {
             Ui.requestUpdate();
             return true;
         }
-        AppState.deliverUnits = AppState.computeUnits();
-        if (AppState.deliverUnits < 0.05) { return true; }   // nothing to deliver
+        // AB4 (Addendum B): if the CGM reading is stale at compose, warn with the three-way choice BEFORE
+        // composing the dose — include the stale reading, bolus for carbs only, or cancel. A fresh reading
+        // (or none) composes straight through. Only carbs mode has a correction term, so units mode (a
+        // fixed manual dose, no BG) bypasses the prompt entirely. Mirrors faBolusCore StaleBolusPrompt.
+        if (AppState.mode.equals("carbs") && AppState.staleBolusShouldWarn()) {
+            var sv = new StaleBolusView();
+            Ui.pushView(sv, new StaleBolusDelegate(sv), Ui.SLIDE_LEFT);
+            return true;
+        }
+        if (!captureDose()) { return true; }   // nothing to deliver
         var v = new HoldView();
         Ui.pushView(v, new HoldDelegate(v), Ui.SLIDE_LEFT);
         return true;
+    }
+
+    // Capture the dose to deliver from the current compose state (honoring whatever stale-BG choice is in
+    // effect via AppState.includeStaleBg). Returns false when there's nothing to deliver (< 0.05 U) so the
+    // caller leaves the compose screen up. Shared by the fresh path and the AB4 three-way choice.
+    static function captureDose() as Lang.Boolean {
+        AppState.deliverUnits = AppState.computeUnits();
+        return AppState.deliverUnits >= 0.05;
     }
 }
