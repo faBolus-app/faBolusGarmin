@@ -45,6 +45,20 @@ class HoldView extends Ui.View {
 
     function progress() as Lang.Number { return _progress; }
 
+    // P15 §2.3 / G4: if the phone flipped read-only ON or Garmin bolusing OFF while this confirm screen
+    // was armed but the bolus hasn't been sent yet, DE-ARM immediately — clear the button-hold state
+    // (btnArmed/btnProgress) and the touch tap-sequence (_progress). AppState.reset() ALONE can't: that
+    // armed progress is view-local, not in AppState. Also drop the half-entered compose (reset()), so a
+    // completed hold/tap can't fire a bolus the host just disabled. Returns true when it tore down, so
+    // onUpdate draws the disabled notice instead of the confirm controls. Deterministic decision lives
+    // in AppState.mustTeardownArmedBolus() (unit-tested); this just applies it to the view-local state.
+    function disabledMidArm() as Lang.Boolean {
+        if (!AppState.mustTeardownArmedBolus()) { return false; }
+        _progress = 0; btnArmed = false; btnProgress = 0.0;
+        AppState.reset();
+        return true;
+    }
+
     // Touch: register a tap on button number `num` (1..3).
     function tapped(num as Lang.Number) as Void {
         if (AppState.status != null) { return; }
@@ -114,6 +128,17 @@ class HoldView extends Ui.View {
             return;
         }
 
+        // P15 §2.3 / G4: a mid-arm disable (read-only ON or Garmin bolusing OFF, just pushed from the
+        // phone) tears down the primed confirm and says why — instead of leaving an armed hold/tap that
+        // could still fire. Only reached pre-delivery (status == null); an in-flight bolus is untouched.
+        if (disabledMidArm()) {
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.40, Gfx.FONT_SMALL, "Bolusing off", vc);
+            dc.drawText(cx, h * 0.54, Gfx.FONT_XTINY, "(disabled on phone)", vc);
+            dc.drawText(cx, h * 0.80, Gfx.FONT_XTINY, "BACK to exit", vc);
+            return;
+        }
+
         // Dose, top.
         dc.setColor(0x8AB4FF, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.14, Gfx.FONT_SMALL, AppState.deliverUnits.format("%.2f") + " U", vc);
@@ -166,6 +191,14 @@ class HoldView extends Ui.View {
     }
 
     private function deliver() as Void {
+        // P15 §2.3 / G4 (hard guard): never SEND if the phone disabled bolusing while this screen was up
+        // (read-only or Garmin bolusing OFF). Even a confirm that completed in the same frame as the
+        // disabling push must fire NOTHING — the host would refuse it anyway (AccessPolicy); the wrist
+        // doesn't even try. De-arm so the next redraw shows the disabled notice.
+        if (AppState.bolusPolicyDisabled()) {
+            _progress = 0; btnArmed = false; btnProgress = 0.0;
+            return;
+        }
         var reqId = RemoteComm.newRequestId();
         AppState.pendingRequestId = reqId;
         AppState.sawPhoneBolusing = false;   // reset the lost-echo recovery tracker for this request
