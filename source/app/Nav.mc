@@ -26,6 +26,40 @@ module Nav {
         return viewFor(AppState.defaultScreen);
     }
 
+    // Open the bolus compose flow (a modal push on top of whatever screen launched it). Both bolus
+    // entry points (the glance button and the bolus-only screen) route through here so the reset + the
+    // G5 one-time notice live in ONE place.
+    //
+    // G5 (Garmin half): the FIRST time bolusing is used, show a one-time plain-language notice that
+    // bolusing from the watch is off by default and is turned on/off from faBolus on the phone. The
+    // flag is persisted (AppState.markBolusIntroShown) at DISPLAY time, so it shows exactly once even
+    // if the wearer backs out of it. Thereafter this opens bolus entry directly.
+    function openBolusEntry() as Void {
+        AppState.reset();
+        if (!AppState.bolusIntroShown()) {
+            AppState.markBolusIntroShown();
+            Ui.pushView(new BolusIntroView(), new BolusIntroDelegate(), Ui.SLIDE_LEFT);
+            return;
+        }
+        pushBolusEntry();
+    }
+
+    // Push the bolus-entry screen on top of the launching screen (glance / bolus-only). A later
+    // popView from entry returns to that launching screen. Used on the direct path (notice already
+    // shown) and, indirectly, as the shape of the G5 continue below.
+    function pushBolusEntry() as Void {
+        var v = new BolusEntryView();
+        Ui.pushView(v, new BolusEntryDelegate(v), Ui.SLIDE_LEFT);
+    }
+
+    // Continue past the G5 one-time notice: REPLACE the notice with bolus entry (switchToView, not
+    // push). The notice was pushed on top of the launching screen, so swapping it out here means a
+    // later BACK/popView from entry returns to the launching screen — not back to the dismissed notice.
+    function continueToBolusEntry() as Void {
+        var v = new BolusEntryView();
+        Ui.switchToView(v, new BolusEntryDelegate(v), Ui.SLIDE_LEFT);
+    }
+
     function indexOf(id as Lang.String) as Lang.Number {
         var order = AppState.screenOrder;
         for (var i = 0; i < order.size(); i += 1) {
