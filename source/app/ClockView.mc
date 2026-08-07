@@ -7,11 +7,11 @@ using Toybox.Application.Storage;
 using Toybox.Lang;
 
 // A clock screen that also shows the current CGM value + trend, with NO bolus button. One of the
-// swipeable screens (id "clock"), added to the order from phone settings. The clock style is
-// user-selectable ON-WATCH: tap (or SELECT) toggles analog <-> digital, persisted in Storage. This
-// is a screen inside the app — NOT a watch face.
+// swipeable screens (id "clock"), added to the order from phone settings. The clock style (analog vs
+// digital) is DISPLAY-ONLY, driven by the phone's `clockAnalog` setting (P15 E4b) and persisted in
+// Storage — there is no on-watch toggle. This is a screen inside the app — NOT a watch face.
 class ClockView extends Ui.View {
-    private const KEY_ANALOG = "clockAnalog";   // Bool; default false (digital)
+    private const KEY_ANALOG = "clockAnalog";   // Bool from the phone (statusRead); default false (digital)
     private const PI = 3.1415926535;
     private var _timer as Timer.Timer?;
 
@@ -42,7 +42,6 @@ class ClockView extends Ui.View {
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
         dc.clear();
         var w = dc.getWidth(), h = dc.getHeight(), cx = w / 2;
-        var vc = Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER;
         var t = System.getClockTime();
 
         if (analog()) {
@@ -53,10 +52,6 @@ class ClockView extends Ui.View {
             drawDigital(dc, cx, h * 0.40, t);
             drawGlucose(dc, cx, h * 0.70, Gfx.FONT_MEDIUM);
         }
-
-        // Hint that tapping switches the clock style.
-        dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.06, Gfx.FONT_XTINY, "tap: analog / digital", vc);
     }
 
     private function drawDigital(dc as Gfx.Dc, cx as Lang.Numeric, cy as Lang.Numeric, t) as Void {
