@@ -34,8 +34,8 @@ class ClockView extends Ui.View {
 
         if (analog()) {
             var r = (h < w ? h : w) * 0.34;
-            drawAnalog(dc, cx, h * 0.44, r, t);
-            drawGlucose(dc, cx, h * 0.87, Gfx.FONT_SMALL);
+            drawAnalog(dc, cx, h * 0.42, r, t);
+            drawGlucose(dc, cx, h * 0.80, Gfx.FONT_SMALL);   // raised from .87 to fit the age line below
         } else {
             drawDigital(dc, cx, h * 0.40, t);
             drawGlucose(dc, cx, h * 0.70, Gfx.FONT_MEDIUM);
@@ -98,6 +98,15 @@ class ClockView extends Ui.View {
         if (!isHidden && !AppState.trend.equals("")) {
             var gw = dc.getTextWidthInPixels(g, font);
             TrendArrow.draw(dc, cx + gw / 2 + 16, cy, 10, AppState.trend, col);
+        }
+        // E3: reading age below the value (same source-epoch age + styling as MainView — orange when
+        // stale, else gray). Suppressed when the value is hidden or the age is unknown ("").
+        if (!isHidden) {
+            var age = AppState.ageLabel();
+            if (!age.equals("")) {
+                dc.setColor(stale ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+                dc.drawText(cx, cy + dc.getFontHeight(font) / 2 + 6, Gfx.FONT_XTINY, age, vc);
+            }
         }
     }
 }
