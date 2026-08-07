@@ -235,6 +235,22 @@ module AppState {
         return garminBolusEnabled && RemoteComm.phoneReachable() && pumpBolusAllowed();
     }
 
+    // P15 §2.3 / G4: the bolus affordance is HOST-POLICY-disabled when the phone put the remote in
+    // read-only mode OR hasn't enabled Garmin bolusing. Distinct from canBolus() (which ALSO needs phone
+    // reachability + pump-side allowance): this is exactly the pair of phone-pushed flags whose mid-flow
+    // flip must tear down an already-armed confirm. Deterministic (no reachability) → unit-testable.
+    function bolusPolicyDisabled() as Lang.Boolean {
+        return readOnly || !garminBolusEnabled;
+    }
+
+    // G4: whether an armed, pre-delivery confirm must be torn down RIGHT NOW — bolusing was policy-
+    // disabled (read-only or Garmin-bolus-off) AND nothing has been sent yet (status == null; once a
+    // request is out the outcome flow owns the screen and must not be disturbed). Pure/deterministic;
+    // HoldView calls it on every redraw (a phone push always triggers Ui.requestUpdate()).
+    function mustTeardownArmedBolus() as Lang.Boolean {
+        return status == null && bolusPolicyDisabled();
+    }
+
     // Pure token → short display text mapping (deterministic → unit-testable). "" for null/unknown.
     function bolusReasonText(reason as Lang.String or Null) as Lang.String {
         if (reason == null) { return ""; }
