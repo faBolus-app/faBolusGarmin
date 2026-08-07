@@ -52,3 +52,5 @@ remotesReadOnly
 canBolus
 bolusBlockReason
 supportsRemoteAlertDismiss
+garminBolusEnabled
+bolusPasscodeRequired

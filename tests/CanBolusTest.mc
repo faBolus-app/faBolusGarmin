@@ -65,6 +65,50 @@ module CanBolusTest {
         return true;
     }
 
+    // P15 §2.3: the phone's `garminBolusEnabled` gates canBolus() (fail-closed) and the block label.
+    // canBolus() ANDs phoneReachable() (not sim-controllable), so we lean on the deterministic facts:
+    //   • disabled ⇒ canBolus() is false no matter what reachability is (false && anything == false);
+    //   • the block label is the disabled reason WHEN reachable, else the phone-not-connected reason —
+    //     asserted in BOTH reachability states so the test is deterministic either way.
+    (:test)
+    function garminBolusEnabledGatesBolus(logger as Test.Logger) as Lang.Boolean {
+        // Bolusing DISABLED on the phone (default/fail-closed), even though the host says canBolus=true.
+        AppState.handle(statusRead({ "message" => "Connected", "canBolus" => true,
+                                     "garminBolusEnabled" => false }));
+        Test.assertMessage(!AppState.garminBolusEnabled, "parsed garminBolusEnabled=false");
+        Test.assertMessage(!AppState.canBolus(), "disabled ⇒ canBolus() false regardless of reachability");
+        if (RemoteComm.phoneReachable()) {
+            Test.assertEqualMessage(AppState.bolusBlockLabel(), "Bolusing off (enable on phone)",
+                "reachable + disabled ⇒ the disabled reason");
+        } else {
+            Test.assertEqualMessage(AppState.bolusBlockLabel(), "Phone not connected",
+                "unreachable ⇒ the phone reason wins first");
+        }
+
+        // Now ENABLE it (host allows, pump connected). The block label is never the disabled one; when the
+        // phone is reachable a bolus is possible (empty label + canBolus() true).
+        AppState.handle(statusRead({ "message" => "Connected", "canBolus" => true,
+                                     "garminBolusEnabled" => true }));
+        Test.assertMessage(AppState.garminBolusEnabled, "parsed garminBolusEnabled=true");
+        Test.assertMessage(!AppState.bolusBlockLabel().equals("Bolusing off (enable on phone)"),
+            "enabled ⇒ never the disabled reason");
+        if (RemoteComm.phoneReachable()) {
+            Test.assertMessage(AppState.canBolus(), "enabled + reachable + host-allowed ⇒ canBolus()");
+            Test.assertEqualMessage(AppState.bolusBlockLabel(), "", "canBolus ⇒ empty block label");
+        }
+        return true;
+    }
+
+    // A non-boolean `garminBolusEnabled` must be ignored — the safe default (false) stands (fail-closed),
+    // mirroring ignoresNonBooleanCanBolus. Guards the `instanceof Lang.Boolean` check in the parse.
+    (:test)
+    function ignoresNonBooleanGarminBolusEnabled(logger as Test.Logger) as Lang.Boolean {
+        AppState.garminBolusEnabled = false;   // start from the safe default
+        AppState.handle(statusRead({ "message" => "Connected", "garminBolusEnabled" => "yes" }));
+        Test.assertMessage(!AppState.garminBolusEnabled, "non-boolean ignored (stays false, fail-closed)");
+        return true;
+    }
+
     // The reason token maps to short display text (pure, deterministic — no reachability dependency).
     (:test)
     function reasonTextMapsTokens(logger as Test.Logger) as Lang.Boolean {

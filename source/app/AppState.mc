@@ -69,6 +69,13 @@ module AppState {
     var hostCanBolus as Lang.Boolean or Null = null;
     var hostBolusBlockReason as Lang.String or Null = null;
 
+    // P15 §2.3: whether the phone has enabled bolusing FROM THIS GARMIN. Default false ⇒ fail-closed: a
+    // cold launch / glance with no push keeps the bolus affordance hidden until a push arms it (persisted
+    // so a restart doesn't re-hide an already-enabled watch). The host also refuses a Garmin deliver when
+    // false (AccessPolicy). `bolusPasscodeRequired` mirrors whether a 4-digit passcode confirms the bolus.
+    var garminBolusEnabled as Lang.Boolean = false;
+    var bolusPasscodeRequired as Lang.Boolean = false;
+
     // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
@@ -103,6 +110,10 @@ module AppState {
         if (ss instanceof Lang.Number && ss > 0) { staleSec = ss; }
         var hd = Storage.getValue("hideDelaySec");
         hideDelaySec = (hd instanceof Lang.Number && hd >= 0) ? hd : null;   // absent/null = never hide
+        // P15 §2.3: restore the persisted bolus-enable so a cold launch stays on the last-known value
+        // (fail-closed to false when never armed) instead of re-hiding an already-enabled watch.
+        var gbe = Storage.getValue("garminBolusEnabled");
+        if (gbe instanceof Lang.Boolean) { garminBolusEnabled = gbe; }
     }
 
     // Keep only allowed string ids (de-duped), preserving the phone-chosen subset + order.
@@ -221,7 +232,7 @@ module AppState {
     // A new bolus is only possible when the phone (which owns the pump link) is reachable AND the pump
     // side permits it. The Garmin never touches the pump directly.
     function canBolus() as Lang.Boolean {
-        return RemoteComm.phoneReachable() && pumpBolusAllowed();
+        return garminBolusEnabled && RemoteComm.phoneReachable() && pumpBolusAllowed();
     }
 
     // Pure token → short display text mapping (deterministic → unit-testable). "" for null/unknown.
@@ -247,6 +258,8 @@ module AppState {
     function bolusBlockLabel() as Lang.String {
         if (canBolus()) { return ""; }
         if (!RemoteComm.phoneReachable()) { return "Phone not connected"; }
+        // P15 §2.3: bolusing from this Garmin is turned off on the phone — say so (and how to fix it).
+        if (!garminBolusEnabled) { return "Bolusing off (enable on phone)"; }
         var t = bolusReasonText(hostBolusBlockReason);
         if (!t.equals("")) { return t; }
         if (bolusing()) { return "Bolus in progress"; }
@@ -497,6 +510,13 @@ module AppState {
             // P12 group D: the host's semantic bolus availability + reason token (see hostCanBolus).
             var cb = data["canBolus"]; if (cb instanceof Lang.Boolean) { hostCanBolus = cb; }
             var cbr = data["bolusBlockReason"]; if (cbr instanceof Lang.String) { hostBolusBlockReason = strCap(cbr, 40); }
+            // P15 §2.3: whether bolusing from this Garmin is enabled on the phone (default OFF). Persist so a
+            // cold launch stays fail-closed on the last-known value. Also the passcode-required flag (drives
+            // confirm). Strict guards: a non-boolean is ignored (keeps the last / safe default).
+            var gbe2 = data["garminBolusEnabled"];
+            if (gbe2 instanceof Lang.Boolean) { garminBolusEnabled = gbe2; Storage.setValue("garminBolusEnabled", garminBolusEnabled); }
+            var bpr = data["bolusPasscodeRequired"];
+            if (bpr instanceof Lang.Boolean) { bolusPasscodeRequired = bpr; }
             var bm = data["bolusMode"] as Lang.String?;
             if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
             var bi = fltRange(data["bolusIncrement"], 0.01, 5.0); if (bi != null) { stepU = bi; }
