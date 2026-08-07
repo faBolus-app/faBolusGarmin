@@ -614,6 +614,13 @@ module AppState {
             if (cdisp instanceof Lang.String && ((cdisp as Lang.String).equals("numericColor") || (cdisp as Lang.String).equals("stringTrend"))) {
                 complicationDisplay = cdisp; Storage.setValue("complicationDisplay", complicationDisplay);
             }
+            // P15 E4b: the clock screen's analog-vs-digital choice is now PHONE-DRIVEN, replacing the old
+            // on-watch tap toggle. Persist under the SAME "clockAnalog" Storage key ClockView.analog()
+            // reads, so a cold launch keeps the last phone-pushed value. Strict guard (mirrors
+            // remotesReadOnly / garminBolusEnabled): a non-boolean is ignored, leaving the last persisted
+            // value (or ClockView's digital default when never set) untouched.
+            var ca = data["clockAnalog"];
+            if (ca instanceof Lang.Boolean) { Storage.setValue("clockAnalog", ca); }
         } else if (kind.equals("bolusStatus")) {
             var rid = strCap(data["requestId"], 64);
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {
