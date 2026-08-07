@@ -31,9 +31,7 @@ class MainDelegate extends Ui.BehaviorDelegate {
         // Inert when bolusing isn't possible (phone unreachable or pump disconnected) — matches the
         // greyed button. Swallow the input so nothing opens.
         if (!AppState.canBolus()) { return true; }
-        AppState.reset();
-        var v = new BolusEntryView();
-        Ui.pushView(v, new BolusEntryDelegate(v), Ui.SLIDE_LEFT);
+        Nav.openBolusEntry();   // resets + shows the G5 one-time notice on first use
         return true;
     }
 

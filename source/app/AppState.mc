@@ -332,6 +332,19 @@ module AppState {
         pendingRequestId = null; status = null; message = null; sawPhoneBolusing = false;
     }
 
+    // G5 (Garmin half): a one-time, plain-language notice shown the first time the wearer opens the
+    // bolus flow — that bolusing from the watch is off by default and is turned on/off from faBolus on
+    // the phone. The "shown" flag is PERSISTED so it appears exactly once for the life of the install
+    // (survives restarts / re-opens). Garmin-local: this does NOT invert or restate any host copy — the
+    // phone owns the enable toggle's own wording; this only tells the wearer where that toggle lives.
+    const KEY_BOLUS_INTRO_SHOWN = "bolusIntroShown";
+    function bolusIntroShown() as Lang.Boolean {
+        return Storage.getValue(KEY_BOLUS_INTRO_SHOWN) == true;
+    }
+    function markBolusIntroShown() as Void {
+        Storage.setValue(KEY_BOLUS_INTRO_SHOWN, true);
+    }
+
     // Seed glucose/trend from the persisted complication value so the glance shows the last-known
     // reading immediately on open, instead of "--" while the first phone reply is in flight.
     function loadPersisted() as Void {

@@ -17,9 +17,7 @@ class BolusOnlyDelegate extends Ui.BehaviorDelegate {
         }
         if (AppState.readOnly) { return true; }      // read-only blocks STARTING a bolus, not cancel
         if (!AppState.canBolus()) { return true; }   // inert when bolusing isn't possible
-        AppState.reset();
-        var v = new BolusEntryView();
-        Ui.pushView(v, new BolusEntryDelegate(v), Ui.SLIDE_LEFT);
+        Nav.openBolusEntry();   // resets + shows the G5 one-time notice on first use
         return true;
     }
 
