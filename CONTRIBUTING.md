@@ -5,6 +5,28 @@ faBolusGarmin is a **host- and pump-agnostic Garmin remote**. It speaks the JSON
 implements that contract can drive it. Contributions are welcome by **PR, not fork**. All work is
 for **experimental use only** (in development, not FDA-cleared).
 
+## Branch model, versioning & lockstep (§1.3 / §1.4)
+Branch governance is centralized in [`BRANCHES.md`](BRANCHES.md) (a stub) →
+[`faBolus/BRANCHES.md`](https://github.com/faBolus-app/faBolus/blob/main/BRANCHES.md): the three-branch
+model, the §1.2 experimental gate, and the §1.4 promotion criteria. Read it before opening a PR. The
+per-release history is in [`CHANGELOG.md`](CHANGELOG.md).
+
+- **Lockstep (§1.3).** faBolusGarmin is a **base feature** of faBolus, not a separate product. A Garmin
+  `main` release accompanies every app `main` release and holds the **same quality bar**; Garmin work
+  does not lag behind and does **not ship separately**.
+- **Published device floor.** The **Garmin Venu 3S is the sole hardware-validated device.** The
+  `manifest.xml` `<iq:products>` list is the set of **build targets** (`venu3s, fr265s, fenix7, fr245,
+  edge540, edge1040`), not a hardware-validation claim; the non-venu3s targets are build-verified only
+  and run behind the phone's confirm + max-bolus interlock. This floor is also stated store-facing in
+  [`store/connectiq-listing.md`](store/connectiq-listing.md) — keep the two in sync (see "Add support
+  for another Garmin device" below for how a device graduates).
+- **Fail gracefully on unsupported hardware.** Where a device genuinely cannot provide a capability, the
+  app must degrade to an explicit, honest state — never a fabricated value or silent misbehavior. This
+  is separate from the deliberate honest-staleness `--` shown for a stale/absent reading (a safety
+  signal, which must be preserved). The data field is the standing example: Connect IQ forbids a
+  `datafield` app from subscribing to the BG complication, so it ships as a labelled placeholder rather
+  than pretending to have a reading (`datafield/FaBolusDataField.mc`).
+
 ## Keep it host-agnostic
 - The watch is a thin remote. Everything it sends/receives is the shared contract
   (`statusRead` / `bolusRequest` / `cancelBolus` / `dismissAlert` + the status payload). Don't bake
@@ -56,8 +78,9 @@ Each Connect IQ app type is a separate app (its own manifest + jungle), so the r
 by side (like `probe.jungle` / `test.jungle`):
 - **Watch face** — a scaffold exists: `watchface/` + `manifest-watchface.xml` + `watchface.jungle`
   (`monkeyc -f watchface.jungle -o bin/faBolusFace.iq -y <dev_key.der> -e -r -w`). It draws the time
-  and a BG slot; wire live glucose by subscribing to the faBolus **public BG complication** (see the
-  TODO in `watchface/FaBolusFaceView.mc`). Watches only — Edge has no watch face.
+  and a BG slot and **already subscribes** to the faBolus **public BG complication**
+  (`watchface/FaBolusFaceView.mc:28-40`, `:55-75`) — no TODO stub remains; the complication behavior
+  still needs on-device validation. Watches only — Edge has no watch face.
 - **Data field** — `datafield/` + `manifest-datafield.xml` + `datafield.jungle`
   (`monkeyc -f datafield.jungle -o bin/faBolusField.iq -y <dev_key.der> -e -r -w`). A `SimpleDataField`
   that shows BG on any run/ride activity screen — watches **and** Edge. Same public-complication feed

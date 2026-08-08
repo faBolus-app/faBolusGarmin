@@ -1,0 +1,36 @@
+# Code ownership → review routing. GitHub requests review from the owner automatically on any PR that
+# touches a matching path. This is a small, single-maintainer project, so the default owner is the
+# maintainer; the point of the specific rules below is to make the SAFETY-CRITICAL and CONTRACT paths
+# impossible to change without that being visible in the review, not to distribute ownership.
+
+# Default owner for everything.
+*                                   @zgranowitz
+
+# The cross-app contract mirror. faBolus's schema/command.schema.json is the source of truth; the
+# Monkey C mirror lives in these files, and schema/remote-keys.txt + scripts/check-schema-drift.sh
+# enforce that they don't drift. The check enforces the mirror; the semantics are a human concern.
+/schema/                            @zgranowitz
+/source/app/RemoteComm.mc           @zgranowitz
+/source/app/AppState.mc             @zgranowitz
+
+# The bolus-confirm interlock: the deliberate 1-2-3 tap (touch) and two-button hold (button). Never
+# weaken these — the watch gesture is a second factor on top of the host's clamp (CONTRIBUTING.md).
+/source/app/HoldView.mc             @zgranowitz
+/source/app/HoldDelegate.mc         @zgranowitz
+/source/app/BolusView.mc            @zgranowitz
+/source/app/BolusDelegate.mc        @zgranowitz
+
+# The most safety-critical code: the paused direct-to-pump engine signs and sends real pump commands
+# and must stay byte-exact vs the pumpX2 oracle. It is excluded from every shipping build (P0-c) — keep
+# any change to that exclusion visible.
+/direct-pump/                       @zgranowitz
+
+# CI, the branch model, governance, and licensing — changes to how the project proves and attributes
+# itself.
+/.github/                           @zgranowitz
+/BRANCHES.md                        @zgranowitz
+/CONTRIBUTING.md                    @zgranowitz
+/AGENTS.md                          @zgranowitz
+/NOTICE.md                          @zgranowitz
+/THIRD_PARTY.md                     @zgranowitz
+/docs/SBOM.md                       @zgranowitz

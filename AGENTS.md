@@ -42,6 +42,30 @@ truth). Change fields → update the mirror → run `scripts/check-schema-drift.
   - Beta: `monkeyc -f monkey.jungle -o bin/faBolus-beta.iq -y ~/garmin_dev_key.der -e -r`
   - Build BOTH every release; upload each `.iq` to its Connect IQ store listing. `bin/` is gitignored.
 
+## Governance, versioning & device floor (§1.3 / §1.4)
+Branch model and promotion criteria are governed centrally — see [`BRANCHES.md`](BRANCHES.md) (a stub)
+and the canonical [`faBolus/BRANCHES.md`](https://github.com/faBolus-app/faBolus/blob/main/BRANCHES.md)
+for the three-branch model, the §1.2 experimental gate, and the §1.4 promotion criteria. Per-release
+history is in [`CHANGELOG.md`](CHANGELOG.md).
+
+- **Lockstep (§1.3).** faBolusGarmin is a **base feature** of faBolus, not a separate product. A Garmin
+  `main` release accompanies every app `main` release and is held to the **same quality bar**; Garmin
+  work does not lag behind and does **not ship separately**.
+- **Published device floor.** **venu3s is the sole hardware-validated device.** The `manifest.xml`
+  `<iq:products>` list (`venu3s, fr265s, fenix7, fr245, edge540, edge1040`) is the set of **build
+  targets**, not a hardware-validation claim; the non-venu3s targets are build-verified only and sit
+  behind the phone's confirm + max-bolus interlock. The store-facing statement of this floor is
+  [`store/connectiq-listing.md`](store/connectiq-listing.md); keep the two in sync when a device is
+  promoted from build-target to hardware-validated.
+- **Fail gracefully on unsupported hardware (RULE).** When a capability a device genuinely cannot
+  provide is requested, the app must degrade to an explicit, honest state — never misbehave, never
+  present a fabricated value. This is distinct from, and must **not** disturb, the deliberate
+  **honest-staleness `--`** shown when a reading is stale or absent (that is a safety signal, not a
+  failure). The data field is the standing example: it structurally cannot read the BG complication, so
+  it ships as a labelled placeholder (`datafield/FaBolusDataField.mc`). _(This is the governance rule;
+  the specific runtime "unsupported / unavailable" message on structurally-incapable surfaces is a
+  separate later increment.)_
+
 ## Conventions
 - Match the phone's command semantics; device-specific input/UI differences go behind per-device checks.
   Note anything unverified on-hardware. Sibling repos: `../faBolus`, `../PumpX2Kit`.
