@@ -76,6 +76,17 @@ module AppState {
     var garminBolusEnabled as Lang.Boolean = false;
     var bolusPasscodeRequired as Lang.Boolean = false;
 
+    // B2 (S1 + O3): the pump's automated-controller identity + its Control-IQ runtime on/off, pushed on
+    // the statusRead reply so the watch can reconstruct the auto-correction DISCLOSURE locally (no prose
+    // crosses the wire). Both mirror faBolusCore (ControllerVariant / PumpSnapshot.controlIQEnabled).
+    // `controllerVariant` is a FROZEN token (schema `controllerVariant` enum): "none" / "controlIQ" /
+    // "controlIQPro" — never invent others. DISPLAY-ONLY: neither ever gates, changes, or delays a bolus
+    // (C3 — nothing here feeds a dose). Safe legacy default ("none" / false) ⇒ render nothing controller-
+    // specific. Not persisted (matches the nearby display-only capability fields, e.g.
+    // supportsRemoteAlertDismiss): a cold launch shows nothing controller-specific until the first push.
+    var controllerVariant as Lang.String = "none";
+    var controlIQEnabled as Lang.Boolean = false;
+
     // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
@@ -297,6 +308,88 @@ module AppState {
     // Garmin prompt is honest and matches the phone. Pure/deterministic → unit-testable.
     function alertActionWord() as Lang.String {
         return supportsRemoteAlertDismiss ? "Clear" : "Snooze";
+    }
+
+    // B2 (S1 + O3) — auto-correction DISCLOSURE derivation. A faithful Monkey C hand-port of faBolusCore
+    // `ControllerDescriptor` + `AutoCorrectionDisclosure`, kept HERE as pure module functions so the
+    // safety-neutral copy is unit-testable (the view is not compiled into the test binary — see
+    // test.jungle). DISPLAY-ONLY: every function returns a string to show (or "") — nothing here blocks,
+    // disables, clamps, delays, or resizes a dose; the Deliver button is unchanged (C3).
+    //
+    // §13 clinical-disclosure values (subject to the clinical-review distribution gate), mirroring the
+    // faBolusCore source of truth so the copy is a verbatim cross-surface contract:
+    //   • display names "Control-IQ" / "Control-IQ+"  (ControllerDescriptor.displayName)
+    //   • lockout window 60 min for BOTH variants      (AutomaticCorrection.blockedByRecentBolusMinutes)
+    //   • thresholds 180 / 150-when-rising             (AutoCorrectionDisclosure.disclose{,Rising}AtOrAbove)
+    //   • "rising" = the pump's OWN reported up arrows  (risingTrends [.rising,.up,.upUp] → up45/up/upup);
+    //     C8 — the arrow is READ, never a computed/synthesized glucose rate.
+    // FROZEN token set (schema `controllerVariant` enum) — never invent others.
+    const CONTROLLER_VARIANTS = ["none", "controlIQ", "controlIQPro"];
+    const CONTROLLER_RISING_TRENDS = ["up45", "up", "upup"];
+    const CONTROLLER_DISCLOSE_AT_OR_ABOVE = 180;
+    const CONTROLLER_DISCLOSE_RISING_AT_OR_ABOVE = 150;
+
+    // Controller marketing name for a variant token; "" for "none"/unknown (mirror displayName).
+    function controllerDisplayName(variant as Lang.String) as Lang.String {
+        if (variant.equals("controlIQ")) { return "Control-IQ"; }
+        if (variant.equals("controlIQPro")) { return "Control-IQ+"; }
+        return "";
+    }
+
+    // Whether the variant names a real auto-correcting controller (mirror
+    // ControllerDescriptor.automaticCorrection.enabled — true for controlIQ/controlIQPro, false for none).
+    function controllerAutoCorrects(variant as Lang.String) as Lang.Boolean {
+        return variant.equals("controlIQ") || variant.equals("controlIQPro");
+    }
+
+    // The documented auto-correction lockout window (minutes) a manual bolus imposes — 60 for BOTH
+    // Control-IQ and Control-IQ+ (mirror AutomaticCorrection.blockedByRecentBolusMinutes). Kept as a
+    // function (not a bare 60 in the copy) so the disclosure text derives it from the descriptor.
+    function controllerLockoutMinutes(variant as Lang.String) as Lang.Number {
+        return 60;
+    }
+
+    // "rising" trigger test: the pump's OWN reported up arrows (C8 — read, never a computed rate).
+    function controllerTrendRising(trendToken as Lang.String) as Lang.Boolean {
+        return containsStr(CONTROLLER_RISING_TRENDS, trendToken);
+    }
+
+    // O3 (ambient) — the persistent "automatic correction is active." line, or "" when it must not show.
+    // Mirror of AutoCorrectionDisclosure.ambientIndicator: shown only when the variant auto-corrects AND
+    // Control-IQ is ON at runtime. Glucose-independent. DISPLAY-ONLY.
+    function controllerAmbientText(variant as Lang.String, enabled as Lang.Boolean) as Lang.String {
+        if (!enabled || !controllerAutoCorrects(variant)) { return ""; }
+        return controllerDisplayName(variant) + " automatic correction is active.";
+    }
+
+    // S1 (lockout) — the high/rising auto-correction lockout line, or "" when it must not show. Mirror of
+    // AutoCorrectionDisclosure.lockoutMessage: shown only when the variant auto-corrects, Control-IQ is
+    // ON, there IS a reading, and the trigger fires: glucose >= 180, OR (glucose >= 150 AND the pump's
+    // own arrow is rising). DISPLAY-ONLY — a caution to READ; it never blocks/changes/delays the dose.
+    function controllerLockoutText(variant as Lang.String, enabled as Lang.Boolean,
+                                   glucoseMgdl as Lang.Number?, trendToken as Lang.String) as Lang.String {
+        if (!enabled || !controllerAutoCorrects(variant) || glucoseMgdl == null) { return ""; }
+        var g = glucoseMgdl as Lang.Number;
+        var trigger = (g >= CONTROLLER_DISCLOSE_AT_OR_ABOVE)
+                   || (g >= CONTROLLER_DISCLOSE_RISING_AT_OR_ABOVE && controllerTrendRising(trendToken));
+        if (!trigger) { return ""; }
+        return "Bolusing now pauses " + controllerDisplayName(variant)
+             + "'s automatic correction for about " + controllerLockoutMinutes(variant).toString() + " min.";
+    }
+
+    // The single disclosure line for the small bolus screen: the S1 caution when it fires, otherwise the
+    // O3 ambient line, otherwise "". Reads live state (controllerVariant/controlIQEnabled + the glucose /
+    // trend already parsed from the SAME statusRead). When both would apply S1 wins — it is the caution.
+    // Pairs with controllerDisclosureIsCaution() so the view can color it. DISPLAY-ONLY.
+    function controllerDisclosureLine() as Lang.String {
+        var s1 = controllerLockoutText(controllerVariant, controlIQEnabled, glucose, trend);
+        if (!s1.equals("")) { return s1; }
+        return controllerAmbientText(controllerVariant, controlIQEnabled);
+    }
+    // True when the line controllerDisclosureLine() would return is the S1 lockout caution (color it as a
+    // caution), false for the ambient O3 line or none.
+    function controllerDisclosureIsCaution() as Lang.Boolean {
+        return !controllerLockoutText(controllerVariant, controlIQEnabled, glucose, trend).equals("");
     }
 
     // A short user-facing reason the bolus button is disabled, so the bolus screen can say WHY (P12
@@ -585,6 +678,15 @@ module AppState {
             if (gbe2 instanceof Lang.Boolean) { garminBolusEnabled = gbe2; Storage.setValue("garminBolusEnabled", garminBolusEnabled); }
             var bpr = data["bolusPasscodeRequired"];
             if (bpr instanceof Lang.Boolean) { bolusPasscodeRequired = bpr; }
+            // B2 (S1 + O3): the pump's controller identity + Control-IQ runtime on/off, for the LOCAL
+            // auto-correction disclosure. FROZEN token set (CONTROLLER_VARIANTS = the schema
+            // `controllerVariant` enum) — an unknown/garbage variant is ignored (keeps the last / safe
+            // "none"). controlIQEnabled is strict-guarded like the other capability booleans. Display-
+            // only: nothing here feeds a dose (C3), so no persistence is needed.
+            var cvr = data["controllerVariant"];
+            if (cvr instanceof Lang.String && containsStr(CONTROLLER_VARIANTS, cvr as Lang.String)) { controllerVariant = cvr; }
+            var ciqe = data["controlIQEnabled"];
+            if (ciqe instanceof Lang.Boolean) { controlIQEnabled = ciqe; }
             var bm = data["bolusMode"] as Lang.String?;
             if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
             var bi = fltRange(data["bolusIncrement"], 0.01, 5.0); if (bi != null) { stepU = bi; }
