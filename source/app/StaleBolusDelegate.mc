@@ -54,8 +54,9 @@ class StaleBolusDelegate extends Ui.BehaviorDelegate {
 
     // Apply the chosen path. Cancel composes/sends NOTHING (pure back-out to the compose screen). The two
     // proceeding paths set the per-attempt include flag (insulin-INCREASING only for "include"; never
-    // sticky) and then compose + REPLACE this prompt with the hold-to-confirm via switchToView — so a
-    // later BACK from the confirm returns to the compose screen, not back to this dismissed prompt.
+    // sticky) and then compose + REPLACE this prompt with the confirm surface via Nav.openConfirm (the
+    // tap/hold HoldView, or the C2 §2.3 passcode entry when the phone requires one) — so a later BACK from
+    // the confirm returns to the compose screen, not back to this dismissed prompt.
     private function choose(opt as Lang.Number) as Lang.Boolean {
         if (!AppState.staleChoiceProceeds(opt)) {   // cancel
             AppState.includeStaleBg = false;        // never leave the flag set on a back-out
@@ -68,8 +69,10 @@ class StaleBolusDelegate extends Ui.BehaviorDelegate {
             Ui.popView(Ui.SLIDE_RIGHT);
             return true;
         }
-        var v = new HoldView();
-        Ui.switchToView(v, new HoldDelegate(v), Ui.SLIDE_LEFT);
+        // C2 §2.3: REPLACE this stale prompt with the confirm surface (switchToView) — the passcode entry
+        // when the phone requires one (§2.3: it replaces the tap/hold, doesn't stack), else HoldView. A
+        // later BACK from the confirm returns to the compose screen, not this dismissed prompt.
+        Nav.openConfirm(true);
         return true;
     }
 }

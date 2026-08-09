@@ -60,6 +60,46 @@ module Nav {
         Ui.switchToView(v, new BolusEntryDelegate(v), Ui.SLIDE_LEFT);
     }
 
+    // C2 §2.3: open the CONFIRM surface for a composed dose. Both bolus push sites route through here so
+    // the passcode branch + the first-use notice live in ONE place:
+    //   • BolusEntryDelegate (fresh path)  → openConfirm(false): PUSH on top of bolus entry (as today).
+    //   • StaleBolusDelegate (stale path)  → openConfirm(true):  REPLACE the stale prompt (switchToView).
+    // `replace` preserves each site's existing stack semantics; both converge to the same final stack.
+    //
+    // §2.3: when the phone requires a passcode (AppState.bolusPasscodeRequired) the passcode entry
+    // REPLACES the tap/hold confirm — it does NOT stack — and the FIRST time a passcode is required a
+    // one-time notice is shown first (flag persisted at DISPLAY time → shows exactly once). Otherwise the
+    // HoldView tap/hold confirm exactly as before. Both surfaces funnel their send through the identical
+    // AppState.sendBolusNow(), so delivery semantics never diverge.
+    function openConfirm(replace as Lang.Boolean) as Void {
+        if (AppState.bolusPasscodeRequired) {
+            if (!AppState.passcodeIntroShown()) {
+                AppState.markPasscodeIntroShown();
+                openConfirmView(new PasscodeIntroView(), new PasscodeIntroDelegate(), replace);
+                return;
+            }
+            var pv = new PasscodeEntryView();
+            openConfirmView(pv, new PasscodeEntryDelegate(pv), replace);
+            return;
+        }
+        var hv = new HoldView();
+        openConfirmView(hv, new HoldDelegate(hv), replace);
+    }
+
+    // Push vs switch, preserving the caller's stack semantics (SLIDE_LEFT like both original push sites).
+    function openConfirmView(view as Ui.Views, delegate as Ui.InputDelegates, replace as Lang.Boolean) as Void {
+        if (replace) { Ui.switchToView(view, delegate, Ui.SLIDE_LEFT); }
+        else { Ui.pushView(view, delegate, Ui.SLIDE_LEFT); }
+    }
+
+    // Continue past the C2 one-time passcode notice: REPLACE it with passcode entry (switchToView, not
+    // push), so a later BACK/popView from entry returns to the launching screen — not the dismissed
+    // notice. Mirrors continueToBolusEntry().
+    function continueToPasscodeEntry() as Void {
+        var pv = new PasscodeEntryView();
+        Ui.switchToView(pv, new PasscodeEntryDelegate(pv), Ui.SLIDE_LEFT);
+    }
+
     function indexOf(id as Lang.String) as Lang.Number {
         var order = AppState.screenOrder;
         for (var i = 0; i < order.size(); i += 1) {

@@ -27,7 +27,7 @@ module SentAtTest {
     (:test)
     function bolusRequestStamped(logger as Test.Logger) as Lang.Boolean {
         var before = Time.now().value();
-        var cmd = RemoteComm.bolusRequest(2.5, "rid-1");
+        var cmd = RemoteComm.bolusRequest(2.5, "rid-1", null);
         var after = Time.now().value();
         Test.assertEqualMessage(cmd["kind"], "bolusRequest", "kind");
         assertFreshStamp(cmd, before, after, "bolusRequest");
@@ -38,7 +38,7 @@ module SentAtTest {
     (:test)
     function bolusRequestCarbsStamped(logger as Test.Logger) as Lang.Boolean {
         var before = Time.now().value();
-        var cmd = RemoteComm.bolusRequestCarbs(30, 120, 1.8, "rid-2");
+        var cmd = RemoteComm.bolusRequestCarbs(30, 120, 1.8, "rid-2", null);
         var after = Time.now().value();
         Test.assertEqualMessage(cmd["kind"], "bolusRequest", "kind");
         assertFreshStamp(cmd, before, after, "bolusRequestCarbs");
