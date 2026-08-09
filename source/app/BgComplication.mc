@@ -6,12 +6,16 @@ using Toybox.Lang;
 // resources-complications/complications/complications.xml). Publishes a NUMERIC :value (matching the
 // complication's numeric <range>, so Face It can range-color it) with the trend in the :unit slot as a
 // Latin-safe arrow (from the phone's direction token; Unicode arrow glyphs fail to render on many faces).
-// LIMITATION (audit): a numeric/ranged complication cannot render "--", so when a reading goes stale we
-// drop the arrow but the last NUMBER still shows (and keeps its range color). The complication also
-// refreshes only while the app is foreground (15 s) or via throttled background temporal events (≥5 min,
-// system-coalesced), and not at all while the phone/BLE is unreachable — so it can lag the CGM and does
-// NOT itself flag staleness. The in-app screens (and the "value + trend" string display mode) are the
-// staleness-aware surfaces.
+// LIMITATION (audit): a numeric/ranged complication cannot render "--" in its numeric :value slot, so a
+// stale reading keeps its last NUMBER (and range color) there — the pure-numeric display is STRUCTURALLY
+// unable to flag staleness (a stale glucose can look current). P16 §1.3 (fail-graceful): the shortLabel
+// TEXT is the one complication sub-surface that can carry a marker, so staleness is made honest there in
+// BOTH display modes (see shortLabelFor) — string-rendering faces can no longer show a stale reading as
+// current. The residual structural limit (a face that renders ONLY the numeric :value) is unavoidable at
+// the publisher and stays documented here. The complication also refreshes only while the app is
+// foreground (15 s) or via throttled background temporal events (≥5 min, system-coalesced), and not at
+// all while the phone/BLE is unreachable — so it can lag the CGM. The in-app screens remain the
+// fully staleness-aware surfaces (grayed value + called-out age).
 module BgComplication {
     const COMP_ID = 0;
     const KEY_BG = "bg";
@@ -31,6 +35,22 @@ module BgComplication {
         if (token.equals("down45")) { return "\\"; }
         if (token.equals("flat")) { return "->"; }
         return "";
+    }
+
+    // P16 §1.3 (fail-graceful): compute the complication shortLabel string. This is the ONE complication
+    // sub-surface that can carry text, so it is where staleness is made honest for string-rendering faces:
+    //   • stringTrend  mode → "--" when stale (the value is replaced), else "<value><arrow>".
+    //   • numericColor mode → keeps "<value>" so a face can still range-color the number, but appends an
+    //     explicit " old" marker when stale so a string-rendering face cannot show a stale reading as
+    //     current. (The pure-NUMERIC :value display remains structurally unable to convey staleness — see
+    //     the LIMITATION note above — so the honest marker lives here, in the text label.)
+    // Pure/string-only (no Complications dependency) so it is unit-testable in the P6 harness.
+    function shortLabelFor(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean,
+                           stringMode as Lang.Boolean) as Lang.String {
+        if (stringMode) {
+            return stale ? "--" : (value.toString() + arrow);
+        }
+        return stale ? (value.toString() + " old") : (value.toString() + arrow);
     }
 
     function remember(bg as Lang.Number?, token as Lang.String, epoch as Lang.Number) as Void {
@@ -87,17 +107,14 @@ module BgComplication {
         // itself. The real "reads 0" fix is the NUMERIC :value in step 1 (a String value fell back to the
         // range floor). Stale keeps the last numeric value but drops the arrow (numeric can't render "--").
         try {
-            // GA-08: in "stringTrend" mode the surface is the STRING shortLabel — it carries the value +
-            // Latin trend arrow, and "--" when stale (the one place we can honestly show staleness, since
-            // the numeric :value can't render "--"). In "numericColor" mode the label keeps the last number
-            // and we attach range breakpoints for the face to color by.
+            // GA-08 / P16 §1.3: in "stringTrend" mode the surface is the STRING shortLabel — it carries
+            // the value + Latin trend arrow, and "--" when stale. In "numericColor" mode the shortLabel
+            // keeps the last number (so the face can range-color it) but appends an explicit stale marker,
+            // and we attach range breakpoints for the face to color by. shortLabelFor makes staleness
+            // honest in BOTH modes; the numeric :value slot stays as the last reading (a numeric
+            // complication cannot render "--" there — the documented structural limit).
             var stringMode = AppState.complicationDisplay.equals("stringTrend");
-            var label;
-            if (stringMode) {
-                label = stale ? "--" : (value.toString() + arrow);
-            } else {
-                label = stale ? value.toString() : (value.toString() + arrow);
-            }
+            var label = shortLabelFor(value, arrow, stale, stringMode);
             var params = { :value => value, :unit => (stale ? "" : arrow), :shortLabel => label };
             if (!stringMode) {
                 // Glucose range breakpoints (mg/dL) — the same canonical bands as AppState.rangeColor.
