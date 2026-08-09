@@ -20,6 +20,9 @@ sentAt
 forceGlucose
 alertId
 alertKind
+# C2 §2.3: the entered 4-digit bolus passcode (String), added to bolusRequest only when a code was
+# entered. The phone verifies it and denies the bolus if wrong/absent; the watch never verifies/persists.
+bolusPasscode
 
 # statusRead reply consumed by the watch (AppState.mc)
 status

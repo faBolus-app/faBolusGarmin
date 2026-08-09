@@ -125,6 +125,13 @@ module AppState {
         // (fail-closed to false when never armed) instead of re-hiding an already-enabled watch.
         var gbe = Storage.getValue("garminBolusEnabled");
         if (gbe instanceof Lang.Boolean) { garminBolusEnabled = gbe; }
+        // C2 §2.3: restore the persisted passcode-required flag the same way, so a cold launch before the
+        // first statusRead already knows a passcode confirms the bolus — closing the window where a
+        // required→(default not-required) flip could briefly offer the tap/hold confirm instead. Default
+        // false is a safe fail-open here (worst case the phone still denies an unverified bolus), but
+        // persisting matches garminBolusEnabled and avoids that transient.
+        var bpr0 = Storage.getValue("bolusPasscodeRequired");
+        if (bpr0 instanceof Lang.Boolean) { bolusPasscodeRequired = bpr0; }
     }
 
     // Keep only allowed string ids (de-duped), preserving the phone-chosen subset + order.
@@ -461,6 +468,42 @@ module AppState {
         includeStaleBg = false;   // AB4: the stale-BG include choice is per-attempt — never carried over
     }
 
+    // C2 §2.3 / P15 §2.3 — the SINGLE bolus send funnel. Extracted verbatim from HoldView.deliver() so
+    // BOTH confirm surfaces send through the identical path with NO duplicated or divergent delivery
+    // semantics:
+    //   • HoldView (tap/hold confirm, no passcode)      → sendBolusNow(null)
+    //   • PasscodeEntryView (passcode confirm, §2.3)     → sendBolusNow(enteredCode)
+    // It mints the reqId, sets pendingRequestId, resets the lost-echo tracker, checks reachability, sets
+    // status="delivering", and calls the RemoteComm builder — exactly as before. `code` is threaded to the
+    // builder, which adds "bolusPasscode" to the wire only when non-null. The WATCH NEVER verifies or
+    // persists the code — the phone is the sole authority and denies a wrong/absent one.
+    //
+    // Returns false ONLY when the P15 §2.3 / G4 policy-disabled hard guard blocked the send WITHOUT
+    // sending anything (read-only ON or Garmin bolusing OFF pushed while confirming) — the caller must
+    // then de-arm its own view-local confirm state. Returns true when a request was sent OR a terminal
+    // status was set (outOfRange), i.e. the confirm surface is done and status now owns the screen.
+    function sendBolusNow(code as Lang.String?) as Lang.Boolean {
+        if (bolusPolicyDisabled()) { return false; }
+        var reqId = RemoteComm.newRequestId();
+        pendingRequestId = reqId;
+        sawPhoneBolusing = false;   // reset the lost-echo recovery tracker for this request
+        if (!RemoteComm.phoneReachable()) {
+            status = "outOfRange"; message = "iPhone unreachable"; return true;
+        }
+        status = "delivering";
+        // Carbs mode: send carbsGrams (+ bg + this watch's estimate) so the phone is the single
+        // calculator and can run the divergence guard. Units mode: send the units as before.
+        if (mode.equals("carbs")) {
+            // AB4 (Addendum B): fresh → the reading; stale → included only on the explicit per-attempt
+            // "include" choice, else nil-dropped (carbs-only). bgForBolus() encapsulates that decision.
+            var bg = bgForBolus();
+            RemoteComm.send(RemoteComm.bolusRequestCarbs(carbsValue, bg, deliverUnits, reqId, code));
+        } else {
+            RemoteComm.send(RemoteComm.bolusRequest(deliverUnits, reqId, code));
+        }
+        return true;
+    }
+
     // G5 (Garmin half): a one-time, plain-language notice shown the first time the wearer opens the
     // bolus flow — that bolusing from the watch is off by default and is turned on/off from faBolus on
     // the phone. The "shown" flag is PERSISTED so it appears exactly once for the life of the install
@@ -472,6 +515,21 @@ module AppState {
     }
     function markBolusIntroShown() as Void {
         Storage.setValue(KEY_BOLUS_INTRO_SHOWN, true);
+    }
+
+    // C2 §2.3 (Garmin half): a SEPARATE one-time notice, shown the FIRST time a passcode is actually
+    // required, explaining that a 4-digit passcode set in faBolus on the phone now confirms a bolus
+    // (replacing the tap/hold). The plan's "prompt at pairing time" has no on-watch equivalent — pairing
+    // is done phone-side on Garmin — so this first-use notice is the correct on-watch stand-in. Its own
+    // persisted flag (separate from KEY_BOLUS_INTRO_SHOWN) so it appears exactly once for the life of the
+    // install, set at DISPLAY time (before the notice is pushed) so it shows once even if the wearer backs
+    // out. Same persisted-boolean shape as bolusIntroShown() (a non-true value errs toward showing).
+    const KEY_PASSCODE_INTRO_SHOWN = "passcodeIntroShown";
+    function passcodeIntroShown() as Lang.Boolean {
+        return Storage.getValue(KEY_PASSCODE_INTRO_SHOWN) == true;
+    }
+    function markPasscodeIntroShown() as Void {
+        Storage.setValue(KEY_PASSCODE_INTRO_SHOWN, true);
     }
 
     // Seed glucose/trend from the persisted complication value so the glance shows the last-known
@@ -677,7 +735,11 @@ module AppState {
             var gbe2 = data["garminBolusEnabled"];
             if (gbe2 instanceof Lang.Boolean) { garminBolusEnabled = gbe2; Storage.setValue("garminBolusEnabled", garminBolusEnabled); }
             var bpr = data["bolusPasscodeRequired"];
-            if (bpr instanceof Lang.Boolean) { bolusPasscodeRequired = bpr; }
+            // C2 §2.3: persist like garminBolusEnabled so a cold launch / background context knows a
+            // passcode is required before the first statusRead (loadPrefs restores it). Strict guard: a
+            // non-boolean is ignored (keeps the last / safe default). The watch only COLLECTS the code and
+            // sends it; the phone verifies + persists nothing here beyond this required flag.
+            if (bpr instanceof Lang.Boolean) { bolusPasscodeRequired = bpr; Storage.setValue("bolusPasscodeRequired", bolusPasscodeRequired); }
             // B2 (S1 + O3): the pump's controller identity + Control-IQ runtime on/off, for the LOCAL
             // auto-correction disclosure. FROZEN token set (CONTROLLER_VARIANTS = the schema
             // `controllerVariant` enum) — an unknown/garbage variant is ignored (keeps the last / safe

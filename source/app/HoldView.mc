@@ -191,31 +191,18 @@ class HoldView extends Ui.View {
     }
 
     private function deliver() as Void {
-        // P15 §2.3 / G4 (hard guard): never SEND if the phone disabled bolusing while this screen was up
-        // (read-only or Garmin bolusing OFF). Even a confirm that completed in the same frame as the
+        // C2 §2.3: the no-passcode confirm path. Delivery/reqId/reachability/status semantics + the P15
+        // §2.3 / G4 policy-disabled hard guard all live in the SHARED funnel AppState.sendBolusNow() so
+        // this path and the passcode path (PasscodeEntryView) send identically. This is the tap/hold
+        // confirm, so no passcode is ever collected here → pass null.
+        //
+        // The funnel returns false ONLY when the hard guard blocked the send (read-only or Garmin bolusing
+        // OFF pushed while this screen was armed): even a confirm that completed in the same frame as the
         // disabling push must fire NOTHING — the host would refuse it anyway (AccessPolicy); the wrist
-        // doesn't even try. De-arm so the next redraw shows the disabled notice.
-        if (AppState.bolusPolicyDisabled()) {
+        // doesn't even try. De-arm the view-local confirm state so the next redraw shows the disabled
+        // notice (disabledMidArm()). On true, status now owns the screen (delivering / outOfRange).
+        if (!AppState.sendBolusNow(null)) {
             _progress = 0; btnArmed = false; btnProgress = 0.0;
-            return;
-        }
-        var reqId = RemoteComm.newRequestId();
-        AppState.pendingRequestId = reqId;
-        AppState.sawPhoneBolusing = false;   // reset the lost-echo recovery tracker for this request
-        if (!RemoteComm.phoneReachable()) {
-            AppState.status = "outOfRange"; AppState.message = "iPhone unreachable"; return;
-        }
-        AppState.status = "delivering";
-        // Carbs mode: send carbsGrams (+ bg + this watch's estimate) so the phone is the single
-        // calculator and can run the divergence guard. Units mode: send the units as before.
-        if (AppState.mode.equals("carbs")) {
-            // AB4 (Addendum B): fresh → the reading; stale → included only on the explicit per-attempt
-            // "include" choice, else nil-dropped (carbs-only). bgForBolus() encapsulates that decision;
-            // a nil result omits bgMgdl on the wire, so the phone recomputes carbs-only in lockstep.
-            var bg = AppState.bgForBolus();
-            RemoteComm.send(RemoteComm.bolusRequestCarbs(AppState.carbsValue, bg, AppState.deliverUnits, reqId));
-        } else {
-            RemoteComm.send(RemoteComm.bolusRequest(AppState.deliverUnits, reqId));
         }
     }
 }

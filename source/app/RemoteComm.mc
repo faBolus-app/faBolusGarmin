@@ -18,21 +18,30 @@ module RemoteComm {
     // `sentAt` is the wall-clock send-time stamp (Unix seconds); the host refuses a delivery-authorizing
     // command that arrives too late (stale bolus = double-dose hazard). Time.now().value() is real
     // wall-clock — NOT System.getTimer() (monotonic device-uptime), which newRequestId() uses.
-    function bolusRequest(units as Lang.Float, requestId as Lang.String) as Lang.Dictionary {
-        return {
+    //
+    // C2 §2.3: `code` is the entered 4-digit bolus passcode, or null when no passcode was required. It is
+    // added to the wire dict ("bolusPasscode") ONLY when non-null (same additive-field idiom as sentAt /
+    // bgMgdl) — omitted entirely otherwise. The PHONE is the sole authority: it verifies the code and
+    // denies the bolus if wrong/absent. The watch never verifies or persists it (see AppState.sendBolusNow).
+    function bolusRequest(units as Lang.Float, requestId as Lang.String, code as Lang.String?) as Lang.Dictionary {
+        var d = {
             "version" => SCHEMA_VERSION,
             "kind" => "bolusRequest",
             "requestId" => requestId,
             "units" => units,
             "sentAt" => Time.now().value()
         };
+        if (code != null) { d["bolusPasscode"] = code; }
+        return d;
     }
 
     // Builds a CARB bolus request: the phone (host) is the single calculator — it recomputes the dose
     // from carbsGrams and delivers. We include this watch's own estimate (remoteEstimateUnits) so the
     // phone can reject the bolus if the two diverge (stale-settings guard). bg omitted when stale/unknown.
+    //
+    // C2 §2.3: `code` is added ("bolusPasscode") only when non-null — see bolusRequest() above.
     function bolusRequestCarbs(carbs as Lang.Number, bg as Lang.Number?, estimate as Lang.Float,
-                               requestId as Lang.String) as Lang.Dictionary {
+                               requestId as Lang.String, code as Lang.String?) as Lang.Dictionary {
         var d = {
             "version" => SCHEMA_VERSION,
             "kind" => "bolusRequest",
@@ -42,6 +51,7 @@ module RemoteComm {
             "sentAt" => Time.now().value()   // freshness stamp — see bolusRequest()
         };
         if (bg != null) { d["bgMgdl"] = bg; }
+        if (code != null) { d["bolusPasscode"] = code; }
         return d;
     }
 

@@ -58,8 +58,10 @@ class BolusEntryDelegate extends Ui.BehaviorDelegate {
             return true;
         }
         if (!captureDose()) { return true; }   // nothing to deliver
-        var v = new HoldView();
-        Ui.pushView(v, new HoldDelegate(v), Ui.SLIDE_LEFT);
+        // C2 §2.3: open the confirm surface. When the phone requires a passcode, Nav pushes the passcode
+        // entry (with a one-time notice the first time) INSTEAD of the tap/hold HoldView — §2.3: the
+        // passcode REPLACES the tap/hold, it does not stack. PUSH here (fresh path) as today.
+        Nav.openConfirm(false);
         return true;
     }
 
