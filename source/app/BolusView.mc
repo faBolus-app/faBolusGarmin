@@ -22,6 +22,44 @@ class BolusEntryView extends Ui.View {
     static function plusCenter(w, h) { return [w * 0.83, h * 0.45]; }
     static function stepRadius(w) { return w * 0.13; }
 
+    // Greedy word-wrap: split `text` into centered lines each ≤ `maxW` pixels wide in `font`. Never
+    // splits a single word (a too-long word gets its own line). Used only for the B2 disclosure copy so
+    // the exact contract string renders in full on the small round screen instead of clipping.
+    static function wrapLines(dc as Gfx.Dc, text as Lang.String, font, maxW as Lang.Number) as Lang.Array {
+        var words = splitWords(text);
+        var lines = [];
+        var cur = "";
+        for (var i = 0; i < words.size(); i += 1) {
+            var word = words[i] as Lang.String;
+            var trial = cur.equals("") ? word : cur + " " + word;
+            if (cur.equals("") || dc.getTextWidthInPixels(trial, font) <= maxW) {
+                cur = trial;
+            } else {
+                lines.add(cur);
+                cur = word;
+            }
+        }
+        if (!cur.equals("")) { lines.add(cur); }
+        return lines;
+    }
+
+    // Split on spaces (Monkey C's String has no portable split-by-string across API levels; keep it
+    // local and simple — the disclosure copy is plain ASCII words separated by single spaces).
+    static function splitWords(text as Lang.String) as Lang.Array {
+        var out = [];
+        var cur = "";
+        for (var i = 0; i < text.length(); i += 1) {
+            var ch = text.substring(i, i + 1);
+            if (ch.equals(" ")) {
+                if (!cur.equals("")) { out.add(cur); cur = ""; }
+            } else {
+                cur += ch;
+            }
+        }
+        if (!cur.equals("")) { out.add(cur); }
+        return out;
+    }
+
     function onUpdate(dc as Gfx.Dc) as Void {
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
         dc.clear();
@@ -50,15 +88,50 @@ class BolusEntryView extends Ui.View {
         dc.setColor(0x8AB4FF, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.45, Gfx.FONT_NUMBER_MEDIUM, AppState.valueLabel(), vc);
 
-        // Computed insulin (carbs mode) — clear of the value and the Deliver button.
+        var dr = deliverRect(w, h);
+
+        // B2 (S1 + O3) auto-correction DISCLOSURE — a single line in the band directly above the Deliver
+        // button (the S1 caution when it fires, else the O3 ambient line; "" ⇒ nothing). Bottom-anchored
+        // just above the button and grown UPWARD, wrapped to the width in FONT_XTINY so the exact
+        // faBolusCore contract string renders in full. DISPLAY-ONLY — it never touches the button.
+        var disc = AppState.controllerDisclosureLine();
+        var discTopY = null;   // pixel y of the block's top edge, when a disclosure is shown
+        if (!disc.equals("")) {
+            var dfont = Gfx.FONT_XTINY;
+            var maxW = (w * 0.92).toNumber();
+            var lines = wrapLines(dc, disc, dfont, maxW);
+            var fh = dc.getFontHeight(dfont);
+            var lineH = fh * 0.95;
+            var n = lines.size();
+            var bottomCy = dr[1] - h * 0.02 - fh / 2.0;   // center of the LAST line, just above Deliver
+            dc.setColor(AppState.controllerDisclosureIsCaution() ? Gfx.COLOR_YELLOW : Gfx.COLOR_LT_GRAY,
+                        Gfx.COLOR_TRANSPARENT);
+            for (var i = 0; i < n; i += 1) {
+                dc.drawText(cx, bottomCy - (n - 1 - i) * lineH, dfont, lines[i], vc);
+            }
+            discTopY = bottomCy - (n - 1) * lineH - fh / 2.0;
+        }
+
+        // Computed insulin (carbs mode) — kept clear of the value, the disclosure, and the Deliver
+        // button. Default position is h*0.63; when a disclosure is shown it sits just ABOVE the block,
+        // and is dropped for the frame only if there is no clean room (a rare long S1 on the smallest
+        // device) — the exact deliverable dose is always shown on the hold-to-deliver screen regardless.
         if (!isUnits) {
-            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.63, Gfx.FONT_XTINY,
-                        "~ " + AppState.computeUnits().format("%.2f") + " U", vc);
+            var cuY = h * 0.63;
+            var showCu = true;
+            if (discTopY != null) {
+                var above = discTopY - dc.getFontHeight(Gfx.FONT_XTINY);
+                if (above < h * 0.55) { showCu = false; }
+                else if (above < cuY) { cuY = above; }
+            }
+            if (showCu) {
+                dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+                dc.drawText(cx, cuY, Gfx.FONT_XTINY,
+                            "~ " + AppState.computeUnits().format("%.2f") + " U", vc);
+            }
         }
 
         // Deliver button.
-        var dr = deliverRect(w, h);
         dc.setColor(0x5C6BE6, Gfx.COLOR_TRANSPARENT);
         dc.fillRoundedRectangle(dr[0], dr[1], dr[2], dr[3], 10);
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
