@@ -496,8 +496,11 @@ module AppState {
         if (mode.equals("carbs")) {
             // AB4 (Addendum B): fresh → the reading; stale → included only on the explicit per-attempt
             // "include" choice, else nil-dropped (carbs-only). bgForBolus() encapsulates that decision.
+            // Option B: also forward the include-stale INTENT (includeStaleBg — the same per-attempt flag,
+            // cleared by reset()) so the host can honor an acknowledged-stale correction instead of failing
+            // closed to carbs-only. The builder omits it entirely unless true (never sent on units mode).
             var bg = bgForBolus();
-            RemoteComm.send(RemoteComm.bolusRequestCarbs(carbsValue, bg, deliverUnits, reqId, code));
+            RemoteComm.send(RemoteComm.bolusRequestCarbs(carbsValue, bg, deliverUnits, reqId, code, includeStaleBg));
         } else {
             RemoteComm.send(RemoteComm.bolusRequest(deliverUnits, reqId, code));
         }

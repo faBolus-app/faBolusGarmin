@@ -34,12 +34,12 @@ module BolusPasscodeTest {
     // Carb variant: same additive contract — present with the value when a code is passed.
     (:test)
     function bolusRequestCarbsIncludesCodeWhenPresent(logger as Test.Logger) as Lang.Boolean {
-        var cmd = RemoteComm.bolusRequestCarbs(30, 120, 1.8, "rid-3", "0000");
+        var cmd = RemoteComm.bolusRequestCarbs(30, 120, 1.8, "rid-3", "0000", false);
         Test.assertMessage(cmd.hasKey("bolusPasscode"), "bolusRequestCarbs: bolusPasscode present when a code is passed");
         Test.assertEqualMessage(cmd["bolusPasscode"], "0000", "bolusPasscode is the entered code verbatim");
         // The carb builder still omits bgMgdl when bg is null (unrelated additive field) — sanity that the
-        // passcode addition didn't disturb the existing bg-omission contract.
-        var noBg = RemoteComm.bolusRequestCarbs(30, null, 1.8, "rid-3b", "0000");
+        // passcode addition didn't disturb the existing bg-omission contract. (includeStale=false: carbs-only.)
+        var noBg = RemoteComm.bolusRequestCarbs(30, null, 1.8, "rid-3b", "0000", false);
         Test.assertMessage(!noBg.hasKey("bgMgdl"), "bgMgdl still omitted when bg is null");
         Test.assertMessage(noBg.hasKey("bolusPasscode"), "bolusPasscode still present alongside an omitted bgMgdl");
         return true;
@@ -48,7 +48,7 @@ module BolusPasscodeTest {
     // Carb variant: OMITTED when the code is null.
     (:test)
     function bolusRequestCarbsOmitsCodeWhenNull(logger as Test.Logger) as Lang.Boolean {
-        var cmd = RemoteComm.bolusRequestCarbs(30, 120, 1.8, "rid-4", null);
+        var cmd = RemoteComm.bolusRequestCarbs(30, 120, 1.8, "rid-4", null, false);
         Test.assertMessage(!cmd.hasKey("bolusPasscode"), "bolusRequestCarbs: bolusPasscode OMITTED when code is null");
         return true;
     }

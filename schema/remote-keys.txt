@@ -23,6 +23,9 @@ alertKind
 # C2 §2.3: the entered 4-digit bolus passcode (String), added to bolusRequest only when a code was
 # entered. The phone verifies it and denies the bolus if wrong/absent; the watch never verifies/persists.
 bolusPasscode
+# AB4 (Addendum B Option B): explicit per-attempt include-stale INTENT (Boolean), added to a CARB
+# bolusRequest only when the wearer chose "include" this attempt. Absent ⇒ host fails closed to carbs-only.
+includeStaleBG
 
 # statusRead reply consumed by the watch (AppState.mc)
 status
