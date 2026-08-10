@@ -40,8 +40,16 @@ module RemoteComm {
     // phone can reject the bolus if the two diverge (stale-settings guard). bg omitted when stale/unknown.
     //
     // C2 §2.3: `code` is added ("bolusPasscode") only when non-null — see bolusRequest() above.
+    //
+    // AB4 (Addendum B Option B): `includeStale` is the EXPLICIT per-attempt intent that the wearer chose
+    // to include a stale-but-real CGM reading in the correction (the three-way stale prompt's "include").
+    // It is added to the wire dict ("includeStaleBG" => true) ONLY when true (same additive-field idiom as
+    // bgMgdl / bolusPasscode) — omitted entirely otherwise, NEVER sent as false. The host fails closed on
+    // its absence (carbs-only), so the flag is what lets the phone distinguish an acknowledged-stale dose
+    // from a bg that merely happened to be stale. Only meaningful on the carb path (never units-mode).
     function bolusRequestCarbs(carbs as Lang.Number, bg as Lang.Number?, estimate as Lang.Float,
-                               requestId as Lang.String, code as Lang.String?) as Lang.Dictionary {
+                               requestId as Lang.String, code as Lang.String?,
+                               includeStale as Lang.Boolean) as Lang.Dictionary {
         var d = {
             "version" => SCHEMA_VERSION,
             "kind" => "bolusRequest",
@@ -52,6 +60,7 @@ module RemoteComm {
         };
         if (bg != null) { d["bgMgdl"] = bg; }
         if (code != null) { d["bolusPasscode"] = code; }
+        if (includeStale) { d["includeStaleBG"] = true; }
         return d;
     }
 

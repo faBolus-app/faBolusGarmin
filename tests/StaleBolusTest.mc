@@ -8,6 +8,9 @@ using Toybox.Time;
 //   • staleBolusShouldWarn — warn iff there IS a reading AND it is stale (fresh / no-reading bypass);
 //   • bgForBolus — the include/exclude BG feed (stale is dropped unless the per-attempt flag is set);
 //   • computeUnits — the decision end-to-end (include recovers the correction the drop removed);
+//   • bolusRequestCarbs — the WIRE round-trip (Option B): the explicit include-stale intent
+//     (includeStaleBG => true) AND the stale correction bg (bgMgdl) are on the dict iff the per-attempt
+//     flag is set, and NEITHER is present otherwise (never sent as false; carbs-only fail-closed);
 //   • staleChoiceProceeds / staleChoiceIncludesBg — cancel composes/sends NOTHING; only include carries BG;
 //   • reset — the include flag is per-attempt, never sticky.
 // Style mirrors tests/CanBolusTest.mc. AppState is compiled into the test binary (test.jungle).
@@ -73,6 +76,30 @@ module StaleBolusTest {
 
         seed(200, 0);                                  // fresh always corrects, no flag needed
         Test.assertEqualMessage(AppState.computeUnits(), 2.0, "fresh ⇒ correction applied");
+        return true;
+    }
+
+    // Option B WIRE round-trip: the carb bolusRequest carries the explicit include-stale INTENT
+    // (includeStaleBG => true) alongside the stale correction bg (bgMgdl) ONLY on the per-attempt
+    // "include" choice; with the flag off it carries NEITHER — the intent is never sent as false and the
+    // stale bg is dropped (host fails closed to carbs-only, today's behavior). Composes exactly as
+    // AppState.sendBolusNow does: bg = bgForBolus(), then RemoteComm.bolusRequestCarbs(..., includeStaleBg).
+    (:test)
+    function bolusRequestCarbsCarriesIncludeStaleIntent(logger as Test.Logger) as Lang.Boolean {
+        seed(200, 1000);                               // stale reading present
+        AppState.includeStaleBg = true;                // wearer chose "include" this attempt
+        var bgInc = AppState.bgForBolus();
+        var dInc = RemoteComm.bolusRequestCarbs(AppState.carbsValue, bgInc, 2.0, "r-inc", null, AppState.includeStaleBg);
+        Test.assertMessage(dInc.hasKey("includeStaleBG"), "included ⇒ intent key present");
+        Test.assertEqualMessage(dInc["includeStaleBG"], true, "included ⇒ includeStaleBG => true");
+        Test.assertMessage(dInc.hasKey("bgMgdl"), "included ⇒ correction bg present");
+        Test.assertEqualMessage(dInc["bgMgdl"], 200, "included ⇒ bgMgdl is the (stale) reading");
+
+        seed(200, 1000);                               // seed() resets includeStaleBg to false (carbs-only)
+        var bgOff = AppState.bgForBolus();
+        var dOff = RemoteComm.bolusRequestCarbs(AppState.carbsValue, bgOff, 0.0, "r-off", null, AppState.includeStaleBg);
+        Test.assertMessage(!dOff.hasKey("includeStaleBG"), "not included ⇒ NO includeStaleBG key (never false)");
+        Test.assertMessage(!dOff.hasKey("bgMgdl"), "not included ⇒ NO correction bg (carbs-only)");
         return true;
     }
 
