@@ -133,6 +133,10 @@ class BolusEntryView extends Ui.View {
         // button. Default position is h*0.63; when a disclosure is shown it sits just ABOVE the block,
         // and is dropped for the frame only if there is no clean room (a rare long S1 on the smallest
         // device) — the exact deliverable dose is always shown on the hold-to-deliver screen regardless.
+        // task #93 op-109 parity check: computeUnits()'s IOB term reads AppState.iob, which is a pure,
+        // unrounded pass-through of the host's statusRead "units" field (op-109 swan6hrIOB — see
+        // AppState.handle()) — the watch never re-derives IOB itself, on this line or on the Details
+        // screen. The phone remains the single calculator + 0.10 U divergence guard at delivery.
         if (!isUnits) {
             var cuY = h * 0.63;
             var showCu = true;
