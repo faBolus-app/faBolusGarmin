@@ -588,40 +588,141 @@ module AppState {
         var total;
         if (mode.equals("units")) {
             total = unitsValue;
-        } else if (carbRatio > 0.0) {
-            // GA-04: round EACH component to two decimals (half-up) before combining — exactly as the
-            // oracle-backed host does. Combining unrounded components then rounding only the total drifted
-            // by one 0.05 U pump increment on ~1.5% of inputs, and the host's 0.10 U tolerance accepted it,
-            // so the delivered dose could differ from the number shown on the hold screen.
-            var fromCarbs = dp2(carbsValue.toFloat() / carbRatio);
-            var fromBG = 0.0;
-            // AB4 (Addendum B): a stale BG is dropped from the correction (carbs-only) UNLESS the wearer
-            // made the explicit, per-attempt "include" choice this compose (includeStaleBg) — never sticky,
-            // never default. Fresh always corrects. Keeps the wrist preview in lockstep with bgForBolus().
-            if (isf > 0 && glucose != null && (!glucoseStale() || includeStaleBg)) {
-                fromBG = dp2((glucose - targetBg).toFloat() / isf.toFloat());   // signed
-            }
-            var fromIOB = (iob > 0.0) ? dp2(-iob) : 0.0;
-            total = fromCarbs;
-            if (fromBG >= 0.0) {                        // at or above target
-                var corr = fromBG + fromIOB;
-                if (corr > 0.0) { total += corr; }      // else IOB cancels the correction → add nothing
-            } else {                                    // below target — correction reduces the dose
-                var corr = fromBG + fromIOB;
-                if (total + corr > 0.0) { total += corr; }
-                else { total = 0.0; }                   // would go negative → floor the total at 0
-            }
-            total = dp2(total);                         // oracle dp() on the combined total too
         } else {
-            // FB-01: the carb ratio hasn't arrived from the phone. Do NOT silently assume 10 g/U (that
-            // is an unverified guess that could misdose). Return 0 — `carbCalcAvailable()` is false, so
-            // the UI shows "calculator unavailable" and blocks the bolus until the phone syncs settings.
-            total = 0.0;
+            total = carbCorrectionTotal();
         }
         total = Math.round(total * 20.0) / 20.0;   // 0.05 u steps
         if (total < 0.0) { total = 0.0; }
         if (total > maxUnits) { total = maxUnits; }
         return total;
+    }
+
+    // The carb+correction math ONLY (unrounded, unclamped) — factored out of computeUnits()'s former
+    // "carbs" branch so `recommendedUnits()` (SG task #93, below) can read the SAME calculator total
+    // regardless of the CURRENT mode, without a second, independently-drifting copy of this logic.
+    // computeUnits() and recommendedUnits() each apply their own identical final rounding/clamp step.
+    // 0.0 when the carb ratio hasn't arrived from the phone (FB-01 — do NOT silently assume 10 g/U;
+    // that is an unverified guess that could misdose. `carbCalcAvailable()`/`sgDisplaysNumericDose()`
+    // tell "genuinely zero" apart from "not available yet").
+    function carbCorrectionTotal() as Lang.Float {
+        if (carbRatio <= 0.0) { return 0.0; }
+        // GA-04: round EACH component to two decimals (half-up) before combining — exactly as the
+        // oracle-backed host does. Combining unrounded components then rounding only the total drifted
+        // by one 0.05 U pump increment on ~1.5% of inputs, and the host's 0.10 U tolerance accepted it,
+        // so the delivered dose could differ from the number shown on the hold screen.
+        var fromCarbs = dp2(carbsValue.toFloat() / carbRatio);
+        var fromBG = 0.0;
+        // AB4 (Addendum B): a stale BG is dropped from the correction (carbs-only) UNLESS the wearer
+        // made the explicit, per-attempt "include" choice this compose (includeStaleBg) — never sticky,
+        // never default. Fresh always corrects. Keeps the wrist preview in lockstep with bgForBolus().
+        if (isf > 0 && glucose != null && (!glucoseStale() || includeStaleBg)) {
+            fromBG = dp2((glucose - targetBg).toFloat() / isf.toFloat());   // signed
+        }
+        var fromIOB = (iob > 0.0) ? dp2(-iob) : 0.0;
+        var total = fromCarbs;
+        if (fromBG >= 0.0) {                        // at or above target
+            var corr = fromBG + fromIOB;
+            if (corr > 0.0) { total += corr; }      // else IOB cancels the correction → add nothing
+        } else {                                    // below target — correction reduces the dose
+            var corr = fromBG + fromIOB;
+            if (total + corr > 0.0) { total += corr; }
+            else { total = 0.0; }                   // would go negative → floor the total at 0
+        }
+        return dp2(total);                           // oracle dp() on the combined total too
+    }
+
+    // ---- Insulin Stacking Guard (SG1 + SG3a, task #93) ----
+    // Hand-port of faBolusCore.StackingGuard (Packages/faBolusCore/Sources/faBolusCore/StackingGuard.swift).
+    // Mirrors controllerDisclosureLine()'s/-IsCaution()'s exact shape and doc contract immediately above:
+    // these are DISCLOSURE facts, never therapy — NEVER affect delivery. `computeUnits()`/`deliverUnits`
+    // are only ever READ here, never written or changed by anything below.
+    //
+    // The comparison baseline is `recommendedUnits()`: the SAME carbs+correction math computeUnits()
+    // already runs (both are wrist-side PREVIEWS the phone re-derives with the oracle-backed calculator
+    // and divergence-guards before delivery — see computeUnits()'s doc comment above), read via the
+    // shared `carbCorrectionTotal()` helper so this is not a second, drifting recompute.
+    //
+    // On THIS watch the override signal is only ever live in "units" mode: Carbs mode has no separate
+    // manual-units step (deliverUnits == computeUnits() == recommendedUnits() there by construction, so
+    // SG never fires in Carbs mode); Units mode lets the wearer pick ANY amount, via the same +/- stepper,
+    // independent of the carb-based suggestion — exactly the override SG discloses.
+    //
+    // §13 owner-confirmable, lock-backed cut-points below default IDENTICALLY to StackingGuard.swift's
+    // OSAllocatedUnfairLock-backed statics (1.5 / 2.0). Monkey C's single-threaded VM needs no lock — a
+    // bare module var is the platform-appropriate mirror of that same idiom. NOT clinical constants.
+    var sgConfirmExtraOverrideRatio as Lang.Float = 1.5;
+    var sgReenterOverrideRatio as Lang.Float = 2.0;
+
+    // The pump-calculator's carb+correction suggestion, computed regardless of the CURRENT mode (see
+    // the SG block above) — SG's comparison baseline. Same final rounding/clamp as computeUnits() so
+    // entered vs. recommended compare at the same precision. 0.0 when the carb ratio hasn't synced yet
+    // (mirrors carbCorrectionTotal()'s own FB-01 guard) — pair with sgDisplaysNumericDose() to tell
+    // "genuinely zero" apart from "not available yet".
+    function recommendedUnits() as Lang.Float {
+        var total = carbCorrectionTotal();
+        total = Math.round(total * 20.0) / 20.0;
+        if (total < 0.0) { total = 0.0; }
+        if (total > maxUnits) { total = maxUnits; }
+        return total;
+    }
+
+    // §13 Rule-1 mirror: a numeric dose may only be CITED once the pump's real calculator settings (its
+    // carb ratio) have synced — never sized off a placeholder guess.
+    function sgDisplaysNumericDose() as Lang.Boolean {
+        return carbRatio > 0.0;
+    }
+
+    // SG1 — hand-port of StackingGuard.calcOverride, keyed on the value that will actually be delivered
+    // right now (computeUnits()). "" when it must not fire. DISPLAY-ONLY — never gates, changes, or
+    // delays the Deliver button.
+    function sgCalcOverrideLine() as Lang.String {
+        if (!sgDisplaysNumericDose()) { return ""; }
+        var entered = computeUnits();
+        if (entered <= 0.0) { return ""; }
+        if (glucose == null) { return ""; }
+        var g = glucose as Lang.Number;
+        if (g <= targetBg) { return ""; }
+        var recommended = recommendedUnits();
+        // Full-override branch — BEFORE any ratio, mirroring StackingGuard.swift: a nonzero entered
+        // dose against a zero recommendation discloses without ever computing entered/recommended.
+        if (recommended == 0.0) {
+            return "You're entering " + entered.format("%.2f") + " U — the pump's calculator did not suggest a dose.";
+        }
+        if (entered <= recommended) { return ""; }
+        return "You're entering more than the pump's calculator suggested.";
+    }
+
+    // SG3a — hand-port of StackingGuard.escalation: composes SG1 + the max-bolus proximity signal (SG2)
+    // into ONE message ("" when SG1 wouldn't fire). DISPLAY-ONLY. NO new confirm step exists on this
+    // watch for ANY tier — the SG3a friction ceiling here IS the existing single HoldView tap/hold
+    // (never a second dialog, never a re-type); see BolusView.mc's render call site.
+    function sgDisclosureLine() as Lang.String {
+        var sg1 = sgCalcOverrideLine();
+        if (sg1.equals("")) { return ""; }
+        var entered = computeUnits();
+        var recommended = recommendedUnits();
+        if (recommended == 0.0) {
+            return "You're entering " + entered.format("%.2f")
+                 + " U with no calculator suggestion to compare against — please re-enter to confirm.";
+        }
+        var atOrAboveMax = (maxUnits > 0.0) && (entered >= maxUnits);
+        var ratio = entered / recommended;
+        if (ratio >= sgReenterOverrideRatio) {
+            return "This dose is far above what the pump's calculator suggested — please re-enter to confirm.";
+        }
+        if (ratio >= sgConfirmExtraOverrideRatio || atOrAboveMax) {
+            return "This dose is well above what the pump's calculator suggested — please confirm before delivering.";
+        }
+        return sg1;
+    }
+
+    // True when sgDisclosureLine() is at the confirmExtra/reenter tier (color it as a caution, like
+    // S1's lockout line); false for the disclose tier or "". Pairs with sgDisclosureLine() the way
+    // controllerDisclosureIsCaution() pairs with controllerDisclosureLine().
+    function sgDisclosureIsCaution() as Lang.Boolean {
+        var line = sgDisclosureLine();
+        if (line.equals("")) { return false; }
+        return !line.equals(sgCalcOverrideLine());
     }
 
     function valueLabel() as Lang.String {

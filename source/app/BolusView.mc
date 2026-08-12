@@ -90,23 +90,40 @@ class BolusEntryView extends Ui.View {
 
         var dr = deliverRect(w, h);
 
-        // B2 (S1 + O3) auto-correction DISCLOSURE — a single line in the band directly above the Deliver
-        // button (the S1 caution when it fires, else the O3 ambient line; "" ⇒ nothing). Bottom-anchored
-        // just above the button and grown UPWARD, wrapped to the width in FONT_XTINY so the exact
-        // faBolusCore contract string renders in full. DISPLAY-ONLY — it never touches the button.
-        var disc = AppState.controllerDisclosureLine();
-        var discTopY = null;   // pixel y of the block's top edge, when a disclosure is shown
-        if (!disc.equals("")) {
+        // B2 (S1 + O3) auto-correction DISCLOSURE + SG (task #93) Insulin Stacking Guard DISCLOSURE — up
+        // to two independent lines in the SAME band directly above the Deliver button (the S1 caution or
+        // O3 ambient line, and separately the SG1/SG3a line; "" from either ⇒ that line just isn't
+        // included). Bottom-anchored just above the button and grown UPWARD, each wrapped to the width in
+        // FONT_XTINY so the exact faBolusCore contract strings render in full, each independently colored
+        // (S1/SG3a-escalated = caution yellow, O3/SG1-only = neutral gray). DISPLAY-ONLY — neither ever
+        // touches the button. The SG3a friction ceiling on this watch is the existing single HoldView
+        // tap/hold below (Nav.mc:85 / HoldView.mc) — no new dialog, no re-type step is added here for any
+        // SG friction tier.
+        var discTopY = null;   // pixel y of the topmost disclosure block's top edge, when any is shown
+        var discBlocks = [];   // [ [text, isCaution], ... ] one entry per disclosure that fired
+        var ctrlLine = AppState.controllerDisclosureLine();
+        if (!ctrlLine.equals("")) { discBlocks.add([ctrlLine, AppState.controllerDisclosureIsCaution()]); }
+        var sgLine = AppState.sgDisclosureLine();
+        if (!sgLine.equals("")) { discBlocks.add([sgLine, AppState.sgDisclosureIsCaution()]); }
+        if (discBlocks.size() > 0) {
             var dfont = Gfx.FONT_XTINY;
             var maxW = (w * 0.92).toNumber();
-            var lines = wrapLines(dc, disc, dfont, maxW);
             var fh = dc.getFontHeight(dfont);
             var lineH = fh * 0.95;
+            var lines = [];      // physical lines, top-to-bottom, across ALL blocks
+            var lineCaution = []; // parallel array: which color each physical line uses
+            for (var b = 0; b < discBlocks.size(); b += 1) {
+                var block = discBlocks[b];
+                var wrapped = wrapLines(dc, block[0], dfont, maxW);
+                for (var i = 0; i < wrapped.size(); i += 1) {
+                    lines.add(wrapped[i]);
+                    lineCaution.add(block[1]);
+                }
+            }
             var n = lines.size();
             var bottomCy = dr[1] - h * 0.02 - fh / 2.0;   // center of the LAST line, just above Deliver
-            dc.setColor(AppState.controllerDisclosureIsCaution() ? Gfx.COLOR_YELLOW : Gfx.COLOR_LT_GRAY,
-                        Gfx.COLOR_TRANSPARENT);
             for (var i = 0; i < n; i += 1) {
+                dc.setColor(lineCaution[i] ? Gfx.COLOR_YELLOW : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
                 dc.drawText(cx, bottomCy - (n - 1 - i) * lineH, dfont, lines[i], vc);
             }
             discTopY = bottomCy - (n - 1) * lineH - fh / 2.0;
