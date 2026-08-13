@@ -35,7 +35,7 @@ class StaleBolusView extends Ui.View {
         // Warning lead: the reading, its age, and that it was left out of the dose.
         dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.10, Gfx.FONT_XTINY, "Stale CGM", vc);
-        var head = AppState.displayGlucose() + " mg/dL";
+        var head = AppState.displayGlucose() + " " + AppState.glucoseUnitLabel();
         var age = AppState.ageLabel();
         if (!age.equals("")) { head = head + " · " + age; }
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);

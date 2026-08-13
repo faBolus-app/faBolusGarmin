@@ -20,11 +20,11 @@ class DetailsView extends Ui.View {
         if (id.equals("iob")) { return "Active Insulin: " + f2(AppState.iob) + " U"; }
         if (id.equals("reservoir")) { return "Reservoir: " + f2(AppState.reservoir) + " U"; }
         if (id.equals("battery")) { return "Battery: " + n0(AppState.battery) + "%"; }
-        if (id.equals("cgm")) { return "CGM: " + (AppState.glucose != null ? AppState.glucose.toString() + " mg/dL" : "--"); }
+        if (id.equals("cgm")) { return "CGM: " + (AppState.glucose != null ? AppState.displayGlucose() + " " + AppState.glucoseUnitLabel() : "--"); }
         if (id.equals("lastBolus")) { return "Last bolus: " + f2(AppState.lastBolus) + " U"; }
         if (id.equals("carbRatio")) { return "Carb ratio: " + (AppState.carbRatio > 0.0 ? AppState.carbRatio.format("%.0f") + " g/U" : "--"); }
-        if (id.equals("isf")) { return "ISF: " + (AppState.isf > 0 ? AppState.isf.toString() + " mg/dL/U" : "--"); }
-        if (id.equals("target")) { return "Target: " + (AppState.targetBg > 0 ? AppState.targetBg.toString() + " mg/dL" : "--"); }
+        if (id.equals("isf")) { return "ISF: " + (AppState.isf > 0 ? AppState.formatMgdl(AppState.isf) + " " + AppState.isfUnitLabel() : "--"); }
+        if (id.equals("target")) { return "Target: " + (AppState.targetBg > 0 ? AppState.formatMgdl(AppState.targetBg) + " " + AppState.glucoseUnitLabel() : "--"); }
         if (id.equals("maxBolus")) { return "Max bolus: " + f2(AppState.maxUnits) + " U"; }
         return null;
     }

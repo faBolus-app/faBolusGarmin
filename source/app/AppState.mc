@@ -444,25 +444,26 @@ module AppState {
     }
     // Show the number whenever we have one — a stale reading is shown but marked (grayed + age
     // called out), never hidden. "--" only when there's no reading at all. Unit-aware (P-mmol):
-    // renders in the active glucoseUnit via the pure formatMgdlForUnit() funnel below.
+    // renders in the active glucoseUnit via the pure displayGlucoseForUnit() funnel below.
     function displayGlucose() as Lang.String {
         return glucose == null ? "--" : formatMgdl(glucose as Lang.Number);
     }
 
     // P-mmol: format an arbitrary mg/dL value (glucose, isf, targetBg — anything canonical mg/dL) in
     // the CURRENT instance unit. Every Garmin glucose/ISF/target display site routes through this (or
-    // the pure formatMgdlForUnit() below), mirroring faBolusCore.GlucoseUnit.format(mgdl:) exactly:
+    // the pure displayGlucoseForUnit() below), mirroring faBolusCore.GlucoseUnit.format(mgdl:) exactly:
     // mgdl → the plain integer string (unchanged); mmol → 1-decimal (D-05), never a second inline
     // "/ 18.0182" — GlucoseUnitTest.mc pins this against the same expected strings as the Swift funnel.
     function formatMgdl(v as Lang.Number) as Lang.String {
-        return formatMgdlForUnit(v, glucoseUnit);
+        return displayGlucoseForUnit(v, glucoseUnit);
     }
 
-    // Pure variant of formatMgdl(), independent of the instance's loaded glucoseUnit — for contexts
-    // (FaBolusGlanceView's (:glance) surface) that read Storage directly rather than depending on
-    // AppState.loadPrefs() having run first (see FaBolusGlanceView.mc's own "reads Storage directly"
-    // note). Both call sites route through this ONE conversion so the math is never duplicated.
-    function formatMgdlForUnit(v as Lang.Number, unitToken as Lang.String) as Lang.String {
+    // Pure variant of formatMgdl()/displayGlucose(), independent of the instance's loaded
+    // glucoseUnit — for contexts (FaBolusGlanceView's (:glance) surface) that read Storage directly
+    // rather than depending on AppState.loadPrefs() having run first (see FaBolusGlanceView.mc's own
+    // "reads Storage directly" note). Both call sites route through this ONE conversion so the math
+    // is never duplicated.
+    function displayGlucoseForUnit(v as Lang.Number, unitToken as Lang.String) as Lang.String {
         if (unitToken.equals("mmol")) { return (v.toFloat() / MGDL_PER_MMOL).format("%.1f"); }
         return v.toString();
     }
@@ -470,12 +471,12 @@ module AppState {
     // The unit suffix for a glucose/target reading ("mg/dL"/"mmol/L"). Callers compose
     // displayGlucose() + " " + glucoseUnitLabel() instead of ever hardcoding "mg/dL".
     function glucoseUnitLabel() as Lang.String {
-        return unitLabelForToken(glucoseUnit);
+        return glucoseUnitLabelForToken(glucoseUnit);
     }
 
     // Pure variant of glucoseUnitLabel(), for the same Storage-direct (:glance) contexts as
-    // formatMgdlForUnit() above.
-    function unitLabelForToken(unitToken as Lang.String) as Lang.String {
+    // displayGlucoseForUnit() above.
+    function glucoseUnitLabelForToken(unitToken as Lang.String) as Lang.String {
         return unitToken.equals("mmol") ? "mmol/L" : "mg/dL";
     }
 

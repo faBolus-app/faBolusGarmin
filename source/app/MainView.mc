@@ -45,7 +45,7 @@ class MainView extends Ui.View {
             TrendArrow.draw(dc, cx + gw / 2 + 24, h * 0.36, 13, AppState.trend, gColor);
         }
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.55, Gfx.FONT_XTINY, "mg/dL", vc);
+        dc.drawText(cx, h * 0.55, Gfx.FONT_XTINY, AppState.glucoseUnitLabel(), vc);
         // Reading age — shown while a value is visible; called out in orange when stale.
         var age = AppState.ageLabel();
         if (!isHidden && !age.equals("")) {

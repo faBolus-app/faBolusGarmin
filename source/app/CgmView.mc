@@ -36,14 +36,17 @@ class CgmView extends Ui.View {
             TrendArrow.draw(dc, cx + gw / 2 + 20, h * 0.22, 11, AppState.trend, AppState.glucoseColor());
         }
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.32, Gfx.FONT_XTINY, "mg/dL", vc);
+        dc.drawText(cx, h * 0.32, Gfx.FONT_XTINY, AppState.glucoseUnitLabel(), vc);
 
         // Plot area.
         var plotL = w * 0.16, plotR = w * 0.84;
         var plotT = h * 0.42, plotB = h * 0.82;
         var plotH = plotB - plotT;
 
-        // Gridlines with right-edge labels (y-axis max = VMAX).
+        // Gridlines with right-edge labels (y-axis max = VMAX). Positions (y) stay computed from the
+        // mg/dL breakpoints — only the rendered LABEL TEXT converts to the active unit (same
+        // domain-vs-label-text split as the phone's GlucoseChartView Y-axis, so a mmol user's plot
+        // never shows a bare mg/dL gridline number).
         var lines = [100, 200, 300];
         for (var i = 0; i < lines.size(); i += 1) {
             var v = lines[i];
@@ -52,7 +55,7 @@ class CgmView extends Ui.View {
             dc.setPenWidth(1);
             dc.drawLine(plotL, y, plotR, y);
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(plotR + w * 0.02, y, Gfx.FONT_XTINY, v.toString(), Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(plotR + w * 0.02, y, Gfx.FONT_XTINY, AppState.formatMgdl(v), Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER);
         }
 
         // Data dots (CGM-style). E5: when the phone sent per-point source timestamps (historyEpochs,
