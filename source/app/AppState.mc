@@ -16,6 +16,19 @@ module AppState {
     const GLUCOSE_HIGH = 180;
     const GLUCOSE_VERY_HIGH = 250;
 
+    // P-mmol (Phase 4, D-01/D-02/D-05): the Garmin hand-port of faBolusCore.GlucoseUnit — the ONLY
+    // place this factor may appear on the Garmin side, mirroring the Swift canonical
+    // (Packages/faBolusCore/Sources/faBolusCore/GlucoseUnit.swift, mgdlPerMmol = 18.0182). Pinned by
+    // GlucoseUnitTest.mc against the same expected strings the Swift GlucoseUnitTests assert.
+    const MGDL_PER_MMOL = 18.0182;
+    // Display-unit wire token ("mgdl"|"mmol"), mirrored from the phone's statusRead reply
+    // (RemoteCommand.glucoseDisplayUnit). D-06: this NEVER changes GLUCOSE_*/rangeColor()/the
+    // canonical glucose/isf/targetBg Numbers themselves — it only selects which label
+    // formatMgdl()/glucoseUnitLabel()/isfUnitLabel() render. Default "mgdl" is the fail-closed value
+    // (T-04-02): an absent field (legacy host) or an unrecognized token is never adopted (see handle()
+    // below), so a fresh install / older phone build always renders mg/dL.
+    var glucoseUnit as Lang.String = "mgdl";
+
     // HUD data (from phone)
     var glucose as Lang.Number? = null;   // mg/dL
     var trend as Lang.String = "";
@@ -132,6 +145,16 @@ module AppState {
         // persisting matches garminBolusEnabled and avoids that transient.
         var bpr0 = Storage.getValue("bolusPasscodeRequired");
         if (bpr0 instanceof Lang.Boolean) { bolusPasscodeRequired = bpr0; }
+        // P-mmol / D-04: restore the persisted display-unit token the same guarded way, so a cold
+        // launch before the first statusRead already renders in the last unit the phone pushed
+        // (fail-closed to the "mgdl" default when never set / not yet a recognized token).
+        var gu0 = Storage.getValue("glucoseDisplayUnit");
+        if (gu0 instanceof Lang.String && isValidUnitToken(gu0 as Lang.String)) { glucoseUnit = gu0; }
+    }
+
+    // Frozen wire-token set for the display-unit field (Pitfall 6 — never a raw enum on the wire).
+    function isValidUnitToken(t as Lang.String) as Lang.Boolean {
+        return t.equals("mgdl") || t.equals("mmol");
     }
 
     // Keep only allowed string ids (de-duped), preserving the phone-chosen subset + order.
@@ -420,9 +443,46 @@ module AppState {
         return bolusing() && pendingRequestId != null;
     }
     // Show the number whenever we have one — a stale reading is shown but marked (grayed + age
-    // called out), never hidden. "--" only when there's no reading at all.
+    // called out), never hidden. "--" only when there's no reading at all. Unit-aware (P-mmol):
+    // renders in the active glucoseUnit via the pure formatMgdlForUnit() funnel below.
     function displayGlucose() as Lang.String {
-        return glucose == null ? "--" : glucose.toString();
+        return glucose == null ? "--" : formatMgdl(glucose as Lang.Number);
+    }
+
+    // P-mmol: format an arbitrary mg/dL value (glucose, isf, targetBg — anything canonical mg/dL) in
+    // the CURRENT instance unit. Every Garmin glucose/ISF/target display site routes through this (or
+    // the pure formatMgdlForUnit() below), mirroring faBolusCore.GlucoseUnit.format(mgdl:) exactly:
+    // mgdl → the plain integer string (unchanged); mmol → 1-decimal (D-05), never a second inline
+    // "/ 18.0182" — GlucoseUnitTest.mc pins this against the same expected strings as the Swift funnel.
+    function formatMgdl(v as Lang.Number) as Lang.String {
+        return formatMgdlForUnit(v, glucoseUnit);
+    }
+
+    // Pure variant of formatMgdl(), independent of the instance's loaded glucoseUnit — for contexts
+    // (FaBolusGlanceView's (:glance) surface) that read Storage directly rather than depending on
+    // AppState.loadPrefs() having run first (see FaBolusGlanceView.mc's own "reads Storage directly"
+    // note). Both call sites route through this ONE conversion so the math is never duplicated.
+    function formatMgdlForUnit(v as Lang.Number, unitToken as Lang.String) as Lang.String {
+        if (unitToken.equals("mmol")) { return (v.toFloat() / MGDL_PER_MMOL).format("%.1f"); }
+        return v.toString();
+    }
+
+    // The unit suffix for a glucose/target reading ("mg/dL"/"mmol/L"). Callers compose
+    // displayGlucose() + " " + glucoseUnitLabel() instead of ever hardcoding "mg/dL".
+    function glucoseUnitLabel() as Lang.String {
+        return unitLabelForToken(glucoseUnit);
+    }
+
+    // Pure variant of glucoseUnitLabel(), for the same Storage-direct (:glance) contexts as
+    // formatMgdlForUnit() above.
+    function unitLabelForToken(unitToken as Lang.String) as Lang.String {
+        return unitToken.equals("mmol") ? "mmol/L" : "mg/dL";
+    }
+
+    // The unit suffix for an ISF reading ("mg/dL/U"/"mmol/L/U") — the one glucose-family label that
+    // isn't the bare glucoseUnitLabel() suffix.
+    function isfUnitLabel() as Lang.String {
+        return glucoseUnit.equals("mmol") ? "mmol/L/U" : "mg/dL/U";
     }
     // Minutes since the current reading (-1 if unknown).
     function ageMinutes() as Lang.Number {
@@ -889,6 +949,18 @@ module AppState {
             // value (or ClockView's digital default when never set) untouched.
             var ca = data["clockAnalog"];
             if (ca instanceof Lang.Boolean) { Storage.setValue("clockAnalog", ca); }
+            // P-mmol / D-04: display-unit token mirrored from the phone (RemoteCommand.
+            // glucoseDisplayUnit, additive-optional). Strict guard (mirrors clockAnalog/
+            // garminComplicationDisplay above): only a recognized "mgdl"|"mmol" token is adopted +
+            // persisted; an absent/unrecognized token is ignored, keeping the last persisted value —
+            // which fails closed to "mgdl" on a fresh install / older phone build that never sends it
+            // (T-04-02). The canonical glucose/isf/targetBg Numbers are never touched here — only the
+            // label this token selects.
+            var gu = data["glucoseDisplayUnit"];
+            if (gu instanceof Lang.String && isValidUnitToken(gu as Lang.String)) {
+                glucoseUnit = gu;
+                Storage.setValue("glucoseDisplayUnit", glucoseUnit);
+            }
         } else if (kind.equals("bolusStatus")) {
             var rid = strCap(data["requestId"], 64);
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {
