@@ -4,16 +4,20 @@ using Toybox.Lang;
 using Toybox.Time;
 
 // CGM history screen (swipe up from the glance): "Nm ago", the current reading + trend,
-// and a 3-hour glucose plot with 100/200/300/400 gridlines. Data comes from the phone
-// (AppState.history, ~5-min spacing). A stale reading is shown grayed with its age called out.
+// and a 3-hour glucose plot whose Y-axis domain + gridlines follow the phone-configured plot
+// floor/ceiling (Phase 09.13, D-05/D-06/D-07 — AppState.plotFloor/plotCeiling). Data comes from the
+// phone (AppState.history, ~5-min spacing). A stale reading is shown grayed with its age called out.
 // CGM-agnostic: works with whatever sensor the phone is sourcing.
 class CgmView extends Ui.View {
     function initialize() { View.initialize(); }
 
-    private const VMIN = 40.0;
-    private const VMAX = 300.0;
-
     function onUpdate(dc as Gfx.Dc) as Void {
+        // Phase 09.13 (D-05/D-06/D-07/D-08): Garmin's Y-axis domain, read fresh every draw from the
+        // small-screen-resolved AppState bounds (override when set, else the shared/phone bounds) —
+        // no more hardcoded 40.0/300.0. The clamps below already pin both edges symmetrically, so this
+        // becomes a symmetric clamp over the NEW bounds automatically (D-08).
+        var VMIN = AppState.plotFloor.toFloat();
+        var VMAX = AppState.plotCeiling.toFloat();
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
         dc.clear();
         var w = dc.getWidth(), h = dc.getHeight(), cx = w / 2;
@@ -43,11 +47,13 @@ class CgmView extends Ui.View {
         var plotT = h * 0.42, plotB = h * 0.82;
         var plotH = plotB - plotT;
 
-        // Gridlines with right-edge labels (y-axis max = VMAX). Positions (y) stay computed from the
+        // Gridlines with right-edge labels (y-axis max = VMAX). D-10: computed strictly INSIDE the
+        // resolved [plotFloor, plotCeiling] domain (AppState.plotGridlines) so a gridline never lands
+        // on the edge itself — never a hardcoded [100, 200, 300]. Positions (y) stay computed from the
         // mg/dL breakpoints — only the rendered LABEL TEXT converts to the active unit (same
         // domain-vs-label-text split as the phone's GlucoseChartView Y-axis, so a mmol user's plot
         // never shows a bare mg/dL gridline number).
-        var lines = [100, 200, 300];
+        var lines = AppState.plotGridlines(AppState.plotFloor, AppState.plotCeiling);
         for (var i = 0; i < lines.size(); i += 1) {
             var v = lines[i];
             var y = plotB - ((v - VMIN) / (VMAX - VMIN)) * plotH;

@@ -56,6 +56,14 @@ module AppState {
     var historyEpochs as Lang.Array = [];
     var alerts as Lang.Array = [];        // active pump alerts: dicts {id, kind, title}
     var plotHours as Lang.Number = 3;     // history-plot window: 3 → 6 → 12 → 24 → 3
+    // Phase 09.13 (glucose plot height customization, D-05/D-06/D-07/D-08/D-10): the Garmin Y-axis
+    // plot floor/ceiling, mg/dL. Garmin is in the SMALL-SCREEN group (same as the Apple Watch) — the
+    // statusRead parse below resolves the small-screen override first, falling back to the shared/
+    // phone-scoped bounds when no override is set (never the reverse). Defaults mirror
+    // faBolusCore.GlucosePlotScale.defaultFloor/defaultCeiling exactly, preserving today's hardcoded
+    // view (D-01) until the first statusRead arrives.
+    var plotFloor as Lang.Number = 40;
+    var plotCeiling as Lang.Number = 300;
 
     // Configurable layout (from phone settings, persisted so it survives restarts / offline launch).
     // The swipe order of the screens and which one opens first. Ids: glance/alerts/history/details.
@@ -150,6 +158,15 @@ module AppState {
         // (fail-closed to the "mgdl" default when never set / not yet a recognized token).
         var gu0 = Storage.getValue("glucoseDisplayUnit");
         if (gu0 instanceof Lang.String && isValidUnitToken(gu0 as Lang.String)) { glucoseUnit = gu0; }
+        // Phase 09.13: restore the persisted plot bounds so a cold launch (before the first statusRead)
+        // already renders the last phone-pushed range instead of silently reverting to the 40/300
+        // defaults. Strict guard (mirrors staleSec): only a sane in-range Number is adopted; a corrupt/
+        // absent value keeps the compile-time default (T-09.13-08).
+        var pf0 = Storage.getValue("plotFloor");
+        var pc0 = Storage.getValue("plotCeiling");
+        if (pf0 instanceof Lang.Number && pf0 > 0 && pf0 < 1000) { plotFloor = pf0; }
+        if (pc0 instanceof Lang.Number && pc0 > 0 && pc0 < 1000) { plotCeiling = pc0; }
+        if (plotFloor >= plotCeiling) { plotFloor = 40; plotCeiling = 300; }   // D-01 min-gap invariant
     }
 
     // Frozen wire-token set for the display-unit field (Pitfall 6 — never a raw enum on the wire).
@@ -194,6 +211,35 @@ module AppState {
         if (chartRanges.size() > 0 && !containsNum(chartRanges, plotHours)) {
             plotHours = chartRanges[0] as Lang.Number;
         }
+    }
+
+    // Phase 09.13 (D-10): gridlines for CgmView's dynamic plot, computed to fall STRICTLY inside
+    // [floor, ceiling] — never exactly at either edge, so a gridline is never visually confused with
+    // the top/bottom of the plotted domain. Prefers a 100 mg/dL step (matches today's 100/200/300
+    // default view exactly for the 40..300 default combo, since the domain floor/ceiling never land
+    // exactly on a multiple of 100); falls back to a 50 mg/dL step only if that would produce fewer
+    // than 2 lines. Every discrete floor×ceiling preset combo (floorOptions × ceilingOptions,
+    // faBolusCore.GlucosePlotScale) already clears >=2 lines at the 100 step today — the 50 fallback
+    // is a defensive guard against a future preset-set edit narrowing the domain further (mirrors
+    // GlucosePlotScale.minGap's own "never triggers today" precedent).
+    function plotGridlines(floor as Lang.Number, ceiling as Lang.Number) as Lang.Array {
+        var lines = multiplesStrictlyBetween(floor, ceiling, 100);
+        if (lines.size() < 2) {
+            lines = multiplesStrictlyBetween(floor, ceiling, 50);
+        }
+        return lines;
+    }
+
+    // Every multiple of `step` with floor < v < ceiling, ascending.
+    function multiplesStrictlyBetween(floor as Lang.Number, ceiling as Lang.Number, step as Lang.Number) as Lang.Array {
+        var out = [];
+        var v = ((floor / step) + 1) * step;   // smallest multiple of step, may equal floor if floor is
+        if (v <= floor) { v += step; }         // itself already a multiple — bump past it (strict >)
+        while (v < ceiling) {
+            out.add(v);
+            v += step;
+        }
+        return out;
     }
 
     // Keep only known ids (de-duped), preserving the phone-chosen subset + order. Screens the user
@@ -938,6 +984,29 @@ module AppState {
             if (chartRaw instanceof Lang.Array) {
                 var chartSan = sanitizeRanges(chartRaw);
                 if (chartSan.size() > 0) { chartRanges = chartSan; Storage.setValue("watchChartRanges", chartRanges); ensureValidPlotHours(); }
+            }
+            // Phase 09.13 (D-05/D-06/D-07/D-08/D-10, threat T-09.13-08): Garmin is in the SMALL-SCREEN
+            // group (same as the Apple Watch) — resolve the small-screen OVERRIDE first
+            // (glucosePlotFloorSmall/CeilingSmall), falling back to the shared/phone-scoped bounds
+            // (glucosePlotFloor/Ceiling) when no override is on the wire. A field absent on BOTH keeps
+            // the last-persisted/default value (legacy-safe, D-06) — this is a SEPARATE channel from
+            // watchChartRanges/chartRanges above, never derived from it. A resolved pair failing the
+            // floor<ceiling invariant is dropped to the compile-time defaults rather than applied
+            // (never a corrupt/inverted domain, T-09.13-08).
+            var pf = numRange(data["glucosePlotFloorSmall"], 1, 1000);
+            if (pf == null) { pf = numRange(data["glucosePlotFloor"], 1, 1000); }
+            var pc = numRange(data["glucosePlotCeilingSmall"], 1, 1000);
+            if (pc == null) { pc = numRange(data["glucosePlotCeiling"], 1, 1000); }
+            if (pf != null && pc != null) {
+                if (pf < pc) {
+                    plotFloor = pf;
+                    plotCeiling = pc;
+                } else {
+                    plotFloor = 40;
+                    plotCeiling = 300;
+                }
+                Storage.setValue("plotFloor", plotFloor);
+                Storage.setValue("plotCeiling", plotCeiling);
             }
             var cdisp = data["garminComplicationDisplay"];
             if (cdisp instanceof Lang.String && ((cdisp as Lang.String).equals("numericColor") || (cdisp as Lang.String).equals("stringTrend"))) {

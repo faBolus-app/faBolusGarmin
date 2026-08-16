@@ -3,11 +3,14 @@
 #   monkeyc -f test.jungle -o bin/faBolusGarmin-test.prg -y developer_key.der -d venu3s --unit-test -w
 #   monkeydo bin/faBolusGarmin-test.prg venu3s -t
 #
-# The AppState parse tests (tests/HistoryEpochsTest.mc) need AppState.mc compiled in. AppState's only
-# app-code dependencies are RemoteComm.mc and BgComplication.mc (verified: every other capitalized ref
-# is comment-only), so we pull in exactly those three files — NOT the whole source/app tree, which would
-# drag in EatingRelay.mc and its private EatingSense barrel (absent here / in CI). excludeAnnotations
-# drops BgComplication's no-op stub so only the real (:complications) publisher compiles on venu3s.
+# The AppState parse tests (tests/HistoryEpochsTest.mc, tests/GlucosePlotBoundsTest.mc — Phase 09.13
+# glucose plot height customization, D-05/D-06/D-07/D-08/D-10) need AppState.mc compiled in. AppState's
+# only app-code dependencies are RemoteComm.mc and BgComplication.mc (verified: every other capitalized
+# ref is comment-only), so we pull in exactly those three files — NOT the whole source/app tree, which
+# would drag in EatingRelay.mc and its private EatingSense barrel (absent here / in CI). GlucosePlotBoundsTest.mc
+# needs no additional source files beyond AppState.mc; the `tests` sourcePath glob below picks it up
+# automatically like every other file in tests/. excludeAnnotations drops BgComplication's no-op stub so
+# only the real (:complications) publisher compiles on venu3s.
 project.manifest = manifest-test.xml
 base.sourcePath = direct-pump/engine/protocol;direct-pump/engine/auth;direct-pump/engine/messages;direct-pump/engine/ble;source/app/AppState.mc;source/app/RemoteComm.mc;source/app/BgComplication.mc;tests
 base.excludeAnnotations = nocomplications
