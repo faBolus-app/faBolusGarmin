@@ -14,6 +14,18 @@ class DetailsView extends Ui.View {
         return v < 0 ? "--" : v.toString();
     }
 
+    // Phase 09.15 T1-1 (D-01/D-08): Tandem's own zone word, capitalized exactly as the UI-SPEC
+    // Copywriting Contract specifies — an explicit literal table (never a runtime case-transform),
+    // so an out-of-set token can only ever fall through to "" and never render (D-06 guardrail #6).
+    private function ciqZoneWord(token as Lang.String) as Lang.String {
+        if (token.equals("increases")) { return "Increases"; }
+        if (token.equals("decreases")) { return "Decreases"; }
+        if (token.equals("maintains")) { return "Maintains"; }
+        if (token.equals("stops")) { return "Stops"; }
+        if (token.equals("delivers")) { return "Delivers"; }
+        return "";
+    }
+
     // One labeled row per detail-field id (from the phone-mirrored AppState.detailsOrder), or null
     // for an unknown id. Mirrors the phone Details card / Apple-Watch Details page.
     private function detailRow(id as Lang.String) as Lang.String? {
@@ -26,6 +38,16 @@ class DetailsView extends Ui.View {
         if (id.equals("isf")) { return "ISF: " + (AppState.isf > 0 ? AppState.formatMgdl(AppState.isf) + " " + AppState.isfUnitLabel() : "--"); }
         if (id.equals("target")) { return "Target: " + (AppState.targetBg > 0 ? AppState.formatMgdl(AppState.targetBg) + " " + AppState.glucoseUnitLabel() : "--"); }
         if (id.equals("maxBolus")) { return "Max bolus: " + f2(AppState.maxUnits) + " U"; }
+        // Phase 09.15 T1-1 (D-01/D-08): a PRINTED word (Garmin has no VoiceOver, D-08 Garmin rule) —
+        // row omitted entirely (never "--") unless Control-IQ is running and the zone is a known
+        // token, never a stale/fabricated word (D-06 guardrail #5/#6).
+        if (id.equals("ciqZone")) {
+            if (AppState.controlIQEnabled && AppState.ciqZone != null) {
+                var word = ciqZoneWord(AppState.ciqZone as Lang.String);
+                return word.equals("") ? null : "Control-IQ: " + word;
+            }
+            return null;
+        }
         return null;
     }
 

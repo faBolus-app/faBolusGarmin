@@ -108,10 +108,23 @@ module AppState {
     var controllerVariant as Lang.String = "none";
     var controlIQEnabled as Lang.Boolean = false;
 
+    // Phase 09.15 T1-1 (D-01/D-08): the pump's live Control-IQ action zone, a FROZEN wire token
+    // (schema `ciqZone`: "increases"/"decreases"/"maintains"/"stops"/"delivers" — Tandem's own zone
+    // words, (c) Tandem, never invent others). UNLIKE `controllerVariant`/`controlIQEnabled` above,
+    // this one DOES need to survive a restart between phone syncs (matches `garminBolusEnabled`'s
+    // persistence, not the display-only capability fields) because it changes far more often and a
+    // watch that restarts mid-session should still show the last-known zone rather than nothing.
+    // `null` ⇒ render the row ABSENT — never a stale/fabricated word (D-06 guardrail #5/#6).
+    // DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    var ciqZone as Lang.String? = null;
+
     // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
-    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
+    // Phase 09.15 T1-1 (D-01/D-08): "ciqZone" registered so it CAN be selected once a phone-side
+    // customizer opts it in (mirrors "ciqZone"'s iOS `pillItems` registration) — deliberately NOT
+    // added to the default `detailsOrder` above (opt-in, matches `defaultPills` not including it).
+    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone"];
     var chartRanges as Lang.Array = [3, 6, 12, 24];
     // How the BG complication presents: "numericColor" (numeric value + range color + Latin trend
     // in the unit slot) or "stringTrend" (plain "124 ^" string). Mirrored from the phone.
@@ -146,6 +159,11 @@ module AppState {
         // (fail-closed to false when never armed) instead of re-hiding an already-enabled watch.
         var gbe = Storage.getValue("garminBolusEnabled");
         if (gbe instanceof Lang.Boolean) { garminBolusEnabled = gbe; }
+        // Phase 09.15 T1-1 (D-01/D-08): restore the persisted zone the same guarded way, so a cold
+        // launch before the first statusRead shows the last-known zone rather than nothing. A
+        // corrupt/absent/non-member value keeps the safe default (null ⇒ row absent).
+        var cz0 = Storage.getValue("ciqZone");
+        if (cz0 instanceof Lang.String && containsStr(CIQ_ZONES, cz0 as Lang.String)) { ciqZone = cz0; }
         // C2 §2.3: restore the persisted passcode-required flag the same way, so a cold launch before the
         // first statusRead already knows a passcode confirms the bolus — closing the window where a
         // required→(default not-required) flip could briefly offer the tap/hold confirm instead. Default
@@ -401,6 +419,8 @@ module AppState {
     //     C8 — the arrow is READ, never a computed/synthesized glucose rate.
     // FROZEN token set (schema `controllerVariant` enum) — never invent others.
     const CONTROLLER_VARIANTS = ["none", "controlIQ", "controlIQPro"];
+    // Phase 09.15 T1-1 (D-01/D-08): FROZEN token set (schema `ciqZone` enum) — never invent a 6th.
+    const CIQ_ZONES = ["increases", "decreases", "maintains", "stops", "delivers"];
     const CONTROLLER_RISING_TRENDS = ["up45", "up", "upup"];
     const CONTROLLER_DISCLOSE_AT_OR_ABOVE = 180;
     const CONTROLLER_DISCLOSE_RISING_AT_OR_ABOVE = 150;
@@ -960,6 +980,22 @@ module AppState {
             if (cvr instanceof Lang.String && containsStr(CONTROLLER_VARIANTS, cvr as Lang.String)) { controllerVariant = cvr; }
             var ciqe = data["controlIQEnabled"];
             if (ciqe instanceof Lang.Boolean) { controlIQEnabled = ciqe; }
+            // Phase 09.15 T1-1 (D-01/D-08, SP-5 fail-closed): UNLIKE controllerVariant/controlIQEnabled
+            // above (where absent only ever means "legacy host" and the last-known value stays safe to
+            // keep), `ciqZone` can legitimately clear on a MODERN host too — CIQ turns off, or the raw
+            // zone becomes unmapped — and a Monkey C dictionary can't distinguish "key never sent" from
+            // "key sent null" once decoded. So this field is always fully authoritative on every
+            // statusRead (assign/clear, never "ignore if invalid, keep last"): a stale zone word must
+            // never survive past the moment it actually cleared. Persisted (mirrors garminBolusEnabled,
+            // not the not-persisted controllerVariant above) so it survives a restart between syncs.
+            var cz = data["ciqZone"];
+            if (cz instanceof Lang.String && containsStr(CIQ_ZONES, cz as Lang.String)) {
+                ciqZone = cz;
+                Storage.setValue("ciqZone", ciqZone);
+            } else {
+                ciqZone = null;
+                Storage.deleteValue("ciqZone");
+            }
             var bm = data["bolusMode"] as Lang.String?;
             if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
             var bi = fltRange(data["bolusIncrement"], 0.01, 5.0); if (bi != null) { stepU = bi; }
