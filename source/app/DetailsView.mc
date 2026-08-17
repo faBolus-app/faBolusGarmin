@@ -38,6 +38,16 @@ class DetailsView extends Ui.View {
         return mins < 0 ? 0 : mins;
     }
 
+    // Phase 09.15 T1-3/T1-4 (D-08, epoch-not-age convention) — elapsed minutes computed HERE at draw
+    // time from an immutable source epoch, never transmitted as a pre-computed age (mirrors
+    // ciqSuspendElapsedMinutes's identical pattern, kept as a separate generic helper so that
+    // existing function stays byte-unchanged). Clamped to 0 for a clock-skew/future stamp.
+    private function elapsedMinutesSince(epoch as Lang.Number?) as Lang.Number {
+        if (epoch == null) { return 0; }
+        var mins = (Time.now().value() - (epoch as Lang.Number)) / 60;
+        return mins < 0 ? 0 : mins;
+    }
+
     // One labeled row per detail-field id (from the phone-mirrored AppState.detailsOrder), or null
     // for an unknown id. Mirrors the phone Details card / Apple-Watch Details page.
     private function detailRow(id as Lang.String) as Lang.String? {
@@ -73,6 +83,27 @@ class DetailsView extends Ui.View {
                 AppState.ciqSuspendStartEpochSec != null) {
                 var mins = ciqSuspendElapsedMinutes();
                 return "Basal: CIQ paused (" + mins.toString() + "m)";
+            }
+            return null;
+        }
+        // Phase 09.15 T1-3 (D-01/D-08, SP-5 fail-closed) — a PRINTED row (Garmin has no VoiceOver),
+        // omitted entirely (never "--") unless an auto-correction has actually been seen — no recent
+        // auto-correction is the common/expected case, not an error (matches ciqZone's convention).
+        if (id.equals("autoCorrection")) {
+            if (AppState.lastAutoCorrectionEpochSec != null) {
+                var mins = elapsedMinutesSince(AppState.lastAutoCorrectionEpochSec);
+                return "Auto-correction: " + mins.toString() + "m ago";
+            }
+            return null;
+        }
+        // Phase 09.15 T1-4 (D-01/D-08) — remote MARKER only (no on-watch/Garmin timeline). "CIQ" (not
+        // the full "Control-IQ") to stay within the ~28-char DetailsView.detailRow budget at
+        // FONT_XTINY, matching the ciqSuspend row's precedent. Never speculates WHY (D-06
+        // guardrail #6).
+        if (id.equals("couldNotDeliver")) {
+            if (AppState.ciqLastCouldNotDeliverEpochSec != null) {
+                var mins = elapsedMinutesSince(AppState.ciqLastCouldNotDeliverEpochSec);
+                return "CIQ couldn't deliver (" + mins.toString() + "m)";
             }
             return null;
         }
