@@ -123,5 +123,29 @@ class CgmView extends Ui.View {
 
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, AppState.plotHours.toString() + " Hours (tap)", vc);
+
+        // T1-5 (D-01, D-06 "never adjacent to a dose CTA", D-08): the 60-min lockout countdown — a
+        // drawn rect bar over an outlined track (Garmin has no native progress-bar primitive) PLUS a
+        // MANDATORY printed "Nm until next correction" numeral (Garmin has no VoiceOver). This screen
+        // carries no bolus/Deliver affordance at all, so drawing it here can never create the
+        // dose-CTA adjacency D-06 forbids. Single flat color regardless of fraction — never red/amber
+        // near completion (a neutral status readout, not an alarm). Fail-closed: a null fraction
+        // (no controller, off, no known lockout, or already expired) draws NOTHING — never a frozen
+        // 0%/100% bar, never a negative countdown.
+        var lockoutFraction = AppState.controllerLockoutFraction(AppState.controllerVariant, AppState.controlIQEnabled,
+                                                                  AppState.lockoutUntilEpochSec);
+        if (lockoutFraction != null) {
+            var barL = w * 0.22, barR = w * 0.78;
+            var barY = h * 0.945, barH = h * 0.018;
+            var barW = barR - barL;
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawRectangle(barL, barY, barW, barH);
+            dc.setColor(Gfx.COLOR_BLUE, Gfx.COLOR_TRANSPARENT);
+            dc.fillRectangle(barL, barY, barW * (lockoutFraction as Lang.Float), barH);
+            var mins = AppState.controllerLockoutMinutesRemaining(AppState.controllerVariant, AppState.controlIQEnabled,
+                                                                    AppState.lockoutUntilEpochSec);
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.975, Gfx.FONT_XTINY, mins.toString() + "m until next correction", vc);
+        }
     }
 }

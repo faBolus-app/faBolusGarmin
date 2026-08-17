@@ -1,5 +1,6 @@
 using Toybox.Lang;
 using Toybox.Test;
+using Toybox.Time;
 
 // B2 (S1 + O3): the pump's automatic-correction DISCLOSURE, derived LOCALLY on the watch from the
 // controller identity/runtime-on-off the phone pushes (controllerVariant / controlIQEnabled) plus the
@@ -165,6 +166,49 @@ module ControllerDisclosureTest {
         AppState.handle(statusRead({ "controllerVariant" => "none" }));
         Test.assertEqualMessage(AppState.controllerVariant, "none", "parsed none");
         Test.assertEqualMessage(AppState.controllerDisclosureLine(), "", "none → nothing renders");
+        return true;
+    }
+
+    // MARK: T1-5 — controllerLockoutFraction/controllerLockoutMinutesRemaining (mirrors the Swift
+    // AutoCorrectionLockoutFractionTests fail-closed guards + fill-up-not-drain-down shape).
+
+    (:test)
+    function lockoutFractionIsNilWithNoActiveLockout(logger as Test.Logger) as Lang.Boolean {
+        var now = Time.now().value();
+        Test.assertMessage(AppState.controllerLockoutFraction("none", true, now + 1800) == null,
+            "no controller → nil");
+        Test.assertMessage(AppState.controllerLockoutFraction("controlIQ", false, now + 1800) == null,
+            "controller off → nil");
+        Test.assertMessage(AppState.controllerLockoutFraction("controlIQ", true, null) == null,
+            "no known lockout epoch → nil");
+        Test.assertMessage(AppState.controllerLockoutFraction("controlIQ", true, now - 10) == null,
+            "already-past epoch → nil (expired, D-06 guardrail #5 fail-closed)");
+        return true;
+    }
+
+    (:test)
+    function lockoutFractionFillsUpTowardOneNeverDrains(logger as Test.Logger) as Lang.Boolean {
+        var now = Time.now().value();
+        var windowSec = AppState.controllerLockoutMinutes("controlIQ") * 60;
+        // Halfway through the 60-min window: fraction should read roughly 0.5, not 1.0/0.0.
+        var elapsedSec = windowSec / 2;
+        var untilEpoch = now - elapsedSec + windowSec;
+        var fraction = AppState.controllerLockoutFraction("controlIQ", true, untilEpoch) as Lang.Float;
+        Test.assertMessage(fraction > 0.3 && fraction < 0.7, "roughly halfway through the lockout");
+        // Just-fired (elapsed ~0): fraction near 0.0 (fills UP from here, never starts at 1.0).
+        var justFiredUntil = now + windowSec;
+        var freshFraction = AppState.controllerLockoutFraction("controlIQ", true, justFiredUntil) as Lang.Float;
+        Test.assertMessage(freshFraction >= 0.0 && freshFraction < 0.05, "just-fired fraction near zero");
+        return true;
+    }
+
+    (:test)
+    function lockoutMinutesRemainingMatchesTheEpochAndSentinelsOnExpiry(logger as Test.Logger) as Lang.Boolean {
+        var now = Time.now().value();
+        var mins = AppState.controllerLockoutMinutesRemaining("controlIQ", true, now + 1800);
+        Test.assertMessage(mins >= 29 && mins <= 30, "about 30 minutes remaining");
+        var expiredMins = AppState.controllerLockoutMinutesRemaining("controlIQ", true, now - 10);
+        Test.assertEqualMessage(expiredMins, -1, "expired → -1 sentinel (mirrors the null-fraction guard)");
         return true;
     }
 }

@@ -144,6 +144,17 @@ module AppState {
     // renders ABSENT. DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
     var ciqLastCouldNotDeliverEpochSec as Lang.Number? = null;
 
+    // Phase 09.15 T1-5 (D-01/D-08) — the immutable SOURCE epoch (Unix seconds, raw — NOT an age) of
+    // the instant Control-IQ's automatic correction becomes available again. UNLIKE
+    // `lastAutoCorrectionEpochSec` above (a monotonic historical marker that never un-happens), this
+    // is a DERIVED instant the phone recomputes fresh on every statusRead — so it is always fully
+    // authoritative (assign/clear, never "ignore if invalid, keep last"), mirroring `ciqZone`'s
+    // unconditional guard, NOT `lastAutoCorrectionEpochSec`'s monotonic one. Persisted (survives a
+    // restart between phone syncs, matches `ciqZone`'s own persistence). `null` ⇒ the bar/numeral
+    // renders ABSENT (never a frozen 0%/100% bar, never a negative countdown — D-06 guardrail #5).
+    // DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    var lockoutUntilEpochSec as Lang.Number? = null;
+
     // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
@@ -209,6 +220,11 @@ module AppState {
         if (lac0 instanceof Lang.Number && lac0 > 0) { lastAutoCorrectionEpochSec = lac0; }
         var cncd0 = Storage.getValue("ciqLastCouldNotDeliverEpochSec");
         if (cncd0 instanceof Lang.Number && cncd0 > 0) { ciqLastCouldNotDeliverEpochSec = cncd0; }
+        // Phase 09.15 T1-5 (D-08): restore the persisted lockout-until epoch the same guarded way, so
+        // a cold launch before the first statusRead shows the last-known instant rather than nothing.
+        // A corrupt/absent value keeps the safe default (null ⇒ bar/numeral absent).
+        var lue0 = Storage.getValue("lockoutUntilEpochSec");
+        if (lue0 instanceof Lang.Number && lue0 > 0) { lockoutUntilEpochSec = lue0; }
         // C2 §2.3: restore the persisted passcode-required flag the same way, so a cold launch before the
         // first statusRead already knows a passcode confirms the bolus — closing the window where a
         // required→(default not-required) flip could briefly offer the tap/hold confirm instead. Default
@@ -516,6 +532,39 @@ module AppState {
         if (!trigger) { return ""; }
         return "Bolusing now pauses " + controllerDisplayName(variant)
              + "'s automatic correction for about " + controllerLockoutMinutes(variant).toString() + " min.";
+    }
+
+    // T1-5 (D-01, D-08) — the 60-min lockout countdown FRACTION [0.0, 1.0], a TIME-FILL that grows
+    // toward 1.0 as availability returns (never a draining battery) — hand-ported mirror of
+    // faBolusCore's AutoCorrectionDisclosure.lockoutRemainingFraction (Garmin has no shared Swift
+    // runtime). `null` when there's no active lockout to show: no controller, controller off, no
+    // known lockout-until instant, or the window has already elapsed. DISPLAY-ONLY: this is a
+    // FRACTION, never a dose/units value (D-06 guardrail #1); it never blocks/changes/delays a bolus
+    // (C3), and an expired lockout is ABSENT, never a frozen 100% bar (D-06 guardrail #5).
+    function controllerLockoutFraction(variant as Lang.String, enabled as Lang.Boolean,
+                                        lockoutUntilEpoch as Lang.Number?) as Lang.Float? {
+        if (!enabled || !controllerAutoCorrects(variant) || lockoutUntilEpoch == null) { return null; }
+        var windowMinutes = controllerLockoutMinutes(variant);
+        var untilEpoch = lockoutUntilEpoch as Lang.Number;
+        var startEpoch = untilEpoch - windowMinutes * 60;
+        var elapsedMinutes = (Time.now().value() - startEpoch) / 60.0;
+        if (elapsedMinutes >= windowMinutes) { return null; }   // expired: no active lockout
+        var fraction = elapsedMinutes / windowMinutes.toFloat();
+        if (fraction < 0.0) { fraction = 0.0; }
+        if (fraction > 1.0) { fraction = 1.0; }
+        return fraction;
+    }
+
+    // Minutes remaining until Control-IQ's automatic correction becomes available again, or -1 when
+    // there's no active lockout (mirrors `controllerLockoutFraction`'s exact same guards — gates on
+    // it rather than re-deriving them). Kept as a separate pure fn (not derived FROM the fraction) so
+    // `CgmView.mc`'s mandatory printed numeral (Garmin has no VoiceOver, D-08) is unit-testable here.
+    function controllerLockoutMinutesRemaining(variant as Lang.String, enabled as Lang.Boolean,
+                                                lockoutUntilEpoch as Lang.Number?) as Lang.Number {
+        if (controllerLockoutFraction(variant, enabled, lockoutUntilEpoch) == null) { return -1; }
+        var untilEpoch = lockoutUntilEpoch as Lang.Number;
+        var mins = Math.ceil((untilEpoch - Time.now().value()) / 60.0).toNumber();
+        return mins < 0 ? 0 : mins;
     }
 
     // The single disclosure line for the small bolus screen: the S1 caution when it fires, otherwise the
@@ -1075,6 +1124,18 @@ module AppState {
             if (cncd instanceof Lang.Number && cncd > 0) {
                 ciqLastCouldNotDeliverEpochSec = cncd;
                 Storage.setValue("ciqLastCouldNotDeliverEpochSec", ciqLastCouldNotDeliverEpochSec);
+            }
+            // Phase 09.15 T1-5 (D-08, SP-5 fail-closed): UNLIKE lastAutoCorrectionEpochSec/
+            // ciqLastCouldNotDeliverEpochSec just above, this is a DERIVED instant the phone
+            // recomputes fresh every statusRead — so it is always fully authoritative (assign/clear,
+            // mirrors ciqZone's unconditional guard), never "ignore if invalid, keep last".
+            var lue = data["lockoutUntilEpochSec"];
+            if (lue instanceof Lang.Number && lue > 0) {
+                lockoutUntilEpochSec = lue;
+                Storage.setValue("lockoutUntilEpochSec", lockoutUntilEpochSec);
+            } else {
+                lockoutUntilEpochSec = null;
+                Storage.deleteValue("lockoutUntilEpochSec");
             }
             var bm = data["bolusMode"] as Lang.String?;
             if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
