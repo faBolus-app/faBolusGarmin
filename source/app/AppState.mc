@@ -118,13 +118,26 @@ module AppState {
     // DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
     var ciqZone as Lang.String? = null;
 
+    // Phase 09.15 T1-2 (D-08, D-09.1 fail-closed cause-attribution): whether the pump's OWN
+    // control-state currently attributes an active basal suspend to Control-IQ. UNLIKE
+    // `controllerVariant`/`controlIQEnabled`, this DOES need to survive a restart between phone syncs
+    // (mirrors `ciqZone`'s own persistence exactly, same reasoning). `null`/`false` ⇒ this watch has no
+    // generic-suspend signal to fall back to either, so the row is simply ABSENT — never a fabricated
+    // "Control-IQ paused" claim (D-09.1 BINDING). DISPLAY-ONLY: never gates, changes, or delays a bolus.
+    var ciqSuspendedForLow as Lang.Boolean? = null;
+    // The immutable SOURCE epoch (Unix seconds, raw — NOT an age) of the moment `ciqSuspendedForLow`
+    // first became true. Elapsed minutes are computed at DRAW time from this (DetailsView's
+    // `ciqSuspendElapsedMinutes()`), never transmitted as a pre-computed age.
+    var ciqSuspendStartEpochSec as Lang.Number? = null;
+
     // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
-    // Phase 09.15 T1-1 (D-01/D-08): "ciqZone" registered so it CAN be selected once a phone-side
-    // customizer opts it in (mirrors "ciqZone"'s iOS `pillItems` registration) — deliberately NOT
-    // added to the default `detailsOrder` above (opt-in, matches `defaultPills` not including it).
-    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone"];
+    // Phase 09.15 T1-1/T1-2 (D-01/D-08): "ciqZone"/"ciqSuspend" registered so either CAN be selected
+    // once a phone-side customizer opts them in (mirrors "ciqZone"'s iOS `pillItems` registration) —
+    // deliberately NOT added to the default `detailsOrder` above (opt-in, matches `defaultPills` not
+    // including "basal"/"ciqZone" either).
+    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend"];
     var chartRanges as Lang.Array = [3, 6, 12, 24];
     // How the BG complication presents: "numericColor" (numeric value + range color + Latin trend
     // in the unit slot) or "stringTrend" (plain "124 ^" string). Mirrored from the phone.
@@ -164,6 +177,13 @@ module AppState {
         // corrupt/absent/non-member value keeps the safe default (null ⇒ row absent).
         var cz0 = Storage.getValue("ciqZone");
         if (cz0 instanceof Lang.String && containsStr(CIQ_ZONES, cz0 as Lang.String)) { ciqZone = cz0; }
+        // Phase 09.15 T1-2 (D-08, D-09.1): restore the persisted suspend attribution the same guarded
+        // way as ciqZone, so a cold launch before the first statusRead shows the last-known attribution
+        // rather than nothing. A corrupt/absent value keeps the safe default (null ⇒ row absent).
+        var csfl0 = Storage.getValue("ciqSuspendedForLow");
+        if (csfl0 instanceof Lang.Boolean) { ciqSuspendedForLow = csfl0; }
+        var csse0 = Storage.getValue("ciqSuspendStartEpochSec");
+        if (csse0 instanceof Lang.Number && csse0 > 0) { ciqSuspendStartEpochSec = csse0; }
         // C2 §2.3: restore the persisted passcode-required flag the same way, so a cold launch before the
         // first statusRead already knows a passcode confirms the bolus — closing the window where a
         // required→(default not-required) flip could briefly offer the tap/hold confirm instead. Default
@@ -995,6 +1015,27 @@ module AppState {
             } else {
                 ciqZone = null;
                 Storage.deleteValue("ciqZone");
+            }
+            // Phase 09.15 T1-2 (D-08, D-09.1, SP-5 fail-closed): mirrors ciqZone's unconditional
+            // assign-or-clear exactly — `ciqSuspendedForLow` can legitimately clear on a MODERN host too
+            // (the suspend ends, or its cause is no longer CIQ-attributed), so a stale `true` must never
+            // survive past the moment it actually cleared. Persisted (mirrors ciqZone/garminBolusEnabled)
+            // so it survives a restart between syncs.
+            var csfl = data["ciqSuspendedForLow"];
+            if (csfl instanceof Lang.Boolean) {
+                ciqSuspendedForLow = csfl;
+                Storage.setValue("ciqSuspendedForLow", ciqSuspendedForLow);
+            } else {
+                ciqSuspendedForLow = null;
+                Storage.deleteValue("ciqSuspendedForLow");
+            }
+            var csse = data["ciqSuspendStartEpochSec"];
+            if (csse instanceof Lang.Number && csse > 0) {
+                ciqSuspendStartEpochSec = csse;
+                Storage.setValue("ciqSuspendStartEpochSec", ciqSuspendStartEpochSec);
+            } else {
+                ciqSuspendStartEpochSec = null;
+                Storage.deleteValue("ciqSuspendStartEpochSec");
             }
             var bm = data["bolusMode"] as Lang.String?;
             if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
