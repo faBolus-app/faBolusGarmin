@@ -1,6 +1,7 @@
 using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
+using Toybox.Time as Time;
 
 // Secondary screen (swipe up from the glance): all the other relevant pump data from the phone.
 // One metric per row, centered, generously spaced so nothing overlaps. "--" when unknown.
@@ -26,6 +27,17 @@ class DetailsView extends Ui.View {
         return "";
     }
 
+    // Phase 09.15 T1-2 (D-08, epoch-not-age convention) — elapsed minutes computed HERE at draw time
+    // from the immutable source epoch, never transmitted as a pre-computed age (mirrors
+    // AppState.ageMinutes()'s identical pattern for the glucose reading). Clamped to 0 for a
+    // clock-skew/future stamp rather than a negative elapsed time.
+    private function ciqSuspendElapsedMinutes() as Lang.Number {
+        var start = AppState.ciqSuspendStartEpochSec;
+        if (start == null) { return 0; }
+        var mins = (Time.now().value() - (start as Lang.Number)) / 60;
+        return mins < 0 ? 0 : mins;
+    }
+
     // One labeled row per detail-field id (from the phone-mirrored AppState.detailsOrder), or null
     // for an unknown id. Mirrors the phone Details card / Apple-Watch Details page.
     private function detailRow(id as Lang.String) as Lang.String? {
@@ -45,6 +57,22 @@ class DetailsView extends Ui.View {
             if (AppState.controlIQEnabled && AppState.ciqZone != null) {
                 var word = ciqZoneWord(AppState.ciqZone as Lang.String);
                 return word.equals("") ? null : "Control-IQ: " + word;
+            }
+            return null;
+        }
+        // Phase 09.15 T1-2 (D-08/D-09.1, fail-closed cause-attribution) — a PRINTED row (Garmin has no
+        // VoiceOver, D-08 Garmin rule), shown ONLY when the pump's OWN control-state has confirmed the
+        // ACTIVE suspend is Control-IQ's. D-09.1 BINDING: Garmin has no generic deliverySuspended wire
+        // signal to fall back to, so an absent/false attribution renders the row entirely ABSENT —
+        // never a fabricated "Control-IQ paused" claim, and never a plain "Basal" row this watch never
+        // had in the first place. "CIQ" (not the full "Control-IQ") to stay within the ~28-char
+        // DetailsView.detailRow budget at FONT_XTINY — "Basal: Control-IQ paused (Nm)" runs 29-30+
+        // chars, well past every other row's max (23); "Basal: CIQ paused (Nm)" holds at 22-23.
+        if (id.equals("ciqSuspend")) {
+            if (AppState.ciqSuspendedForLow != null && AppState.ciqSuspendedForLow &&
+                AppState.ciqSuspendStartEpochSec != null) {
+                var mins = ciqSuspendElapsedMinutes();
+                return "Basal: CIQ paused (" + mins.toString() + "m)";
             }
             return null;
         }
