@@ -107,6 +107,25 @@ class DetailsView extends Ui.View {
             }
             return null;
         }
+        // Phase 09.15 T1-8 (D-03, D-09.4 TEXT-ONLY — no drawn bar) — the honest "% of your configured
+        // max basal rate" text row, computed LOCALLY from AppState.basalRate/maxBasalUnitsPerHour
+        // (D-08: never a pre-rendered percentage on the wire). Row omitted entirely (never "0%"/"--")
+        // when the configured max is unknown/absent (D-03(v) fail-closed) — mirrors ciqZone's
+        // row-absent convention. The label ALWAYS contains "Basal" and ALWAYS shows both the current
+        // and configured max U/hr alongside the % (D-03(i)/(ii)) — this is faBolus's OWN construct,
+        // Tandem ships no such gauge, NEVER a Control-IQ figure. "%.2f" (not "%.0f") to match the
+        // Copywriting Contract's exact U/hr precision; typical values ("Basal 0.85/1.60 U/hr · 53%",
+        // 26 chars) hold well within the ~28-char FONT_XTINY budget — only the extreme, unrealistic
+        // edge of current==max==the pump's absolute ceiling (15.00 U/hr) reaches 27-29 chars, matching
+        // the ciqSuspend row's own documented over-budget precedent above.
+        if (id.equals("maxBasal")) {
+            var fraction = AppState.maxBasalFraction();
+            if (fraction == null) { return null; }
+            var pct = (fraction * 100.0 + 0.5).toNumber();
+            var maxV = AppState.maxBasalUnitsPerHour as Lang.Float;
+            return "Basal " + AppState.basalRate.format("%.2f") + "/" + maxV.format("%.2f")
+                 + " U/hr · " + pct.toString() + "%";
+        }
         return null;
     }
 

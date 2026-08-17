@@ -37,6 +37,12 @@ module AppState {
     var isf as Lang.Number = 0;           // mg/dL per unit
     var targetBg as Lang.Number = 0;      // mg/dL
     var maxUnits as Lang.Float = 25.0;
+    // Phase 09.15 T1-8 (D-03, D-08): current basal delivery rate (units/hr), mirrored from the phone's
+    // `basalRate` — NOT persisted (mirrors `iob`'s own not-persisted, refreshed-every-sync pattern), so
+    // a cold launch shows 0.0 until the first statusRead lands rather than a stale rate. Paired with
+    // `maxBasalUnitsPerHour` below to compute the T1-8 "% of your configured max basal rate" text row
+    // LOCALLY — the % itself is never received pre-rendered (D-08).
+    var basalRate as Lang.Float = 0.0;
     // Extra pump status (from phone) for the details screen.
     var reservoir as Lang.Float = -1.0;   // units remaining (-1 = unknown)
     var battery as Lang.Number = -1;      // percent (-1 = unknown)
@@ -155,6 +161,16 @@ module AppState {
     // DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
     var lockoutUntilEpochSec as Lang.Number? = null;
 
+    // Phase 09.15 T1-8 (D-03, D-08) — the pump's configured max-basal delivery limit, mirrored from the
+    // phone's `maxBasalUnitsPerHour`. Like `lockoutUntilEpochSec` above, the phone relays its CURRENT
+    // knowledge every statusRead (never "unread ⇒ omit the key", `<= 0` means unread on the wire), so
+    // this is always fully authoritative (assign/clear, never "ignore if invalid, keep last") — a stale
+    // max surviving past the moment it actually cleared would misrepresent the pump's real configured
+    // limit. Persisted (survives a restart between phone syncs, matches `lockoutUntilEpochSec`'s own
+    // persistence). `null` ⇒ the "% of configured max basal" text row renders ABSENT (D-03(v)
+    // fail-closed: hidden, never "0%"/"--"). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    var maxBasalUnitsPerHour as Lang.Float? = null;
+
     // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
@@ -166,7 +182,7 @@ module AppState {
     // would let a user actually ADD these to their watch/Garmin details screen was not extended this
     // plan (out of this plan's declared `files_modified` — `ios/faBolus/Data/AppSettings.swift` is
     // untouched); the rows exist and render correctly once selected, just not yet user-reachable.
-    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend", "autoCorrection", "couldNotDeliver"];
+    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend", "autoCorrection", "couldNotDeliver", "maxBasal"];
     var chartRanges as Lang.Array = [3, 6, 12, 24];
     // How the BG complication presents: "numericColor" (numeric value + range color + Latin trend
     // in the unit slot) or "stringTrend" (plain "124 ^" string). Mirrored from the phone.
@@ -225,6 +241,11 @@ module AppState {
         // A corrupt/absent value keeps the safe default (null ⇒ bar/numeral absent).
         var lue0 = Storage.getValue("lockoutUntilEpochSec");
         if (lue0 instanceof Lang.Number && lue0 > 0) { lockoutUntilEpochSec = lue0; }
+        // Phase 09.15 T1-8 (D-08): restore the persisted configured max-basal limit the same guarded
+        // way, so a cold launch before the first statusRead shows the last-known value rather than
+        // nothing. A corrupt/absent/non-positive value keeps the safe default (null ⇒ row absent).
+        var mbu0 = fltRange(Storage.getValue("maxBasalUnitsPerHour"), 0.01, 25.0);
+        if (mbu0 != null) { maxBasalUnitsPerHour = mbu0; }
         // C2 §2.3: restore the persisted passcode-required flag the same way, so a cold launch before the
         // first statusRead already knows a passcode confirms the bolus — closing the window where a
         // required→(default not-required) flip could briefly offer the tap/hold confirm instead. Default
@@ -565,6 +586,22 @@ module AppState {
         var untilEpoch = lockoutUntilEpoch as Lang.Number;
         var mins = Math.ceil((untilEpoch - Time.now().value()) / 60.0).toNumber();
         return mins < 0 ? 0 : mins;
+    }
+
+    // T1-8 (D-03, D-08) — the honest "% of your configured max basal rate" fraction, hand-ported mirror
+    // of faBolusCore's `MaxBasalFraction.fraction` (Garmin has no shared Swift runtime): `basalRate ÷
+    // maxBasalUnitsPerHour`, clamped to [0.0, 1.0]. `null` (fail-closed, D-03(v)) when
+    // `maxBasalUnitsPerHour` is unknown/absent — this is faBolus's OWN construct, never a Control-IQ
+    // figure. DISPLAY-ONLY: a fraction, never a dose/units value (D-06 guardrail #1); never gates,
+    // changes, or delays a bolus (C3).
+    function maxBasalFraction() as Lang.Float? {
+        if (maxBasalUnitsPerHour == null) { return null; }
+        var max = maxBasalUnitsPerHour as Lang.Float;
+        if (max <= 0.0) { return null; }
+        var fraction = basalRate / max;
+        if (fraction < 0.0) { fraction = 0.0; }
+        if (fraction > 1.0) { fraction = 1.0; }
+        return fraction;
     }
 
     // The single disclosure line for the small bolus screen: the S1 caution when it fires, otherwise the
@@ -974,6 +1011,9 @@ module AppState {
             var isfv = numRange(data["isf"], 1, 1000); if (isfv != null) { isf = isfv; }
             var tb = numRange(data["targetBg"], 40, 400); if (tb != null) { targetBg = tb; }
             var mx = fltRange(data["maxBolusUnits"], 0.0, 100.0); if (mx != null) { maxUnits = mx; }
+            // Phase 09.15 T1-8 (D-08): current basal delivery rate — NOT persisted (mirrors `iob`), kept
+            // at its last-known value on an absent/invalid key exactly like every other live field here.
+            var br = fltRange(data["basalRate"], 0.0, 25.0); if (br != null) { basalRate = br; }
             var rv = fltRange(data["reservoirUnits"], 0.0, 1000.0); if (rv != null) { reservoir = rv; }
             var bt = numRange(data["batteryPercent"], 0, 100); if (bt != null) { battery = bt; }
             var cn = strCap(data["message"], 120); if (cn != null) { connection = cn; }
@@ -1136,6 +1176,18 @@ module AppState {
             } else {
                 lockoutUntilEpochSec = null;
                 Storage.deleteValue("lockoutUntilEpochSec");
+            }
+            // Phase 09.15 T1-8 (D-08, SP-5 fail-closed): mirrors lockoutUntilEpochSec's unconditional
+            // assign-or-clear exactly — the phone relays its CURRENT knowledge every statusRead (`<= 0`
+            // means unread on the wire, same convention as PumpSnapshot.maxBasalUnitsPerHour==0), so a
+            // stale max must never survive past the moment it actually cleared.
+            var mbu = fltRange(data["maxBasalUnitsPerHour"], 0.01, 25.0);
+            if (mbu != null) {
+                maxBasalUnitsPerHour = mbu;
+                Storage.setValue("maxBasalUnitsPerHour", maxBasalUnitsPerHour);
+            } else {
+                maxBasalUnitsPerHour = null;
+                Storage.deleteValue("maxBasalUnitsPerHour");
             }
             var bm = data["bolusMode"] as Lang.String?;
             if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
