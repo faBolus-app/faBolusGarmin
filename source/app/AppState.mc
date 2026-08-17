@@ -2,6 +2,7 @@ using Toybox.Lang;
 using Toybox.Graphics as Gfx;
 using Toybox.Math;
 using Toybox.Time;
+using Toybox.System;
 using Toybox.Application.Storage;
 
 // Shared app state for the faBolus Garmin remote. Glance data comes from the phone
@@ -114,6 +115,24 @@ module AppState {
     var controllerVariant as Lang.String = "none";
     var controlIQEnabled as Lang.Boolean = false;
 
+    // Phase 09.15 T1-9 (D-01/D-08) — the pump's live Sleep/Exercise activity mode
+    // (0 normal / 1 sleep / 2 exercise), previously only reaching this device via the (unused-here)
+    // widget/Live-Activity channel — now ALSO on the shared statusRead reply
+    // (RemoteCommand.controlIQMode) so this Garmin can gate its own T1-9 row locally. Same
+    // display-only, not-persisted treatment as controllerVariant/controlIQEnabled just above (a
+    // capability-like fact that changes rarely enough that a cold launch showing nothing
+    // Sleep/Exercise-specific until the first push is acceptable, matching those two fields'
+    // documented reasoning). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    var controlIQMode as Lang.Number = 0;
+    // The already-decoded exercise countdown (op-179), a RAW remaining-seconds DURATION — NOT an
+    // epoch (D-08 T1-9 note): this device counts down LOCALLY against ITS OWN receipt time for
+    // animation only, re-anchored on every statusRead, never trusted as absolute past that point.
+    // UNLIKE controllerVariant/controlIQEnabled above, this DOES need to survive a restart between
+    // phone syncs (mirrors lockoutUntilEpochSec's own persistence exactly, same reasoning — it
+    // changes far more often than the display-only capability fields). `null` ⇒ the timer fact
+    // renders ABSENT — never a stale/negative countdown (D-06 guardrail #5, SP-5 fail-closed).
+    var exerciseTimeRemainingSec as Lang.Number? = null;
+
     // Phase 09.15 T1-1 (D-01/D-08): the pump's live Control-IQ action zone, a FROZEN wire token
     // (schema `ciqZone`: "increases"/"decreases"/"maintains"/"stops"/"delivers" — Tandem's own zone
     // words, (c) Tandem, never invent others). UNLIKE `controllerVariant`/`controlIQEnabled` above,
@@ -182,7 +201,9 @@ module AppState {
     // would let a user actually ADD these to their watch/Garmin details screen was not extended this
     // plan (out of this plan's declared `files_modified` — `ios/faBolus/Data/AppSettings.swift` is
     // untouched); the rows exist and render correctly once selected, just not yet user-reachable.
-    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend", "autoCorrection", "couldNotDeliver", "maxBasal"];
+    // Phase 09.15 T1-9 (D-01/D-08): "sleepExercise" registered the same opt-in way (same KNOWN GAP
+    // as the T1-1..T1-4 ids above — not yet reachable from a phone-side customizer this plan).
+    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend", "autoCorrection", "couldNotDeliver", "maxBasal", "sleepExercise"];
     var chartRanges as Lang.Array = [3, 6, 12, 24];
     // How the BG complication presents: "numericColor" (numeric value + range color + Latin trend
     // in the unit slot) or "stringTrend" (plain "124 ^" string). Mirrored from the phone.
@@ -241,6 +262,11 @@ module AppState {
         // A corrupt/absent value keeps the safe default (null ⇒ bar/numeral absent).
         var lue0 = Storage.getValue("lockoutUntilEpochSec");
         if (lue0 instanceof Lang.Number && lue0 > 0) { lockoutUntilEpochSec = lue0; }
+        // Phase 09.15 T1-9 (D-08): restore the persisted exercise countdown the same guarded way, so
+        // a cold launch before the first statusRead shows the last-known duration rather than
+        // nothing. A corrupt/absent/non-positive value keeps the safe default (null ⇒ timer absent).
+        var etrs0 = Storage.getValue("exerciseTimeRemainingSec");
+        if (etrs0 instanceof Lang.Number && etrs0 > 0) { exerciseTimeRemainingSec = etrs0; }
         // Phase 09.15 T1-8 (D-08): restore the persisted configured max-basal limit the same guarded
         // way, so a cold launch before the first statusRead shows the last-known value rather than
         // nothing. A corrupt/absent/non-positive value keeps the safe default (null ⇒ row absent).
@@ -602,6 +628,63 @@ module AppState {
         if (fraction < 0.0) { fraction = 0.0; }
         if (fraction > 1.0) { fraction = 1.0; }
         return fraction;
+    }
+
+    // Phase 09.15 T1-9 (D-01, D-08, D-06 guardrail #4) — hand-ported mirror of
+    // ControllerDescriptor.controlIQ/.controlIQPlus.activityPresets (faBolusCore's
+    // ControllerDescriptor.swift:209-236) — Garmin has no shared Swift runtime, so these Tandem
+    // facts are duplicated here exactly, same §13 clinical-disclosure-value convention already
+    // established by controllerLockoutMinutes()/CONTROLLER_DISCLOSE_AT_OR_ABOVE above (subject to
+    // the clinical-review distribution gate). Sleep target 112.5-120 mg/dL; Exercise target
+    // 140-160 mg/dL with a raised suspend threshold of 79 mg/dL. AutoBolus (automatic correction)
+    // stays OFF during Exercise for BOTH controller variants; during Sleep it is OFF for classic
+    // Control-IQ but ON for Control-IQ+ (the CIQ/CIQ+ discriminator, O7).
+    const CIQ_SLEEP_TARGET_LOW = 112.5;
+    const CIQ_SLEEP_TARGET_HIGH = 120.0;
+    const CIQ_EXERCISE_TARGET_LOW = 140.0;
+    const CIQ_EXERCISE_TARGET_HIGH = 160.0;
+    const CIQ_EXERCISE_SUSPEND_THRESHOLD = 79.0;
+
+    // "AutoBolus off" / "AutoBolus continues" for the given mode ("sleep"/"exercise") — mirrors
+    // faBolusCore's SleepExerciseAwareness.autoBolusWords exactly.
+    function ciqAutoBolusWords(mode as Lang.String, variant as Lang.String) as Lang.String {
+        if (mode.equals("sleep") && variant.equals("controlIQPro")) { return "AutoBolus continues"; }
+        return "AutoBolus off";
+    }
+
+    // T1-9 (D-01/D-08, D-09.5): the compact single-line fact this Garmin renders as a PRINTED row
+    // (no icon — Garmin has no VoiceOver, D-08 Garmin rule): "Sleep — AutoBolus off" / "Exercise —
+    // ends 4:20". `null` when normal mode (controlIQMode == 0) or — for Exercise only — the timer
+    // is unknown (SP-5 fail-closed; Sleep's compact fact never depends on the timer). Mirrors
+    // faBolusCore's SleepExerciseAwareness.compactLine.
+    function ciqActivityCompactLine() as Lang.String? {
+        if (controlIQMode == 1) { return "Sleep — " + ciqAutoBolusWords("sleep", controllerVariant); }
+        if (controlIQMode == 2) {
+            var ends = ciqExerciseEndsAtLabel();
+            if (ends == null) { return null; }
+            return "Exercise — " + (ends as Lang.String);
+        }
+        return null;
+    }
+
+    // "ends {h}:{mm}" (12-hour, no AM/PM — matches the UI-SPEC's own compact example "ends 4:20"),
+    // computed by adding the raw remaining-seconds DURATION to the device's current clock time —
+    // recomputed fresh at DRAW time, never a transmitted absolute instant (mirrors faBolusCore's
+    // SleepExerciseAwareness.endsAtLabel exactly). Uses System.getClockTime() (same source
+    // ClockView.mc already reads) rather than Time.Gregorian, avoiding a new time-zone-aware API
+    // this project doesn't otherwise use. `null` when the timer is absent/non-positive.
+    function ciqExerciseEndsAtLabel() as Lang.String? {
+        if (exerciseTimeRemainingSec == null) { return null; }
+        var secs = exerciseTimeRemainingSec as Lang.Number;
+        if (secs <= 0) { return null; }
+        var now = System.getClockTime();
+        var totalMinutesNow = now.hour * 60 + now.min;
+        var endMinuteOfDay = (totalMinutesNow + (secs / 60)) % 1440;
+        var hour24 = endMinuteOfDay / 60;
+        var minute = endMinuteOfDay % 60;
+        var hour12 = (hour24 % 12 == 0) ? 12 : hour24 % 12;
+        var minuteStr = minute < 10 ? "0" + minute.toString() : minute.toString();
+        return "ends " + hour12.toString() + ":" + minuteStr;
     }
 
     // The single disclosure line for the small bolus screen: the S1 caution when it fires, otherwise the
@@ -1114,6 +1197,28 @@ module AppState {
             if (cvr instanceof Lang.String && containsStr(CONTROLLER_VARIANTS, cvr as Lang.String)) { controllerVariant = cvr; }
             var ciqe = data["controlIQEnabled"];
             if (ciqe instanceof Lang.Boolean) { controlIQEnabled = ciqe; }
+            // Phase 09.15 T1-9 (D-01/D-08): the pump's live Sleep/Exercise activity mode, now ALSO on
+            // the shared statusRead reply. Strict-guarded to the pump's own 3-state range; an
+            // out-of-range/non-Number value is ignored (keeps the last / safe "0" default), matching
+            // controllerVariant's guard style just above. Not persisted (mirrors
+            // controllerVariant/controlIQEnabled's own not-persisted reasoning).
+            var ciqm = numRange(data["controlIQMode"], 0, 2);
+            if (ciqm != null) { controlIQMode = ciqm; }
+            // The already-decoded exercise countdown, raw remaining-seconds (NOT an epoch, D-08
+            // T1-9 note) — the phone relays its CURRENT knowledge every statusRead (nil unless
+            // genuinely in Exercise right now), so this is always fully authoritative (assign/clear,
+            // mirrors lockoutUntilEpochSec's unconditional guard), never "ignore if invalid, keep
+            // last" — a stale timer must never survive past the moment the pump's own mode changed.
+            // Persisted (mirrors lockoutUntilEpochSec's own persistence) so a restart between syncs
+            // still shows the last-known countdown rather than nothing.
+            var etrs = numRange(data["exerciseTimeRemainingSec"], 0, 24 * 60 * 60);
+            if (etrs != null && etrs > 0) {
+                exerciseTimeRemainingSec = etrs;
+                Storage.setValue("exerciseTimeRemainingSec", exerciseTimeRemainingSec);
+            } else {
+                exerciseTimeRemainingSec = null;
+                Storage.deleteValue("exerciseTimeRemainingSec");
+            }
             // Phase 09.15 T1-1 (D-01/D-08, SP-5 fail-closed): UNLIKE controllerVariant/controlIQEnabled
             // above (where absent only ever means "legacy host" and the last-known value stays safe to
             // keep), `ciqZone` can legitimately clear on a MODERN host too — CIQ turns off, or the raw
