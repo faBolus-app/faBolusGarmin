@@ -130,14 +130,32 @@ module AppState {
     // `ciqSuspendElapsedMinutes()`), never transmitted as a pre-computed age.
     var ciqSuspendStartEpochSec as Lang.Number? = null;
 
+    // Phase 09.15 T1-3 (D-01/D-08) — the immutable SOURCE epoch (Unix seconds, raw — NOT an age) of
+    // the most-recent Control-IQ auto-correction. A real historical fact never un-happens, so — UNLIKE
+    // `ciqZone`/`ciqSuspendedForLow` above — this is never cleared on an absent key, only ever
+    // overwritten by a newer instant. Persisted (survives a restart between phone syncs, matches
+    // `ciqZone`'s own persistence). `null` ⇒ the row renders ABSENT (never "--" — no recent
+    // auto-correction is the common/expected case, not an error). DISPLAY-ONLY: never gates, changes,
+    // or delays a bolus (C3).
+    var lastAutoCorrectionEpochSec as Lang.Number? = null;
+    // Phase 09.15 T1-4 (D-01/D-08) — the immutable SOURCE epoch of the most-recent "Control-IQ tried
+    // and couldn't deliver an automatic correction" event. Remote MARKER only (no on-watch/Garmin
+    // timeline — this device never had the pump history to build one from). `null` ⇒ the marker
+    // renders ABSENT. DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    var ciqLastCouldNotDeliverEpochSec as Lang.Number? = null;
+
     // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
-    // Phase 09.15 T1-1/T1-2 (D-01/D-08): "ciqZone"/"ciqSuspend" registered so either CAN be selected
-    // once a phone-side customizer opts them in (mirrors "ciqZone"'s iOS `pillItems` registration) —
-    // deliberately NOT added to the default `detailsOrder` above (opt-in, matches `defaultPills` not
-    // including "basal"/"ciqZone" either).
-    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend"];
+    // Phase 09.15 T1-1/T1-2/T1-3/T1-4 (D-01/D-08): "ciqZone"/"ciqSuspend"/"autoCorrection"/
+    // "couldNotDeliver" registered so any CAN be selected once a phone-side customizer opts them in
+    // (mirrors "ciqZone"'s iOS `pillItems` registration) — deliberately NOT added to the default
+    // `detailsOrder` above (opt-in, matches `defaultPills` not including "basal"/"ciqZone" either).
+    // KNOWN GAP (mirrors 09.15-01's own documented gap): the phone-side `detailsOrder` customizer that
+    // would let a user actually ADD these to their watch/Garmin details screen was not extended this
+    // plan (out of this plan's declared `files_modified` — `ios/faBolus/Data/AppSettings.swift` is
+    // untouched); the rows exist and render correctly once selected, just not yet user-reachable.
+    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend", "autoCorrection", "couldNotDeliver"];
     var chartRanges as Lang.Array = [3, 6, 12, 24];
     // How the BG complication presents: "numericColor" (numeric value + range color + Latin trend
     // in the unit slot) or "stringTrend" (plain "124 ^" string). Mirrored from the phone.
@@ -184,6 +202,13 @@ module AppState {
         if (csfl0 instanceof Lang.Boolean) { ciqSuspendedForLow = csfl0; }
         var csse0 = Storage.getValue("ciqSuspendStartEpochSec");
         if (csse0 instanceof Lang.Number && csse0 > 0) { ciqSuspendStartEpochSec = csse0; }
+        // Phase 09.15 T1-3/T1-4 (D-08): restore the persisted markers the same guarded way, so a cold
+        // launch before the first statusRead shows the last-known instant rather than nothing. A
+        // corrupt/absent value keeps the safe default (null ⇒ row/marker absent).
+        var lac0 = Storage.getValue("lastAutoCorrectionEpochSec");
+        if (lac0 instanceof Lang.Number && lac0 > 0) { lastAutoCorrectionEpochSec = lac0; }
+        var cncd0 = Storage.getValue("ciqLastCouldNotDeliverEpochSec");
+        if (cncd0 instanceof Lang.Number && cncd0 > 0) { ciqLastCouldNotDeliverEpochSec = cncd0; }
         // C2 §2.3: restore the persisted passcode-required flag the same way, so a cold launch before the
         // first statusRead already knows a passcode confirms the bolus — closing the window where a
         // required→(default not-required) flip could briefly offer the tap/hold confirm instead. Default
@@ -1036,6 +1061,20 @@ module AppState {
             } else {
                 ciqSuspendStartEpochSec = null;
                 Storage.deleteValue("ciqSuspendStartEpochSec");
+            }
+            // Phase 09.15 T1-3/T1-4 (D-08, SP-3 standard guard): UNLIKE ciqZone/ciqSuspendedForLow
+            // above, these are monotonic historical markers — a real occurrence never un-happens, so
+            // a missing/invalid key means only "this reply didn't repeat it", never "it un-happened".
+            // Keep the last-known value (no else-clear branch) — never overwritten with null.
+            var lac = data["lastAutoCorrectionEpochSec"];
+            if (lac instanceof Lang.Number && lac > 0) {
+                lastAutoCorrectionEpochSec = lac;
+                Storage.setValue("lastAutoCorrectionEpochSec", lastAutoCorrectionEpochSec);
+            }
+            var cncd = data["ciqLastCouldNotDeliverEpochSec"];
+            if (cncd instanceof Lang.Number && cncd > 0) {
+                ciqLastCouldNotDeliverEpochSec = cncd;
+                Storage.setValue("ciqLastCouldNotDeliverEpochSec", ciqLastCouldNotDeliverEpochSec);
             }
             var bm = data["bolusMode"] as Lang.String?;
             if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
