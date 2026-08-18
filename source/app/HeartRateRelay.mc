@@ -18,14 +18,20 @@ using Toybox.Lang;
 // When off, emitIfDue() returns before any read or transmit → zero incremental cost when disabled.
 class HeartRateRelay {
     hidden var _enabled = false;
+    // WR-02 dedup: the epoch of the last ambient sample actually transmitted. Ambient HR history updates
+    // far more slowly than the ~15s status tick, so without this guard emitIfDue() re-sends the SAME
+    // [bpm, epoch] pair on every tick — a redundant radio payload the phone then re-ingests. Mirrors
+    // EatingRelay's event-driven discipline: transmit only on a genuinely NEW sample. null = nothing sent yet.
+    hidden var _lastEpoch = null;
 
     function initialize() {}
 
     // Phone `hr_ctl` on/off (out-of-band, not a RemoteCommand). Off ⇒ no read, no send.
     function setEnabled(on as Lang.Boolean) as Void { _enabled = on; }
 
-    // Symmetry with EatingRelay.stop() — HR holds no sensor/timer, so this just disables the gate.
-    function stop() as Void { _enabled = false; }
+    // Symmetry with EatingRelay.stop() — HR holds no sensor/timer, so this just disables the gate and
+    // clears the dedup cursor so a re-enable transmits the next sample fresh rather than suppressing it.
+    function stop() as Void { _enabled = false; _lastEpoch = null; }
 
     // Called from FaBolusApp.requestStatus() (the existing 15s status tick). Reads the single most-recent
     // ambient HR sample and, if valid + phone-connected, sends the out-of-band `hr_window` envelope the
@@ -43,6 +49,11 @@ class HeartRateRelay {
         // Skip the no-reading sentinel and any non-physiologic value — mirrors the phone's fail-safe parse.
         if (bpm == ActivityMonitor.INVALID_HR_SAMPLE || bpm <= 0 || bpm >= 300) { return; }
         var epoch = (sample.when != null) ? sample.when.value() : Time.now().value();
+        // WR-02 dedup: the newest ambient sample hasn't changed since the last transmit → skip the send
+        // (the phone already has it). Only a genuinely new sample epoch rides the radio, honoring D-08's
+        // "no extra radio wake" framing instead of re-sending an identical payload every ~15s tick.
+        if (epoch == _lastEpoch) { return; }
+        _lastEpoch = epoch;
         var msg = { "v" => 1, "type" => "hr_window", "t0" => Time.now().value(),
                     "samples" => [ [bpm, epoch] ] };
         Comm.transmit(msg, null, new HeartRateCommListener());
