@@ -15,13 +15,14 @@ using Toybox.Lang;
 class FaBolusApp extends App.AppBase {
     private var _timer as Timer.Timer?;
     private var _eating as EatingRelay?;   // wrist eating-sensing relay (phone-gated)
+    private var _hr as HeartRateRelay?;    // ambient HR relay (phone-gated; rides the status tick)
     // True once a real view is on the stack (set in getInitialView). Gates surfacing a background-
     // arrived alert: a CIQ app must not pushView before its first view exists (cold-launch order is
     // onStart → onBackgroundData → getInitialView), so onBackgroundData only vibrates/pushes once this
     // is true; otherwise the alert stays "unseen" and the next foreground statusRead surfaces it.
     private var _foreground as Lang.Boolean = false;
 
-    function initialize() { AppBase.initialize(); _eating = new EatingRelay(); }
+    function initialize() { AppBase.initialize(); _eating = new EatingRelay(); _hr = new HeartRateRelay(); }
 
     function onStart(state as Lang.Dictionary?) as Void {
         Comm.registerForPhoneAppMessages(method(:onPhoneMessage));
@@ -37,6 +38,7 @@ class FaBolusApp extends App.AppBase {
     function onStop(state as Lang.Dictionary?) as Void {
         if (_timer != null) { _timer.stop(); }
         if (_eating != null) { _eating.stop(); }
+        if (_hr != null) { _hr.stop(); }
         _foreground = false;
     }
 
@@ -71,6 +73,9 @@ class FaBolusApp extends App.AppBase {
 
     function requestStatus() as Void {
         RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRequestId()));
+        // Piggyback ambient HR on the existing status cadence (D-08) — no new timer/radio wake. No-op
+        // unless the phone's hr_ctl toggle enabled it (D-09).
+        if (_hr != null) { _hr.emitIfDue(); }
     }
 
     function onPhoneMessage(msg as Comm.PhoneAppMessage) as Void {
@@ -82,6 +87,12 @@ class FaBolusApp extends App.AppBase {
                 if (_eating != null) {
                     if (data["on"] == true) { _eating.start(); } else { _eating.stop(); }
                 }
+                return;
+            }
+            // Phone toggles ambient HR chart context (out-of-band, not a RemoteCommand). D-08/D-09:
+            // enables/disables the phone-gated relay; when off the watch skips reading + sending HR.
+            if (type != null && (type as Lang.String).equals("hr_ctl")) {
+                if (_hr != null) { _hr.setEnabled(data["on"] == true); }
                 return;
             }
             AppState.handle(data as Lang.Dictionary);
