@@ -53,7 +53,12 @@ class DetailsView extends Ui.View {
     private function detailRow(id as Lang.String) as Lang.String? {
         if (id.equals("iob")) { return "Active Insulin: " + f2(AppState.iob) + " U"; }
         if (id.equals("reservoir")) { return "Reservoir: " + f2(AppState.reservoir) + " U"; }
-        if (id.equals("battery")) { return "Battery: " + n0(AppState.battery) + "%"; }
+        // Phase 09.27-03 (D-03/D-04/D-05): append a Charging marker ONLY when the phone's most-recent
+        // statusRead positively reported it (fail-closed AppState.batteryCharging) — never inferred
+        // from a rising percent, and the plain string otherwise (byte-identical to before this phase).
+        if (id.equals("battery")) {
+            return "Battery: " + n0(AppState.battery) + "%" + (AppState.batteryCharging ? " · Charging" : "");
+        }
         if (id.equals("cgm")) { return "CGM: " + (AppState.glucose != null ? AppState.displayGlucose() + " " + AppState.glucoseUnitLabel() : "--"); }
         if (id.equals("lastBolus")) { return "Last bolus: " + f2(AppState.lastBolus) + " U"; }
         if (id.equals("carbRatio")) { return "Carb ratio: " + (AppState.carbRatio > 0.0 ? AppState.carbRatio.format("%.0f") + " g/U" : "--"); }

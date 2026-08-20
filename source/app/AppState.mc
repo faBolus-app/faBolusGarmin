@@ -47,6 +47,13 @@ module AppState {
     // Extra pump status (from phone) for the details screen.
     var reservoir as Lang.Float = -1.0;   // units remaining (-1 = unknown)
     var battery as Lang.Number = -1;      // percent (-1 = unknown)
+    // Phase 09.27-03 (D-03/D-04/D-05): the pump's charging state, mirrored from the phone's
+    // `RemoteCommand.batteryCharging` (op-145 `chargingStatus == 1` — see faBolus's
+    // docs/UNVERIFIED-GUESSES.md, the live on-wire semantics are UNCONFIRMED). Fail-closed default
+    // false and re-evaluated UNCONDITIONALLY on every statusRead (NOT the keep-last-value pattern most
+    // other flags here use): absent/invalid/non-true resolves to false so a dropped key or a legacy
+    // phone can never leave a stale "charging" claim on screen. Never inferred from a rising percent.
+    var batteryCharging as Lang.Boolean = false;
     var lastBolus as Lang.Float = -1.0;   // units of the last bolus (-1 = unknown)
     var connection as Lang.String = "";   // e.g. "Connected"
     var readingEpoch as Lang.Number = 0;  // unix sec the current BG was taken (0 = unknown)
@@ -1099,6 +1106,11 @@ module AppState {
             var br = fltRange(data["basalRate"], 0.0, 25.0); if (br != null) { basalRate = br; }
             var rv = fltRange(data["reservoirUnits"], 0.0, 1000.0); if (rv != null) { reservoir = rv; }
             var bt = numRange(data["batteryPercent"], 0, 100); if (bt != null) { battery = bt; }
+            // Phase 09.27-03 (D-03/D-05): fail-closed, unconditional — true ONLY on an explicit
+            // boolean-true wire value; absent/invalid/false all resolve to false every statusRead
+            // (never "keep last known true"), so a stale claim can't survive a dropped key.
+            var bc = data["batteryCharging"];
+            batteryCharging = (bc instanceof Lang.Boolean) && bc;
             var cn = strCap(data["message"], 120); if (cn != null) { connection = cn; }
             // GA-03 / round-2: the AUTHORITATIVE terminal outcome is the phone's bolusStatus echo (by
             // requestId), handled below — including the FB-02 "unknown" status when the pump outcome is
