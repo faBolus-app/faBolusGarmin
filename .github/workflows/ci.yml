@@ -6,9 +6,9 @@ on:
   # pushes, and reported nothing. An absent check reads the same as a passing one on the repo page,
   # which is exactly why this went unnoticed for the whole life of the branch.
   push:
-    branches: [main, experimental]
+    branches: [main, experimental, 'dev/**']
   pull_request:
-    branches: [main, experimental]
+    branches: [main, experimental, 'dev/**']
   # Manual re-validation. This job checks out faBolus for the contract schema, so it can be broken by
   # a commit in a DIFFERENT repo with no trigger here to notice. v3 §1.2's cross-repo reconciliation
   # step needs to re-run this after faBolus moves.
