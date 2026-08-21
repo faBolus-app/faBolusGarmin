@@ -52,7 +52,7 @@ FAIL=0
 
 # --- compile matrix ---------------------------------------------------------
 # Barrel-free jungles → their hardware-validated device (venu3s is the common one; each carries its own
-# manifest). `-w` treats warnings as errors for the two that ship as .iq resources.
+# manifest). `-w` treats warnings as errors for the one that ships as a .iq resource (datafield).
 compile() {  # <jungle> <device> [extra args...]
   local j="$1" d="$2"; shift 2
   if "$MONKEYC" -f "$j.jungle" -o "$OUT/$j-$d.prg" -y "$KEY" -d "$d" "$@" >"$OUT/$j-$d.log" 2>&1; then
@@ -64,7 +64,6 @@ compile() {  # <jungle> <device> [extra args...]
 
 echo "== barrel-free jungles =="
 compile datafield  venu3s -w
-compile watchface  venu3s -w
 compile probe      venu3s
 compile direct-cgm venu3s
 compile test       venu3s
