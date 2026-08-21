@@ -71,10 +71,8 @@ compile test       venu3s
 
 echo "== shipping jungles (need barrels/EatingSense.barrel) =="
 if [ -f barrels/EatingSense.barrel ]; then
-  # fr245 is the lowest-capability declared device (CIQ 3.3, no Complications module → its complication
-  # publisher is compiled out via the jungle's nocomplications split). Building it here is the point.
+  # venu3s is now the sole declared shipping device (main is narrowed to Venu 3S only).
   compile monkey venu3s
-  compile monkey fr245
 else
   echo "  ⏭  skipped: barrels/EatingSense.barrel absent (private faBolusNudge SDK). This is expected"
   echo "     off a dev machine that has the Nudge SDK; the shipping app cannot be built without it."

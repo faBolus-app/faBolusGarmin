@@ -5,8 +5,9 @@
 # DeviceProfile, so supporting a new watch is usually just adding its <iq:product> to manifest.xml.
 #
 # Complications are watch-only. The complication resource lives in resources-complications/ and is
-# included for all devices by default; devices without a watch face (cycling computers, etc.) must
-# drop it — add a `<device>.resourcePath = resources` line below (see edge540).
+# included for all devices by default; a device without a watch face (e.g. a cycling computer) would
+# need to drop it via a `<device>.resourcePath = resources` line — moot for the current venu3s-only
+# shipping target, which has a watch face and keeps the complication.
 #
 # The paused direct-to-pump work lives under direct-pump/ and is NOT part of this build
 # (see direct-pump/DIRECT_PUMP_STATUS.md). Its engine is exercised by test.jungle and probe.jungle.
@@ -19,12 +20,3 @@ base.resourcePath = resources;resources-complications
 base.barrelPath = barrels/EatingSense.barrel
 # Default build keeps the real complication publisher; drop the no-op stub (see BgComplication.mc).
 base.excludeAnnotations = nocomplications
-
-# --- Non-complication devices (no watch face): exclude the complication resource ---
-edge540.resourcePath = resources
-edge1040.resourcePath = resources
-
-# --- Forerunner 245 (CIQ 3.3, no Complications module): compile out the publisher, use the stub,
-#     and drop the complication resource. The app otherwise runs fully (button confirm path). ---
-fr245.resourcePath = resources
-fr245.excludeAnnotations = complications

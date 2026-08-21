@@ -20,8 +20,8 @@ on:
 # unattended installer and an EULA that bars caching it here; (2) `monkeydo` runs the unit tests in the
 # GUI simulator, which needs a display GitHub runners don't have; (3) the shipping jungles need the
 # private, git-ignored EatingSense.barrel. Faking a green Garmin build badge would be worse than an
-# honest, scoped gate. The full matrix (5 barrel-free jungles + the shipping jungle for venu3s AND
-# fr245 + the 29-case unit suite) is verified locally — see AGENTS.md.
+# honest, scoped gate. The full matrix (4 barrel-free jungles + the shipping jungle for venu3s only
+# + the 29-case unit suite) is verified locally — see AGENTS.md.
 jobs:
   schema-drift:
     name: Monkey C ↔ contract schema drift
