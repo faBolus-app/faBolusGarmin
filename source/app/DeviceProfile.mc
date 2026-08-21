@@ -7,9 +7,9 @@ using Toybox.Lang;
 // <iq:product> to manifest.xml — the screens adapt themselves here.
 module DeviceProfile {
 
-    // Touchscreen devices (venu3s, edge1040/1050, …) drive the UI with taps. Button-only devices
-    // (fenix, Forerunner, Instinct, edge530/540, …) drive it with the physical buttons + a focus
-    // cursor. Every interactive screen branches on this instead of assuming touch.
+    // Touchscreen devices (e.g. venu3s) drive the UI with taps. Button-only devices drive it with
+    // the physical buttons + a focus cursor. Every interactive screen branches on this instead of
+    // assuming touch.
     function isTouch() as Lang.Boolean {
         var s = System.getDeviceSettings();
         return (s has :isTouchScreen) ? (s.isTouchScreen == true) : false;

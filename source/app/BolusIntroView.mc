@@ -9,7 +9,7 @@ using Toybox.Lang;
 // (AppState persists the "shown" flag at display time, before this view is pushed).
 //
 // Layout mirrors DetailsView: a title, a body wrapped into short centered lines that fit the round
-// screen on both the largest (venu3s) and smallest (fr245) declared devices, and a bottom hint.
+// screen on any declared device (venu3s and smaller), and a bottom hint.
 class BolusIntroView extends Ui.View {
     function initialize() { View.initialize(); }
 

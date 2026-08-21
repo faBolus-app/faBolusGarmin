@@ -12,7 +12,7 @@ using Toybox.Lang;
 // Garmin — so this first-use notice is the correct on-watch stand-in for that pairing-time explanation.
 //
 // Layout mirrors BolusIntroView: a title, a body pre-wrapped into short centered lines that fit the
-// round screen on both the largest (venu3s) and smallest (fr245) declared devices, and a bottom hint.
+// round screen on any declared device (venu3s and smaller), and a bottom hint.
 class PasscodeIntroView extends Ui.View {
     function initialize() { View.initialize(); }
 

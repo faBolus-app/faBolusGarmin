@@ -5,9 +5,10 @@ using Toybox.Lang;
 
 // C2 §2.3 (Garmin half): input for the 4-digit bolus passcode entry (PasscodeEntryView). Portable across
 // devices via the same both-input model + touch double-route guard as StaleBolusDelegate/HoldDelegate:
-//   • Touch (venu3s): tap − / + to change the active digit, tap OK to commit-and-advance. The physical-
-//     button handlers return false on a touch device so the tap falls through to the validated onTap.
-//   • Buttons (fr245): UP = +1, DOWN = -1, START/ENTER = commit-and-advance.
+//   • Touch (e.g. venu3s): tap − / + to change the active digit, tap OK to commit-and-advance. The
+//     physical-button handlers return false on a touch device so the tap falls through to the validated
+//     onTap.
+//   • Buttons: UP = +1, DOWN = -1, START/ENTER = commit-and-advance.
 //   • Either: BACK deletes the last committed digit, or (when none) cancels back to bolus entry.
 // On the 4th committed digit the code is complete: it is sent through the SHARED funnel
 // AppState.sendBolusNow(code) — the identical delivery/reqId/reachability/status path HoldView uses — and

@@ -8,8 +8,8 @@ using Toybox.Lang;
 //
 // Two input models, chosen by device (DeviceProfile), mirroring the repo's both-input pattern
 // (StaleBolusDelegate / HoldDelegate + the touch double-route guard in BolusEntryDelegate):
-//   • Touch (venu3s): tap − / + to change the active digit, tap OK to commit-and-advance.
-//   • Buttons (fr245): UP / DOWN change the active digit 0-9, START commits-and-advances.
+//   • Touch (e.g. venu3s): tap − / + to change the active digit, tap OK to commit-and-advance.
+//   • Buttons: UP / DOWN change the active digit 0-9, START commits-and-advances.
 //   • Either: BACK deletes the last committed digit, or cancels when none is entered.
 // On the 4th committed digit the entry is complete and the delegate sends the code (via the shared
 // funnel AppState.sendBolusNow) then switches to HoldView to show the delivery outcome.
@@ -56,8 +56,8 @@ class PasscodeEntryView extends Ui.View {
     }
 
     // --- shared geometry (pixels), so touch hit-testing matches what's drawn (mirrors BolusEntryView).
-    // Values chosen so the flanking − / + circles never overlap the 4 slot glyphs on the small round
-    // screen (fr245); layout is subject to on-hardware validation. ---
+    // Values chosen so the flanking − / + circles never overlap the 4 slot glyphs on a small round
+    // screen; layout is subject to on-hardware validation. ---
     static function minusCenter(w, h) { return [w * 0.13, h * 0.44]; }
     static function plusCenter(w, h) { return [w * 0.87, h * 0.44]; }
     static function stepRadius(w) { return w * 0.10; }
