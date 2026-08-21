@@ -17,11 +17,10 @@ A **Garmin (Connect IQ / Monkey C) remote** for bolusing and status viewing. It 
   companion app (e.g. a future Loop integration). Nothing in the default phone-relay path is
   Tandem-specific.
 
-**Supported devices:** the **Garmin Venu 3S** is hardware-validated. The app also builds and runs on
-button-only watches (e.g. fenix 7) and **Edge cycling computers** (e.g. edge 540 / 1040) — it
-adapts to touch vs. buttons and watch vs. no-watch-face **at runtime** (`DeviceProfile`), so adding a
-device is usually just a manifest entry. Those non-Venu-3S targets are build-verified and sit behind
-the phone's safety interlock, but aren't hardware-validated yet. See
+**Supported devices:** the **Garmin Venu 3S** is the sole build target on `main`, and the sole
+hardware-validated device. It adapts to touch vs. buttons **at runtime** (`DeviceProfile`), so a
+future device is usually just a manifest entry — additional touch/button watches and Edge cycling
+computers are build-verified on the `dev/garmin-devices` branch, not on `main`. See
 [CONTRIBUTING.md](CONTRIBUTING.md#add-support-for-another-garmin-device).
 
 > **Experimental — in development.** Not FDA-cleared; if you build or use it you assume all
@@ -52,14 +51,14 @@ one of *two* confirmations.
   (default) or **direct-to-pump**. The same command dicts flow either way, so the UI is
   transport-agnostic.
 
-Beyond the remote, the repo also builds three more Connect IQ surfaces from the same BG feed:
+Beyond the remote, the repo also builds two more Connect IQ surfaces from the same BG feed:
 - a **glance** (compact BG in the glance carousel) — built into the app (`FaBolusGlanceView`, reads
   the persisted reading directly).
 - a **BG data field** for activity screens on watches and Edge — `datafield/` + `datafield.jungle`.
-- a **watch face** scaffold — `watchface/` + `watchface.jungle`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md#add-a-watch-face-or-another-connect-iq-app-type) for building
-and extending these.
+and extending these. (A standalone watch-face app that consumed the complication previously lived on
+`main`; it has been removed and now lives only on the `experimental` branch.)
 
 ### Experimental: direct-to-pump (Tandem)
 An optional engine lets the watch talk **directly** to a Tandem pump over BLE with no phone — a full

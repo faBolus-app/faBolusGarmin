@@ -21,10 +21,9 @@ truth). Change fields → update the mirror → run `scripts/check-schema-drift.
   `direct-cgm/` and `direct-pump/` engines.
 - Jungles + manifests select builds: `monkey.jungle`+`manifest.xml` (Beta listing),
   `official.jungle`+`manifest-official.xml` (Official listing), `test.jungle`, `probe.jungle`,
-  `datafield.jungle`, `watchface.jungle`, `direct-cgm.jungle`.
-- Devices: `venu3s` (touch: onTap) + button devices (fenix7, fr265s, fr245, edge540, edge1040 — UP/DOWN
-  + two-button-hold confirm). `fr245` has no Complications module (compiled out via
-  `fr245.excludeAnnotations = complications`).
+  `datafield.jungle`, `direct-cgm.jungle`.
+- Devices: `venu3s` (touch: onTap) is the sole build target on `main`. Additional button-only and Edge
+  devices are build-verified on the `dev/garmin-devices` branch, not on `main`.
 - `tests/`, `tools/gen_golden.sh` — parity/golden tests.
 
 ## Build + test before a PR
@@ -51,12 +50,11 @@ history is in [`CHANGELOG.md`](CHANGELOG.md).
 - **Lockstep (§1.3).** faBolusGarmin is a **base feature** of faBolus, not a separate product. A Garmin
   `main` release accompanies every app `main` release and is held to the **same quality bar**; Garmin
   work does not lag behind and does **not ship separately**.
-- **Published device floor.** **venu3s is the sole hardware-validated device.** The `manifest.xml`
-  `<iq:products>` list (`venu3s, fr265s, fenix7, fr245, edge540, edge1040`) is the set of **build
-  targets**, not a hardware-validation claim; the non-venu3s targets are build-verified only and sit
-  behind the phone's confirm + max-bolus interlock. The store-facing statement of this floor is
-  [`store/connectiq-listing.md`](store/connectiq-listing.md); keep the two in sync when a device is
-  promoted from build-target to hardware-validated.
+- **Published device floor.** **venu3s is the sole hardware-validated device, and the sole `main`
+  build target.** The `manifest.xml` `<iq:products>` list on `main` contains only `venu3s`; additional
+  devices are build-verified on the `dev/garmin-devices` branch, not on `main`. The store-facing
+  statement of this floor is [`store/connectiq-listing.md`](store/connectiq-listing.md); keep the two
+  in sync when a device is promoted from build-target to hardware-validated.
 - **Fail gracefully on unsupported hardware (RULE).** When a capability a device genuinely cannot
   provide is requested, the app must degrade to an explicit, honest state — never misbehave, never
   present a fabricated value. This is distinct from, and must **not** disturb, the deliberate

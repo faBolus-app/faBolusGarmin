@@ -28,7 +28,7 @@ REQUIREMENTS
 • A Bluetooth connection between the watch and the phone.
 
 SUPPORTED DEVICES
-Hardware-validated on the Venu 3S. The app also builds for other touch and button watches (e.g. Forerunner 265S / 245, fenix 7) and Edge cycling computers, adapting automatically to touch vs. buttons — but those targets are not yet hardware-validated.
+The Garmin Venu 3S is the only supported device — hardware-validated and the sole build target.
 
 IMPORTANT — PLEASE READ
 faBolus is experimental software, in active development, and is NOT FDA-cleared or approved as a medical device. It is provided for personal, experimental use; if you build or use it, you assume all responsibility for its behavior. Always confirm every dose yourself and never rely on this app for medical decisions.

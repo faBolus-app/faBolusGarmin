@@ -35,10 +35,8 @@ KEY="$HOME/garmin_dev_key.der"
 "$MONKEYC" -f monkey.jungle   -o bin/faBolus-beta.iq     -y "$KEY" -e -r
 ```
 
-Both bundle all six devices: `venu3s, fr265s, fenix7, fr245, edge540, edge1040` (add a device by
-adding its `<iq:product>` to **both** manifests). `fr245` (Forerunner 245, CIQ 3.3) has no
-Complications module, so its complication publisher is compiled out via `fr245.excludeAnnotations =
-complications` in both jungles (the rest of the app runs normally on its button-confirm path).
+Both bundle exactly one device on `main`: `venu3s` (add a device back by adding its `<iq:product>` to
+**both** manifests — additional devices are build-verified on the `dev/garmin-devices` branch).
 
 ## Personal beta (a unique app id per person) — one command
 
@@ -66,11 +64,12 @@ It checks the two Garmin prerequisites first (the Connect IQ SDK and your signin
 - Upload the revealed `.iq` at the Connect IQ dashboard, then install it to your watch from the Garmin
   Connect IQ Store app.
 
-## Companion watch face + data field (separate Connect IQ apps, optional)
-These are their own store submissions (one shared build each — no beta/official split):
+## Companion data field (a separate Connect IQ app, optional)
+This is its own store submission (one shared build — no beta/official split). (The standalone watch
+face that also used to build this way has been removed from `main` — it now lives only on the
+`experimental` branch.)
 
 ```sh
-"$MONKEYC" -f watchface.jungle -o bin/faBolusFace.iq  -y "$KEY" -e -r
 "$MONKEYC" -f datafield.jungle  -o bin/faBolusField.iq -y "$KEY" -e -r
 ```
 
@@ -79,4 +78,4 @@ Connect IQ dashboard → each listing → upload the matching `.iq`. The **offic
 store app the first time (create the listing); the **beta** id updates the existing listing.
 
 > Sideload (on-device testing) uses `developer_key.der` and omits `-e -r`, e.g.
-> `"$MONKEYC" -f official.jungle -o bin/faBolus.prg -y developer_key.der -d fr265s`.
+> `"$MONKEYC" -f official.jungle -o bin/faBolus.prg -y developer_key.der -d venu3s`.

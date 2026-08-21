@@ -14,10 +14,10 @@ per-release history is in [`CHANGELOG.md`](CHANGELOG.md).
 - **Lockstep (§1.3).** faBolusGarmin is a **base feature** of faBolus, not a separate product. A Garmin
   `main` release accompanies every app `main` release and holds the **same quality bar**; Garmin work
   does not lag behind and does **not ship separately**.
-- **Published device floor.** The **Garmin Venu 3S is the sole hardware-validated device.** The
-  `manifest.xml` `<iq:products>` list is the set of **build targets** (`venu3s, fr265s, fenix7, fr245,
-  edge540, edge1040`), not a hardware-validation claim; the non-venu3s targets are build-verified only
-  and run behind the phone's confirm + max-bolus interlock. This floor is also stated store-facing in
+- **Published device floor.** The **Garmin Venu 3S is the sole hardware-validated device, and the
+  sole build target on `main`.** The `manifest.xml` `<iq:products>` list on `main` contains only
+  `venu3s`; additional touch/button watches and Edge cycling computers are build-verified on the
+  `dev/garmin-devices` branch, not on `main`. This floor is also stated store-facing in
   [`store/connectiq-listing.md`](store/connectiq-listing.md) — keep the two in sync (see "Add support
   for another Garmin device" below for how a device graduates).
 - **Fail gracefully on unsupported hardware.** Where a device genuinely cannot provide a capability, the
@@ -45,8 +45,8 @@ rewrite:
    Both input models are already implemented — nothing per-device to write.
 2. **Cycling computers / devices with no watch face** (Edge, etc.) have no complication surface, so
    the complication *resource* must be dropped or the build fails. Add one line to `monkey.jungle`:
-   `<deviceId>.resourcePath = resources` (see `edge540`/`edge1040`). The complication code is already
-   runtime-guarded, and these devices run the same `watchApp` type.
+   `<deviceId>.resourcePath = resources`. The complication code is already runtime-guarded, and these
+   devices run the same `watchApp` type.
 3. **Launcher icon (optional polish).** If the default icon is upscaled for the device, add a
    correctly-sized `launcher_icon` via a resource-qualifier folder (`resources-<device>/drawables/…`).
 4. **Verify.** Run the device in the CIQ simulator, exercising bolus entry and the confirm with the
@@ -76,11 +76,11 @@ sustained actions), and keep the touch and button flows in sync in `HoldView`/`H
 ## Add a watch face or another Connect IQ app type
 Each Connect IQ app type is a separate app (its own manifest + jungle), so the repo keeps them side
 by side (like `probe.jungle` / `test.jungle`):
-- **Watch face** — a scaffold exists: `watchface/` + `manifest-watchface.xml` + `watchface.jungle`
-  (`monkeyc -f watchface.jungle -o bin/faBolusFace.iq -y <dev_key.der> -e -r -w`). It draws the time
-  and a BG slot and **already subscribes** to the faBolus **public BG complication**
-  (`watchface/FaBolusFaceView.mc:28-40`, `:55-75`) — no TODO stub remains; the complication behavior
-  still needs on-device validation. Watches only — Edge has no watch face.
+- **Watch face** — removed from `main` (Phase-2 narrowing); it lives only on the `experimental`
+  branch as its own Connect IQ app: a `watchface/` source tree plus its own dedicated manifest/jungle
+  pair, built the same way as any other app type here. It draws the time and a BG slot and subscribes
+  to the faBolus **public BG complication** (`watchface/FaBolusFaceView.mc:28-40`, `:55-75`) — the
+  complication behavior still needs on-device validation. Watches only — Edge has no watch face.
 - **Data field** — `datafield/` + `manifest-datafield.xml` + `datafield.jungle`
   (`monkeyc -f datafield.jungle -o bin/faBolusField.iq -y <dev_key.der> -e -r -w`). A `SimpleDataField`
   that shows BG on any run/ride activity screen — watches **and** Edge. Same public-complication feed

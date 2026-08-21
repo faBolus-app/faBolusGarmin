@@ -15,7 +15,17 @@ the git log and the tag graph, so they are grouped and summarized rather than ex
 
 ## [Unreleased]
 
-_No changes yet on this branch beyond governance/licensing/close-out documentation (P16, docs-only)._
+### Changed
+- **Phase-2 narrowing (2026-08-20).** `main`'s shipping build target is narrowed to the **Garmin
+  Venu 3S only**: the five non-Venu devices (`fr265s`, `fenix7`, `fr245`, `edge540`, `edge1040`) are
+  removed from both shipping manifests (`manifest.xml`, `manifest-official.xml`) and their jungle/
+  build-script/CI-matrix lines, and retained on the `dev/garmin-devices` branch. The standalone
+  Garmin **watch face** app (`manifest-watchface.xml` + `watchface.jungle` + `watchface/`) is removed
+  from `main` and retained on `experimental`; the BG **complication publisher**
+  (`source/app/BgComplication.mc` + `resources-complications/`) is unchanged and continues to ship
+  for `venu3s`. Docs (`README.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/STORE-BUILDS.md`,
+  `docs/SBOM.md`, `store/connectiq-listing.md`) and `.mc` comments reconciled to match — no
+  `main`-side doc or comment names a removed device or the removed watch face as a current target.
 
 ## [safe-baseline/2026-08-07-p15] — 2026-08-07
 
