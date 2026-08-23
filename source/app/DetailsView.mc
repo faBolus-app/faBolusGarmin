@@ -143,6 +143,21 @@ class DetailsView extends Ui.View {
         return null;
     }
 
+    // VA-32 (V-Audit): PURE y-position helper, extracted so the collapsed-layout guard below is
+    // unit-testable (the rest of DetailsView is view-code, so it stays sim/hardware-only). A phone-pushed
+    // detailsOrder of only opt-in CIQ ids can collapse the visible rows down to just the always-appended
+    // alerts row (size 1); the old `step = (bottom-top)/(rows.size()-1)` would then divide by zero and hand
+    // a NaN/inf y to drawText. With a single row we center it in the band at `(top+bottom)/2.0`; with two or
+    // more we space them evenly across `[top, bottom]` exactly as before. `rows` is never empty (the alerts
+    // row is always appended), so rowCount<=0 can't occur — the `<= 1` guard covers it defensively anyway.
+    // Returns a 0..1 band FRACTION; onUpdate multiplies by the drawable height.
+    static function rowY(rowCount as Lang.Number, i as Lang.Number,
+                         top as Lang.Float, bottom as Lang.Float) as Lang.Float {
+        if (rowCount <= 1) { return (top + bottom) / 2.0; }
+        var step = (bottom - top) / (rowCount - 1);
+        return top + step * i;
+    }
+
     function onUpdate(dc as Gfx.Dc) as Void {
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
         dc.clear();
@@ -164,10 +179,9 @@ class DetailsView extends Ui.View {
         }
         rows.add(alertCount > 0 ? ("Alerts: " + alertCount.toString()) : "No alerts");
         var top = 0.28, bottom = 0.80;
-        var step = (bottom - top) / (rows.size() - 1);
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
         for (var i = 0; i < rows.size(); i += 1) {
-            dc.drawText(cx, h * (top + step * i), Gfx.FONT_XTINY, rows[i], vc);
+            dc.drawText(cx, h * rowY(rows.size(), i, top, bottom), Gfx.FONT_XTINY, rows[i], vc);
         }
     }
 }

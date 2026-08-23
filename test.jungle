@@ -11,6 +11,10 @@
 # needs no additional source files beyond AppState.mc; the `tests` sourcePath glob below picks it up
 # automatically like every other file in tests/. excludeAnnotations drops BgComplication's no-op stub so
 # only the real (:complications) publisher compiles on venu3s.
+# VA-32 (V-Audit): DetailsView.mc is also pulled in so tests/DetailsRowYTest.mc can exercise the pure
+# DetailsView.rowY collapsed-layout guard. DetailsView depends only on AppState (already compiled) + SDK
+# WatchUi/Graphics — it references no EatingRelay/EatingSense barrel — so it compiles cleanly here (a
+# WatchUi.View subclass already compiles in this binary: see TestEntryView in tests/TestEntryApp.mc).
 project.manifest = manifest-test.xml
-base.sourcePath = direct-pump/engine/protocol;direct-pump/engine/auth;direct-pump/engine/messages;direct-pump/engine/ble;source/app/AppState.mc;source/app/RemoteComm.mc;source/app/BgComplication.mc;tests
+base.sourcePath = direct-pump/engine/protocol;direct-pump/engine/auth;direct-pump/engine/messages;direct-pump/engine/ble;source/app/AppState.mc;source/app/RemoteComm.mc;source/app/BgComplication.mc;source/app/DetailsView.mc;tests
 base.excludeAnnotations = nocomplications
