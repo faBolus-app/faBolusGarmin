@@ -7,12 +7,16 @@ using Toybox.Lang;
 // complication's numeric <range>, so Face It can range-color it) with the trend in the :unit slot as a
 // Latin-safe arrow (from the phone's direction token; Unicode arrow glyphs fail to render on many faces).
 // LIMITATION (audit): a numeric/ranged complication cannot render "--" in its numeric :value slot, so a
-// stale reading keeps its last NUMBER (and range color) there — the pure-numeric display is STRUCTURALLY
-// unable to flag staleness (a stale glucose can look current). P16 §1.3 (fail-graceful): the shortLabel
-// TEXT is the one complication sub-surface that can carry a marker, so staleness is made honest there in
-// BOTH display modes (see shortLabelFor) — string-rendering faces can no longer show a stale reading as
-// current. The residual structural limit (a face that renders ONLY the numeric :value) is unavoidable at
-// the publisher and stays documented here. The complication also refreshes only while the app is
+// stale reading keeps its last NUMBER there — the pure-numeric display is STRUCTURALLY unable to flag
+// staleness (a stale glucose can look current). P16 §1.3 (fail-graceful): the shortLabel TEXT is the one
+// complication sub-surface that can carry a marker, so staleness is made honest there in BOTH display
+// modes (see shortLabelFor) — string-rendering faces can no longer show a stale reading as current.
+// R2-18 (audit): when the reading is stale we ALSO drop the numeric :ranges breakpoints (see
+// pushComplication), so a range-coloring face no longer paints the frozen last number with an in-range
+// (or any) color cue — removing a SECOND misleading "current" signal on top of the raw number. The
+// residual structural limit is now only a face that renders the bare numeric :value with no face-side
+// coloring and ignores the shortLabel — unavoidable at the publisher and stays documented here. The
+// complication also refreshes only while the app is
 // foreground (15 s) or via throttled background temporal events (≥5 min, system-coalesced), and not at
 // all while the phone/BLE is unreachable — so it can lag the CGM. The in-app screens remain the
 // fully staleness-aware surfaces (grayed value + called-out age).
@@ -105,19 +109,26 @@ module BgComplication {
         // OperationNotAllowedException, when COMP_ID isn't yet owned by this app. `:ranges` are numeric
         // breakpoints the CONSUMER (Face It / watch face) colors by — a publisher can't set the color
         // itself. The real "reads 0" fix is the NUMERIC :value in step 1 (a String value fell back to the
-        // range floor). Stale keeps the last numeric value but drops the arrow (numeric can't render "--").
+        // range floor). Stale keeps the last numeric value but drops the arrow (numeric can't render "--")
+        // and, in numericColor mode, drops the :ranges color cue too (R2-18, below).
         try {
             // GA-08 / P16 §1.3: in "stringTrend" mode the surface is the STRING shortLabel — it carries
             // the value + Latin trend arrow, and "--" when stale. In "numericColor" mode the shortLabel
             // keeps the last number (so the face can range-color it) but appends an explicit stale marker,
-            // and we attach range breakpoints for the face to color by. shortLabelFor makes staleness
-            // honest in BOTH modes; the numeric :value slot stays as the last reading (a numeric
-            // complication cannot render "--" there — the documented structural limit).
+            // and we attach range breakpoints for the face to color by ONLY while the reading is fresh
+            // (R2-18: a stale number drops :ranges so it loses the misleading in-range color cue).
+            // shortLabelFor makes staleness honest in BOTH modes; the numeric :value slot stays as the last
+            // reading (a numeric complication cannot render "--" there — the documented structural limit).
             var stringMode = AppState.complicationDisplay.equals("stringTrend");
             var label = shortLabelFor(value, arrow, stale, stringMode);
             var params = { :value => value, :unit => (stale ? "" : arrow), :shortLabel => label };
-            if (!stringMode) {
-                // Glucose range breakpoints (mg/dL) — the same canonical bands as AppState.rangeColor.
+            if (!stringMode && !stale) {
+                // R2-18 (V-Audit): attach the glucose range breakpoints ONLY when the reading is fresh. When
+                // stale we drop :ranges so a range-coloring face can no longer paint the frozen last number
+                // with an in-range (or any) color cue — a misleading "current & in-range" signal on a value
+                // that is actually old. The numeric :value slot still keeps the last reading (a numeric
+                // complication can't render "--"), but the stale " old" shortLabel marker + the now-uncolored
+                // number are the honest surfaces. Same canonical mg/dL bands as AppState.rangeColor.
                 params[:ranges] = [0, AppState.GLUCOSE_LOW, AppState.GLUCOSE_HIGH, AppState.GLUCOSE_VERY_HIGH, 400];
             }
             Toybox.Complications.updateComplication(COMP_ID, params);
