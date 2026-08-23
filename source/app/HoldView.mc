@@ -15,13 +15,42 @@ class HoldView extends Ui.View {
     // After a successful delivery, auto-return to the configured first screen (once).
     private var _homeTimer as Timer.Timer or Null = null;
     private var _returnScheduled as Lang.Boolean = false;
+    // R2-02: local outcome watchdog (a one-shot, mirroring _homeTimer) so a stuck "delivering…"/
+    // "cancelling…" flips to an honest "unknown" even if the FaBolusApp poll cadence is slow. Armed
+    // while an outcome is pending; the decision itself lives in AppState.tickOutcomeWatchdog() (tested).
+    private var _watchdogTimer as Timer.Timer or Null = null;
+    private var _watchdogScheduled as Lang.Boolean = false;
 
     function initialize() { View.initialize(); }
 
-    // Cancel the auto-return timer if we leave the screen before it fires.
-    function onHide() as Void { stopHomeTimer(); }
+    // Cancel both timers if we leave the screen before they fire.
+    function onHide() as Void { stopHomeTimer(); stopWatchdog(); }
     private function stopHomeTimer() as Void {
         if (_homeTimer != null) { _homeTimer.stop(); _homeTimer = null; }
+    }
+
+    // R2-02: arm the one-shot watchdog (idempotent) just past the outcome deadline. checkOutcome()
+    // re-arms a short follow-up if the outcome is somehow still pending (clock edge).
+    private function armWatchdog() as Void {
+        if (_watchdogScheduled) { return; }
+        _watchdogScheduled = true;
+        _watchdogTimer = new Timer.Timer();
+        _watchdogTimer.start(method(:checkOutcome), (AppState.OUTCOME_DEADLINE_SEC + 1) * 1000, false);
+    }
+    private function stopWatchdog() as Void {
+        if (_watchdogTimer != null) { _watchdogTimer.stop(); _watchdogTimer = null; }
+        _watchdogScheduled = false;
+    }
+    // Fired past the outcome deadline: flip a stuck delivering/cancelling to "unknown" and redraw. If it
+    // wasn't yet expired (clock edge) but is still pending, re-arm a short follow-up rather than give up.
+    function checkOutcome() as Void {
+        _watchdogScheduled = false;
+        if (AppState.tickOutcomeWatchdog()) { Ui.requestUpdate(); return; }
+        if (AppState.outcomePending()) {
+            _watchdogScheduled = true;
+            _watchdogTimer = new Timer.Timer();
+            _watchdogTimer.start(method(:checkOutcome), 2000, false);
+        }
     }
 
     // Fired 2 s after "delivered": dismiss the bolus flow and open the user's first screen.
@@ -84,6 +113,9 @@ class HoldView extends Ui.View {
 
         if (AppState.status != null) {
             var s = AppState.status as Lang.String;
+            // R2-02: keep the local outcome watchdog armed while an outcome is pending; drop it once a
+            // terminal status (delivered/cancelled/failed/unknown/outOfRange) is on screen.
+            if (s.equals("delivering") || s.equals("cancelling")) { armWatchdog(); } else { stopWatchdog(); }
             var color = Gfx.COLOR_BLUE;
             if (s.equals("delivered")) {
                 color = Gfx.COLOR_GREEN;
@@ -133,8 +165,16 @@ class HoldView extends Ui.View {
         // could still fire. Only reached pre-delivery (status == null); an in-flight bolus is untouched.
         if (disabledMidArm()) {
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.40, Gfx.FONT_SMALL, "Bolusing off", vc);
-            dc.drawText(cx, h * 0.54, Gfx.FONT_XTINY, "(disabled on phone)", vc);
+            // VA-07: distinguish WHY the armed confirm was torn down. A policy flip (read-only / Garmin
+            // bolusing off) says "Bolusing off"; a therapy/eligibility change since arming (stale arm)
+            // says "Status changed — re-confirm" so the wearer knows to re-enter, not that it's disabled.
+            if (AppState.bolusPolicyDisabled()) {
+                dc.drawText(cx, h * 0.40, Gfx.FONT_SMALL, "Bolusing off", vc);
+                dc.drawText(cx, h * 0.54, Gfx.FONT_XTINY, "(disabled on phone)", vc);
+            } else {
+                dc.drawText(cx, h * 0.40, Gfx.FONT_SMALL, "Status changed", vc);
+                dc.drawText(cx, h * 0.54, Gfx.FONT_XTINY, "re-confirm the bolus", vc);
+            }
             dc.drawText(cx, h * 0.80, Gfx.FONT_XTINY, "BACK to exit", vc);
             return;
         }

@@ -480,10 +480,19 @@ module AppState {
         return pumpConnected() && !bolusing();
     }
 
-    // A new bolus is only possible when the phone (which owns the pump link) is reachable AND the pump
-    // side permits it. The Garmin never touches the pump directly.
+    // R2-03: app-level liveness — the faBolus phone app has sent a reply within CONNECTION_STALE_SEC.
+    // Distinct from RemoteComm.phoneReachable() (the raw BLE link, which stays "connected" even when
+    // faBolus is killed). 0 (never replied / cold launch) fails closed. Anchored on `lastReplyEpoch`,
+    // stamped at the top of handle() on every inbound reply. Pure decision (wall-clock only) → testable.
+    function appLive() as Lang.Boolean {
+        return lastReplyEpoch > 0 && (Time.now().value() - lastReplyEpoch) <= CONNECTION_STALE_SEC;
+    }
+
+    // A new bolus is only possible when the phone (which owns the pump link) is reachable AND the faBolus
+    // app is live (recent reply, R2-03) AND the pump side permits it. The Garmin never touches the pump
+    // directly. `pumpBolusAllowed()` stays PURE (no liveness) so its own tests remain deterministic.
     function canBolus() as Lang.Boolean {
-        return garminBolusEnabled && RemoteComm.phoneReachable() && pumpBolusAllowed();
+        return garminBolusEnabled && RemoteComm.phoneReachable() && appLive() && pumpBolusAllowed();
     }
 
     // P15 §2.3 / G4: the bolus affordance is HOST-POLICY-disabled when the phone put the remote in
@@ -494,12 +503,34 @@ module AppState {
         return readOnly || !garminBolusEnabled;
     }
 
-    // G4: whether an armed, pre-delivery confirm must be torn down RIGHT NOW — bolusing was policy-
-    // disabled (read-only or Garmin-bolus-off) AND nothing has been sent yet (status == null; once a
-    // request is out the outcome flow owns the screen and must not be disturbed). Pure/deterministic;
-    // HoldView calls it on every redraw (a phone push always triggers Ui.requestUpdate()).
+    // VA-07: a fingerprint of everything that makes an armed Garmin dose still valid to send. When ANY of
+    // these change on a statusRead the armed dose is no longer the one the wearer confirmed against, so
+    // `bolusEligibilityGen` is bumped (see handle()) and the armed confirm is torn down / the send refused
+    // (re-confirm). Deterministic (no wall-clock, no reachability) → unit-testable. `lastBolus` is folded
+    // in so an OBSERVED completed bolus (a new "last bolus" amount) between arm and send also invalidates.
+    function eligibilityFingerprint() as Lang.String {
+        var ro = readOnly ? "1" : "0";
+        var gbe = garminBolusEnabled ? "1" : "0";
+        var pba = pumpBolusAllowed() ? "1" : "0";
+        var bpr = bolusPasscodeRequired ? "1" : "0";
+        return ro + "|" + gbe + "|" + pba + "|" + bpr + "|" + connection + "|" + lastBolus.format("%.2f");
+    }
+
+    // VA-07: snapshot the current eligibility generation at compose (BolusEntryDelegate.captureDose, after
+    // deliverUnits is set). A later statusRead that changes the fingerprint bumps `bolusEligibilityGen`
+    // past this snapshot → mustTeardownArmedBolus()/sendBolusNow() refuse the now-stale arm.
+    function armBolus() as Void {
+        armedEligibilityGen = bolusEligibilityGen;
+    }
+
+    // G4 + VA-07: whether an armed, pre-delivery confirm must be torn down RIGHT NOW — nothing has been
+    // sent yet (status == null; once a request is out the outcome flow owns the screen and must not be
+    // disturbed) AND EITHER bolusing was policy-disabled (read-only / Garmin-bolus-off) OR the therapy/
+    // policy state changed since the wearer armed (armedEligibilityGen != bolusEligibilityGen). Pure/
+    // deterministic; HoldView calls it on every redraw (a phone push always triggers Ui.requestUpdate()).
+    // Kept gated on status == null so an in-flight bolus is never torn down (HoldTeardownTest pins this).
     function mustTeardownArmedBolus() as Lang.Boolean {
-        return status == null && bolusPolicyDisabled();
+        return status == null && (bolusPolicyDisabled() || armedEligibilityGen != bolusEligibilityGen);
     }
 
     // Pure token → short display text mapping (deterministic → unit-testable). "" for null/unknown.
@@ -715,6 +746,9 @@ module AppState {
     function bolusBlockLabel() as Lang.String {
         if (canBolus()) { return ""; }
         if (!RemoteComm.phoneReachable()) { return "Phone not connected"; }
+        // R2-03: the BLE link is up but the faBolus app hasn't replied within CONNECTION_STALE_SEC (app
+        // killed / backgrounded) — say we're reconnecting rather than showing a stale-derived reason.
+        if (!appLive()) { return "Reconnecting…"; }
         // P15 §2.3: bolusing from this Garmin is turned off on the phone — say so (and how to fix it).
         if (!garminBolusEnabled) { return "Bolusing off (enable on phone)"; }
         var t = bolusReasonText(hostBolusBlockReason);
@@ -810,9 +844,41 @@ module AppState {
     // terminal echo can be recovered from the connection state (see handle()).
     var sawPhoneBolusing as Lang.Boolean = false;
 
+    // VA-07: armed-dose eligibility generation. `bolusEligibilityGen` increments whenever the bolus
+    // eligibility fingerprint changes on a statusRead (see handle()); `armBolus()` snapshots it into
+    // `armedEligibilityGen` at compose (BolusEntryDelegate.captureDose). A mismatch means the therapy/
+    // policy state changed AFTER the wearer armed, so the armed confirm must be torn down and the send
+    // refused (re-confirm). `_prevEligibilityFp` is the last-seen fingerprint — null until the first
+    // statusRead, so the very first reply never counts as a change.
+    var bolusEligibilityGen as Lang.Number = 0;
+    var armedEligibilityGen as Lang.Number = 0;
+    var _prevEligibilityFp as Lang.String? = null;
+
+    // R2-02: outcome watchdog. `outcomeSentEpoch` is the wall-clock (Unix sec) a bolus/cancel was sent;
+    // if no authoritative terminal echo arrives within OUTCOME_DEADLINE_SEC the watchdog flips a stuck
+    // "delivering"/"cancelling" to an honest "unknown" (never fabricating delivered/cancelled). Distinct
+    // from `lastReplyEpoch` (reply-time, below) — this is send-time.
+    var outcomeSentEpoch as Lang.Number = 0;
+    const OUTCOME_DEADLINE_SEC = 30;
+
+    // R2-03: app-level liveness. `lastReplyEpoch` is the wall-clock (Unix sec) of the last inbound phone
+    // reply (stamped at the top of handle()); `appLive()` gates a bolus on a RECENT reply — distinct from
+    // the raw BLE link (RemoteComm.phoneReachable()), which stays "connected" even when faBolus is killed.
+    var lastReplyEpoch as Lang.Number = 0;
+    const CONNECTION_STALE_SEC = 60;
+
+    // R2-19: foreground poll cadence + the reply-outstanding deadline. Deadline ordering (batch guidance,
+    // kept consistent): POLL_REPLY_DEADLINE_SEC (12) < OUTCOME_DEADLINE_SEC (30) < CONNECTION_STALE_SEC
+    // (60); POLL_MAX_MS bounds the backoff so R2-02's watchdog backstop (which rides the poll's reschedule
+    // loop) keeps ticking. The jitter + outstanding-gate live in FaBolusApp; only pollBaseDelayMs is pure.
+    const POLL_REPLY_DEADLINE_SEC = 12;
+    const POLL_BASE_MS = 15000;
+    const POLL_MAX_MS = 120000;
+
     function reset() as Void {
         mode = defaultMode; unitsValue = 0.0; carbsValue = 0;
         pendingRequestId = null; status = null; message = null; sawPhoneBolusing = false;
+        outcomeSentEpoch = 0;     // R2-02: clear the outcome watchdog send-stamp with the in-flight state
         includeStaleBg = false;   // AB4: the stale-BG include choice is per-attempt — never carried over
     }
 
@@ -826,12 +892,24 @@ module AppState {
     // builder, which adds "bolusPasscode" to the wire only when non-null. The WATCH NEVER verifies or
     // persists the code — the phone is the sole authority and denies a wrong/absent one.
     //
-    // Returns false ONLY when the P15 §2.3 / G4 policy-disabled hard guard blocked the send WITHOUT
-    // sending anything (read-only ON or Garmin bolusing OFF pushed while confirming) — the caller must
-    // then de-arm its own view-local confirm state. Returns true when a request was sent OR a terminal
-    // status was set (outOfRange), i.e. the confirm surface is done and status now owns the screen.
+    // Returns false — WITHOUT sending anything — when a hard guard blocks the send, so the caller de-arms
+    // its own view-local confirm state and the wearer re-confirms against current state:
+    //   • P15 §2.3 / G4 policy-disabled (read-only ON or Garmin bolusing OFF pushed while confirming);
+    //   • VA-07 the eligibility generation moved since the arm (therapy/policy/last-bolus changed);
+    //   • VA-07 the pump no longer permits a bolus (pumpBolusAllowed() re-check at transmit);
+    //   • R2-02 an outcome is still pending (reattemptBlocked() — never mint a second reqId in flight).
+    // Returns true when a request was sent OR a terminal status was set (outOfRange), i.e. the confirm
+    // surface is done and status now owns the screen.
     function sendBolusNow(code as Lang.String?) as Lang.Boolean {
         if (bolusPolicyDisabled()) { return false; }
+        // VA-07: refuse a send whose eligibility changed since the wearer armed (therapy/policy/last-bolus
+        // moved), and re-check the pump-side allowance right here at transmit — the caller de-arms its
+        // view-local confirm on false so the wearer re-confirms against current state (never a stale dose).
+        if (armedEligibilityGen != bolusEligibilityGen) { return false; }
+        if (!pumpBolusAllowed()) { return false; }
+        // R2-02: never mint a second reqId on top of an outcome that's still pending (double-dose decision
+        // hazard); the caller de-arms and the existing in-flight outcome flow keeps ownership of the screen.
+        if (reattemptBlocked()) { return false; }
         var reqId = RemoteComm.newRequestId();
         pendingRequestId = reqId;
         sawPhoneBolusing = false;   // reset the lost-echo recovery tracker for this request
@@ -839,6 +917,7 @@ module AppState {
             status = "outOfRange"; message = "iPhone unreachable"; return true;
         }
         status = "delivering";
+        outcomeSentEpoch = Time.now().value();   // R2-02: stamp send-time for the outcome watchdog
         // Carbs mode: send carbsGrams (+ bg + this watch's estimate) so the phone is the single
         // calculator and can run the divergence guard. Units mode: send the units as before.
         if (mode.equals("carbs")) {
@@ -853,6 +932,58 @@ module AppState {
             RemoteComm.send(RemoteComm.bolusRequest(deliverUnits, reqId, code));
         }
         return true;
+    }
+
+    // R2-02: an outcome is PENDING while a bolus/cancel we sent hasn't reached an authoritative terminal
+    // state — only "delivering"/"cancelling" (delivered/cancelled/failed/unknown/outOfRange are terminal).
+    // Pure/deterministic → unit-testable.
+    function outcomePending() as Lang.Boolean {
+        return status != null && (status.equals("delivering") || status.equals("cancelling"));
+    }
+
+    // R2-02: the outcome deadline has passed with no authoritative terminal echo. Guards on
+    // outcomeSentEpoch > 0 so a pending status with no send-stamp can never spuriously expire.
+    function outcomeDeadlineExpired() as Lang.Boolean {
+        return outcomePending() && outcomeSentEpoch > 0
+            && (Time.now().value() - outcomeSentEpoch) > OUTCOME_DEADLINE_SEC;
+    }
+
+    // R2-02: the watchdog tick. Flips a stuck delivering/cancelling to an honest "unknown" once the
+    // deadline expires — NEVER fabricating delivered/cancelled. KEEPS pendingRequestId so a late
+    // authoritative echo (by requestId) can still upgrade the outcome. Returns true when it changed state
+    // so the caller (HoldView timer / FaBolusApp poll) can Ui.requestUpdate(). Idempotent once flipped.
+    function tickOutcomeWatchdog() as Lang.Boolean {
+        if (!outcomeDeadlineExpired()) { return false; }
+        status = "unknown";
+        if (message == null) { message = "No response — check the pump/t:connect history."; }
+        return true;
+    }
+
+    // R2-02: clear ALL in-flight bolus state — used by HoldDelegate.onBack() so a back-out doesn't orphan
+    // a "delivering" status + pendingRequestId (a stale outcome left on screen that could confuse a later
+    // attempt). The phone owns the actual delivery + its own (peer,requestId) ledger, so forgetting the
+    // local view state here never re-triggers or double-doses.
+    function clearInFlight() as Void {
+        status = null; message = null; pendingRequestId = null;
+        sawPhoneBolusing = false; outcomeSentEpoch = 0;
+    }
+
+    // R2-02: a NEW send must be refused while an outcome is still pending — never mint a second reqId on
+    // top of an in-flight one. Checked in sendBolusNow before minting.
+    function reattemptBlocked() as Lang.Boolean {
+        return outcomePending();
+    }
+
+    // R2-19 (pure): the base poll delay (ms) for a given consecutive-miss backoff level — POLL_BASE_MS
+    // doubled per level, capped at POLL_MAX_MS. level 0 => 15000, 1 => 30000, 2 => 60000, 3+ => 120000.
+    // Jitter + the outstanding-gate live in FaBolusApp (sim/hardware-only); this pure step is unit-tested.
+    function pollBaseDelayMs(level as Lang.Number) as Lang.Number {
+        var d = POLL_BASE_MS;
+        for (var i = 0; i < level; i += 1) {
+            d *= 2;
+            if (d > POLL_MAX_MS) { d = POLL_MAX_MS; }
+        }
+        return d;
     }
 
     // G5 (Garmin half): a one-time, plain-language notice shown the first time the wearer opens the
@@ -1089,6 +1220,9 @@ module AppState {
     function handle(data as Lang.Dictionary) as Void {
         var kind = data["kind"] as Lang.String?;
         if (kind == null) { return; }
+        // R2-03: any well-formed inbound reply (statusRead OR bolusStatus) proves the faBolus app is
+        // alive — stamp the liveness anchor before dispatching. appLive()/canBolus() read this.
+        lastReplyEpoch = Time.now().value();
         if (kind.equals("statusRead")) {
             // Guard the assignment (audit): a partial statusRead that omits bgMgdl must NOT null out the
             // last-known glucose (which would blank the value + disable correction dosing). Keep last.
@@ -1377,6 +1511,13 @@ module AppState {
                 glucoseUnit = gu;
                 Storage.setValue("glucoseDisplayUnit", glucoseUnit);
             }
+            // VA-07: after EVERY field above is parsed, recompute the bolus eligibility fingerprint. When
+            // it changes from the last-seen one, bump the generation — any armed confirm whose snapshot
+            // (armedEligibilityGen) predates the bump is now stale and is torn down / refused at send.
+            // The first statusRead only establishes the baseline (_prevEligibilityFp == null ⇒ no bump).
+            var fp = eligibilityFingerprint();
+            if (_prevEligibilityFp != null && !fp.equals(_prevEligibilityFp)) { bolusEligibilityGen += 1; }
+            _prevEligibilityFp = fp;
         } else if (kind.equals("bolusStatus")) {
             var rid = strCap(data["requestId"], 64);
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {

@@ -6,6 +6,7 @@ using Toybox.Time;
 using Toybox.System;
 using Toybox.Timer;
 using Toybox.Attention;
+using Toybox.Math;
 using Toybox.Lang;
 
 // App entry. Glance-first: requests pump status from the phone on launch and every 30s, listens
@@ -16,6 +17,13 @@ class FaBolusApp extends App.AppBase {
     private var _timer as Timer.Timer?;
     private var _eating as EatingRelay?;   // wrist eating-sensing relay (phone-gated)
     private var _hr as HeartRateRelay?;    // ambient HR relay (phone-gated; rides the status tick)
+    // R2-19: self-rescheduling poll state. `_pollOutstanding` is true between sending a statusRead and its
+    // reply arriving (statusRead replies aren't reqId-correlated, so "outstanding" is tracked by arrival —
+    // cleared in onPhoneMessage); `_pollSentEpoch` is when the outstanding poll was sent (Unix sec);
+    // `_backoff` is the consecutive-miss level (0..4) feeding AppState.pollBaseDelayMs().
+    private var _backoff as Lang.Number = 0;
+    private var _pollOutstanding as Lang.Boolean = false;
+    private var _pollSentEpoch as Lang.Number = 0;
     // True once a real view is on the stack (set in getInitialView). Gates surfacing a background-
     // arrived alert: a CIQ app must not pushView before its first view exists (cold-launch order is
     // onStart → onBackgroundData → getInitialView), so onBackgroundData only vibrates/pushes once this
@@ -29,9 +37,10 @@ class FaBolusApp extends App.AppBase {
         AppState.loadPersisted();            // show last-known BG instantly (no "--" flash)
         AppState.loadPrefs();                // restore configured screen order + default screen
         BgComplication.publish(null, null, 0);  // re-publish last-known reading to the complication
-        requestStatus();
-        _timer = new Timer.Timer();
-        _timer.start(method(:requestStatus), 15000, true);   // refresh every 15s while open
+        // R2-19: kick off the self-rescheduling poll — pollTick() sends an immediate statusRead and arms
+        // the next one-shot (base 15s + jitter, backing off when replies go missing). Replaces the old
+        // fixed 15s repeating timer (no outstanding-gate/backoff → queue+radio churn on a dead/flappy link).
+        pollTick();
         registerBackground();
     }
 
@@ -71,11 +80,40 @@ class FaBolusApp extends App.AppBase {
         }
     }
 
-    function requestStatus() as Void {
+    // R2-19: one poll tick. Runs the R2-02 outcome-watchdog backstop, applies the outstanding-gate +
+    // backoff, sends a statusRead (unless a prior one is still within its reply deadline), then arms the
+    // next one-shot via scheduleNextPoll(). Re-armed by itself — never a fixed repeating timer.
+    function pollTick() as Void {
+        // R2-02 backstop: advance a stuck in-flight outcome even if no phone reply ever arrives. This is
+        // the reschedule loop the batch guidance relies on to keep the watchdog ticking.
+        if (AppState.tickOutcomeWatchdog()) { Ui.requestUpdate(); }
+        var now = Time.now().value();
+        // Outstanding-gate: a prior poll is still awaiting its reply within the reply deadline → don't
+        // pile on another statusRead; just reschedule and let it land (or time out into backoff below).
+        if (_pollOutstanding && (now - _pollSentEpoch) < AppState.POLL_REPLY_DEADLINE_SEC) {
+            scheduleNextPoll();
+            return;
+        }
+        // A prior poll went unanswered past its reply deadline → back off (capped at level 4).
+        if (_pollOutstanding && _backoff < 4) { _backoff += 1; }
         RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRequestId()));
+        _pollOutstanding = true;
+        _pollSentEpoch = now;
         // Piggyback ambient HR on the existing status cadence (D-08) — no new timer/radio wake. No-op
         // unless the phone's hr_ctl toggle enabled it (D-09).
         if (_hr != null) { _hr.emitIfDue(); }
+        scheduleNextPoll();
+    }
+
+    // R2-19: arm the next one-shot poll. Backoff is SUPPRESSED (level 0, fast cadence) while an outcome is
+    // pending so a terminal-echo recovery is quick; otherwise it follows `_backoff`. A random jitter (0..
+    // 3999 ms) decorrelates repeated polls / multiple watches from hammering the phone in lockstep.
+    function scheduleNextPoll() as Void {
+        var level = AppState.outcomePending() ? 0 : _backoff;
+        var delay = AppState.pollBaseDelayMs(level) + (Math.rand() % 4000);
+        if (_timer != null) { _timer.stop(); }
+        _timer = new Timer.Timer();
+        _timer.start(method(:pollTick), delay, false);   // one-shot; pollTick re-arms
     }
 
     function onPhoneMessage(msg as Comm.PhoneAppMessage) as Void {
@@ -96,6 +134,14 @@ class FaBolusApp extends App.AppBase {
                 return;
             }
             AppState.handle(data as Lang.Dictionary);
+            // R2-19: a statusRead reply clears the poll-outstanding gate and resets backoff so the fast
+            // cadence resumes as soon as the phone is answering again. statusRead replies aren't reqId-
+            // correlated — the arrival of ANY statusRead is the "the poll was answered" signal.
+            var kind = data["kind"];
+            if (kind instanceof Lang.String && (kind as Lang.String).equals("statusRead")) {
+                _pollOutstanding = false;
+                _backoff = 0;
+            }
             BgComplication.publishFromState();
             notifyNewAlerts(true);   // foreground: the app is open, so a view is up — safe to surface
             Ui.requestUpdate();

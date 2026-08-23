@@ -70,6 +70,10 @@ class BolusEntryDelegate extends Ui.BehaviorDelegate {
     // caller leaves the compose screen up. Shared by the fresh path and the AB4 three-way choice.
     static function captureDose() as Lang.Boolean {
         AppState.deliverUnits = AppState.computeUnits();
+        // VA-07: snapshot the current eligibility generation as we arm this dose. A later statusRead that
+        // changes the eligibility fingerprint bumps AppState.bolusEligibilityGen past this snapshot, which
+        // tears the armed confirm down (mustTeardownArmedBolus) / refuses the send (sendBolusNow).
+        AppState.armBolus();
         return AppState.deliverUnits >= 0.05;
     }
 }

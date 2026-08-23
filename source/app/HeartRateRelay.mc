@@ -5,7 +5,7 @@ using Toybox.Time;
 using Toybox.Lang;
 
 // Ambient heart-rate relay → piggybacks the newest AMBIENT HR sample onto the phone on the EXISTING
-// status cadence (co-scheduled with FaBolusApp.requestStatus — no new timer / radio wake). Chart context
+// status cadence (co-scheduled with FaBolusApp.pollTick — no new timer / radio wake). Chart context
 // only; HR rides an out-of-band `hr_window` envelope the phone's GarminRemoteBridge parses BEFORE
 // RemoteCommand, so HR is NEVER a signed dose input.
 //
@@ -33,7 +33,7 @@ class HeartRateRelay {
     // clears the dedup cursor so a re-enable transmits the next sample fresh rather than suppressing it.
     function stop() as Void { _enabled = false; _lastEpoch = null; }
 
-    // Called from FaBolusApp.requestStatus() (the existing 15s status tick). Reads the single most-recent
+    // Called from FaBolusApp.pollTick() (the existing ~15s status tick). Reads the single most-recent
     // ambient HR sample and, if valid + phone-connected, sends the out-of-band `hr_window` envelope the
     // phone parses (samples = [[bpm, epoch]]). No-op when disabled or when the device lacks HR history.
     function emitIfDue() as Void {

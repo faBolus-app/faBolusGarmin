@@ -10,11 +10,16 @@ using Toybox.Test;
 module HoldTeardownTest {
 
     // Restore the safe, bolus-enabled baseline (read-only off, Garmin bolusing on, nothing in flight) so
-    // each case starts deterministically regardless of test order / prior state.
+    // each case starts deterministically regardless of test order / prior state. VA-07: also SYNC the
+    // eligibility generations (armBolus() snapshots the current gen) so the new stale-arm dimension is
+    // neutral here — these cases exercise the POLICY dimension of mustTeardownArmedBolus(); the eligibility
+    // dimension is pinned in ArmedDoseGenTest. Without this sync a prior test's statusRead could leave
+    // bolusEligibilityGen ahead of the never-armed armedEligibilityGen and spuriously force a teardown.
     function armedBaseline() as Void {
         AppState.readOnly = false;
         AppState.garminBolusEnabled = true;
         AppState.status = null;
+        AppState.armBolus();   // armedEligibilityGen = bolusEligibilityGen → no stale-arm teardown
     }
 
     // Enabled + not read-only + pre-delivery ⇒ nothing to tear down.
