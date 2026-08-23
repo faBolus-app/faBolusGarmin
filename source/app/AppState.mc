@@ -958,6 +958,14 @@ module AppState {
         return status != null && (status.equals("delivering") || status.equals("cancelling"));
     }
 
+    // VA-15: a bolus status is TERMINAL once it reaches an authoritative outcome — delivered/cancelled/failed,
+    // plus 'unknown' as a degraded-terminal (R2-02's honest timeout). The complement of outcomePending's
+    // non-terminal set (delivering/cancelling). Pure/deterministic → unit-testable. Used to stop a late
+    // duplicate NON-terminal echo (same requestId) from regressing an authoritative terminal in handle().
+    function isTerminalStatus(s as Lang.String?) as Lang.Boolean {
+        return s != null && (s.equals("delivered") || s.equals("cancelled") || s.equals("failed") || s.equals("unknown"));
+    }
+
     // R2-02: the outcome deadline has passed with no authoritative terminal echo. Guards on
     // outcomeSentEpoch > 0 so a pending status with no send-stamp can never spuriously expire.
     function outcomeDeadlineExpired() as Lang.Boolean {
@@ -1253,11 +1261,25 @@ module AppState {
     // service is waiting for? The background poll sends a statusRead and must publish + exit ONLY on the
     // matching reply — an unrelated dict (an eating_sense/hr_ctl toggle, a stray bolusStatus echo, or an
     // empty {}) that lands first must be IGNORED (not mistaken for the reply, which would exit early and
-    // drop the fresh read). statusRead replies aren't reqId-correlated on the wire yet (a fully-correlated
-    // version is a follow-up), so `kind=="statusRead"` is the discriminator.
+    // drop the fresh read). This is the KIND discriminator, retained as the R2-15 fallback for a legacy
+    // phone that does not echo the requestId; `isCorrelatedStatusReply` layers true id correlation on top.
     function isStatusReply(dict as Lang.Dictionary) as Lang.Boolean {
         var kind = dict["kind"];
         return kind instanceof Lang.String && (kind as Lang.String).equals("statusRead");
+    }
+
+    // R2-15 (pure): TRUE request-id correlation for a statusRead reply. The watch mints a requestId for its
+    // statusRead REQUEST and retains it; the phone now ECHOES that id in its reply (faBolus
+    // AppModel.statusCommand(replyingTo:)). Accept a reply as OURS iff it is a statusRead (kind) AND its
+    // echoed requestId matches the one we minted. A reply with NO requestId is a legacy phone that doesn't
+    // echo → fall back to the kind discrimination only (backward-compatible). A mismatching requestId is a
+    // stale/other reply and is rejected. `mintedReqId == null` (we didn't retain one) also falls back to
+    // kind. Deterministic → unit-testable.
+    function isCorrelatedStatusReply(dict as Lang.Dictionary, mintedReqId as Lang.String?) as Lang.Boolean {
+        if (!isStatusReply(dict)) { return false; }
+        var rid = strCap(dict["requestId"], 64);
+        if (rid == null || mintedReqId == null) { return true; }   // legacy phone (no echo) / no retained id → kind fallback
+        return rid.equals(mintedReqId);
     }
 
     function handle(data as Lang.Dictionary) as Void {
@@ -1569,12 +1591,21 @@ module AppState {
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {
                 // GA-09: only adopt a recognized status token, and cap the message length.
                 var st = data["status"];
-                if (st instanceof Lang.String && containsStr(STATUS_TOKENS, st as Lang.String)) { status = st; }
-                message = data.hasKey("message") ? strCap(data["message"], 160) : null;
-                // Reflect the actual delivered amount from the outcome echo so "Last bolus" shows the
-                // just-delivered value immediately (e.g. 0.05), not the previous bolus.
-                if (status != null && (status.equals("delivered") || status.equals("cancelled"))) {
-                    var du = fltRange(data["deliveredUnits"], 0.0, 100.0); if (du != null) { lastBolus = du; }
+                var incoming = (st instanceof Lang.String && containsStr(STATUS_TOKENS, st as Lang.String)) ? st as Lang.String : null;
+                // VA-15: never regress an authoritative TERMINAL outcome (delivered/cancelled/failed/unknown)
+                // to a late duplicate NON-terminal token (delivering/cancelling) that arrives with the SAME
+                // requestId — a delayed/retransmitted echo must not overwrite the real result. A later
+                // TERMINAL may still replace a terminal (e.g. delivered → cancelled-partial). Mirrors
+                // noteBolusSendFailed's "never regress a terminal" guard.
+                var regresses = incoming != null && isTerminalStatus(status) && !isTerminalStatus(incoming);
+                if (!regresses) {
+                    if (incoming != null) { status = incoming; }
+                    message = data.hasKey("message") ? strCap(data["message"], 160) : null;
+                    // Reflect the actual delivered amount from the outcome echo so "Last bolus" shows the
+                    // just-delivered value immediately (e.g. 0.05), not the previous bolus.
+                    if (status != null && (status.equals("delivered") || status.equals("cancelled"))) {
+                        var du = fltRange(data["deliveredUnits"], 0.0, 100.0); if (du != null) { lastBolus = du; }
+                    }
                 }
             }
         }
