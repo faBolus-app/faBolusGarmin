@@ -159,24 +159,24 @@ class FaBolusApp extends App.AppBase {
     // pushView therefore only ever happen in the foreground; the background never fakes them.
     private function notifyNewAlerts(canSurface as Lang.Boolean) as Void {
         if (!canSurface) { return; }
-        var seen = AppState.loadSeenAlerts();
-        var firstNew = null;   // most-serious NEW alert (the list is most-serious first)
-        var active = [];       // identities currently active, used to rewrite the seen-set
-        for (var i = 0; i < AppState.alerts.size(); i += 1) {
-            var a = AppState.alerts[i] as Lang.Dictionary;
-            var id = AppState.alertIdentity(a);
-            active.add(id);
-            if (firstNew == null && !AppState.containsStr(seen, id)) { firstNew = a; }
+        // VA-13: surface EVERY genuinely-new alert, not just the most-serious one. The old code found only
+        // `firstNew` but marked ALL active identities seen — so a 2nd simultaneous new alert was suppressed
+        // forever. newAlertsSince() returns the new ones (most-serious first); we then rewrite the seen-set
+        // to exactly the active identities (a cleared alert drops out and re-notifies if it re-fires).
+        var newAlerts = AppState.newAlertsSince(AppState.loadSeenAlerts());
+        AppState.saveSeenAlerts(AppState.activeAlertIdentities());
+        if (newAlerts.size() == 0) { return; }
+        // Vibrate ONCE for the batch, then push a Confirmation for EACH new alert. Push LEAST-serious
+        // first (iterate the most-serious-first list in reverse) so the most-serious confirmation ends on
+        // TOP of the view stack — the one the wearer sees + acts on first. Bounded by sanitizeAlerts +
+        // AlertsListView.MAX_ROWS == 4.
+        if (Attention has :vibrate) {
+            Attention.vibrate([new Attention.VibeProfile(75, 400)]);
         }
-        // Rewrite the seen-set to exactly the active identities: newly-surfaced ones are added, and a
-        // cleared alert drops out — so if it re-fires later it counts as new again and re-notifies.
-        AppState.saveSeenAlerts(active);
-        if (firstNew != null) {
-            if (Attention has :vibrate) {
-                Attention.vibrate([new Attention.VibeProfile(75, 400)]);
-            }
-            Ui.pushView(new Ui.Confirmation("Pump alert: " + firstNew["title"] + " — clear?"),
-                        new AlertConfirmDelegate(firstNew["id"], firstNew["kind"]), Ui.SLIDE_UP);
+        for (var i = newAlerts.size() - 1; i >= 0; i -= 1) {
+            var a = newAlerts[i] as Lang.Dictionary;
+            Ui.pushView(new Ui.Confirmation("Pump alert: " + a["title"] + " — clear?"),
+                        new AlertConfirmDelegate(a["id"], a["kind"]), Ui.SLIDE_UP);
         }
     }
 

@@ -14,14 +14,16 @@ class AlertConfirmDelegate extends Ui.ConfirmationDelegate {
 
     function onResponse(response) as Lang.Boolean {
         if (response == Ui.CONFIRM_YES) {
-            RemoteComm.send(RemoteComm.dismissAlert(RemoteComm.newRequestId(), _id, _kind));
-            // Optimistically remove locally.
-            var kept = [];
-            for (var i = 0; i < AppState.alerts.size(); i += 1) {
-                var a = AppState.alerts[i] as Lang.Dictionary;
-                if (!(a["id"] == _id && a["kind"] == _kind)) { kept.add(a); }
+            // VA-14: only remove the alert locally if the dismiss was actually DISPATCHED to the phone.
+            // If offline (send returns false), the alert is still active on the pump — leave it in the
+            // list and set the transient offline flag so AlertsListView shows "not cleared" instead of a
+            // dishonest "No alerts". The phone's next authoritative statusRead reconciles either way.
+            var dispatched = RemoteComm.send(RemoteComm.dismissAlert(RemoteComm.newRequestId(), _id, _kind));
+            if (dispatched) {
+                AppState.removeAlert(_id, _kind);   // optimistic local removal
+            } else {
+                AppState.alertDismissFailedOffline = true;
             }
-            AppState.alerts = kept;
             Ui.requestUpdate();
         }
         return true;

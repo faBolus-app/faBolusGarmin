@@ -48,9 +48,17 @@ class AlertsListView extends Ui.View {
             dc.drawRoundedRectangle(rr0[0], rr0[1], rr0[2], rr0[3], 8);
             dc.setPenWidth(1);
         }
-        // Hint at the bottom (wider part of the round screen), only when there are alerts.
-        dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY,
-                    DeviceProfile.isButtons() ? "press to clear top" : "tap a row to clear", vc);
+        // VA-14: when an alert-dismiss couldn't be dispatched (phone unreachable), the alert was NOT
+        // removed locally — say so instead of the tap/press hint, so the wearer isn't told it cleared
+        // while it's still active on the pump. The flag is transient (cleared on the next phone reply).
+        if (AppState.alertDismissFailedOffline) {
+            dc.setColor(Gfx.COLOR_RED, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, "Phone not connected — not cleared", vc);
+        } else {
+            // Hint at the bottom (wider part of the round screen), only when there are alerts.
+            dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY,
+                        DeviceProfile.isButtons() ? "press to clear top" : "tap a row to clear", vc);
+        }
     }
 }

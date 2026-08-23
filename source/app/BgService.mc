@@ -14,6 +14,12 @@ class BgServiceDelegate extends System.ServiceDelegate {
     function initialize() { ServiceDelegate.initialize(); }
 
     function onTemporalEvent() as Void {
+        // R2-16: the background service is a SEPARATE process from the foreground app — its AppState
+        // starts at compile-time defaults. Restore the persisted prefs (staleness policy, display unit,
+        // etc.) BEFORE the first publish so the "keep last-known reading" republish (and any "--"/stale
+        // rendering) uses the phone-configured policy, not the defaults (e.g. a wrong staleSec would
+        // mis-judge whether the last reading should show as stale).
+        AppState.loadPrefs();
         BgComplication.publish(null, null, 0);   // keep last-known reading visible (or "--" if stale)
 
         if (System.getDeviceSettings().phoneConnected) {
@@ -32,6 +38,12 @@ class BgServiceDelegate extends System.ServiceDelegate {
     function onPhoneMessage(msg as Comm.PhoneAppMessage) as Void {
         var data = msg.data;
         if (data instanceof Lang.Dictionary) {
+            // R2-15/VA-16: this service sent a statusRead and must publish + exit ONLY on the matching
+            // statusRead reply. A non-statusReply dict (an eating_sense/hr_ctl toggle, a stray bolusStatus
+            // echo, etc.) that lands first is IGNORED — return WITHOUT exiting so the service stays alive
+            // for the real reply (the system still bounds our total runtime). Exiting on it would drop the
+            // fresh read we're waiting for and republish stale state.
+            if (!AppState.isStatusReply(data as Lang.Dictionary)) { return; }
             AppState.handle(data as Lang.Dictionary);
             BgComplication.publishFromState();
             // A background service process CANNOT vibrate or pushView, so it must not surface a new

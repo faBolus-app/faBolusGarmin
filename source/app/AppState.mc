@@ -69,6 +69,11 @@ module AppState {
     // historyEpochs is empty — never a partial/off-by-one array (see the lockstep parse in handle()).
     var historyEpochs as Lang.Array = [];
     var alerts as Lang.Array = [];        // active pump alerts: dicts {id, kind, title}
+    // VA-14: transient — set true by AlertConfirmDelegate when a "clear alert" dismiss couldn't be
+    // dispatched (phone unreachable) so the alert was NOT removed locally; AlertsListView renders a
+    // "Phone not connected — not cleared" notice. Cleared at the top of the next handle() (any phone
+    // reply reconciles the alerts list authoritatively). Never persisted — purely a UI hint.
+    var alertDismissFailedOffline as Lang.Boolean = false;
     var plotHours as Lang.Number = 3;     // history-plot window: 3 → 6 → 12 → 24 → 3
     // Phase 09.13 (glucose plot height customization, D-05/D-06/D-07/D-08/D-10): the Garmin Y-axis
     // plot floor/ceiling, mg/dL. Garmin is in the SMALL-SCREEN group (same as the Apple Watch) — the
@@ -920,6 +925,9 @@ module AppState {
         outcomeSentEpoch = Time.now().value();   // R2-02: stamp send-time for the outcome watchdog
         // Carbs mode: send carbsGrams (+ bg + this watch's estimate) so the phone is the single
         // calculator and can run the divergence guard. Units mode: send the units as before.
+        // VA-12: dispatch through RemoteComm.sendBolus (NOT the fire-and-forget send) so a transmit that
+        // fails is reported back — dispatched==false means nothing went out.
+        var dispatched = false;
         if (mode.equals("carbs")) {
             // AB4 (Addendum B): fresh → the reading; stale → included only on the explicit per-attempt
             // "include" choice, else nil-dropped (carbs-only). bgForBolus() encapsulates that decision.
@@ -927,9 +935,18 @@ module AppState {
             // cleared by reset()) so the host can honor an acknowledged-stale correction instead of failing
             // closed to carbs-only. The builder omits it entirely unless true (never sent on units mode).
             var bg = bgForBolus();
-            RemoteComm.send(RemoteComm.bolusRequestCarbs(carbsValue, bg, deliverUnits, reqId, code, includeStaleBg));
+            dispatched = RemoteComm.sendBolus(RemoteComm.bolusRequestCarbs(carbsValue, bg, deliverUnits, reqId, code, includeStaleBg), reqId);
         } else {
-            RemoteComm.send(RemoteComm.bolusRequest(deliverUnits, reqId, code));
+            dispatched = RemoteComm.sendBolus(RemoteComm.bolusRequest(deliverUnits, reqId, code), reqId);
+        }
+        // VA-12: a synchronously-failed dispatch (the phone dropped between the reachability check above
+        // and transmit, or Comm.transmit threw) must surface as "failed" — never a stuck "delivering…".
+        // An ASYNC transport failure AFTER a true dispatch is caught by BolusCommListener.onError →
+        // noteBolusSendFailed(reqId). We keep pendingRequestId so a late authoritative echo can still
+        // upgrade the outcome.
+        if (!dispatched) {
+            status = "failed";
+            if (message == null) { message = "Send failed — not delivered."; }
         }
         return true;
     }
@@ -972,6 +989,21 @@ module AppState {
     // top of an in-flight one. Checked in sendBolusNow before minting.
     function reattemptBlocked() as Lang.Boolean {
         return outcomePending();
+    }
+
+    // VA-12: mark an in-flight bolus send as FAILED — pure/guarded so it can never regress a terminal
+    // outcome or touch the wrong request. Called by RemoteComm.BolusCommListener.onError (async transport
+    // failure) and by sendBolusNow itself when the synchronous dispatch reports false. No-op unless there
+    // IS an in-flight request (pendingRequestId non-null), the reqId matches it (a late error for a
+    // superseded/other request — or a null reqId — is ignored), and the status is still pending
+    // (delivering|cancelling): a terminal delivered/cancelled/unknown/failed is NEVER regressed. Keeps
+    // pendingRequestId so a later authoritative bolusStatus echo can still upgrade the outcome.
+    function noteBolusSendFailed(reqId as Lang.String?) as Void {
+        if (pendingRequestId == null) { return; }
+        if (reqId == null || !reqId.equals(pendingRequestId)) { return; }
+        if (!outcomePending()) { return; }
+        status = "failed";
+        if (message == null) { message = "Send failed — not delivered."; }
     }
 
     // R2-19 (pure): the base poll delay (ms) for a given consecutive-miss backoff level — POLL_BASE_MS
@@ -1217,12 +1249,26 @@ module AppState {
     }
 
     // Route an inbound phone message.
+    // R2-15/VA-16 (pure): is this inbound phone message the correlated statusRead reply the background
+    // service is waiting for? The background poll sends a statusRead and must publish + exit ONLY on the
+    // matching reply — an unrelated dict (an eating_sense/hr_ctl toggle, a stray bolusStatus echo, or an
+    // empty {}) that lands first must be IGNORED (not mistaken for the reply, which would exit early and
+    // drop the fresh read). statusRead replies aren't reqId-correlated on the wire yet (a fully-correlated
+    // version is a follow-up), so `kind=="statusRead"` is the discriminator.
+    function isStatusReply(dict as Lang.Dictionary) as Lang.Boolean {
+        var kind = dict["kind"];
+        return kind instanceof Lang.String && (kind as Lang.String).equals("statusRead");
+    }
+
     function handle(data as Lang.Dictionary) as Void {
         var kind = data["kind"] as Lang.String?;
         if (kind == null) { return; }
         // R2-03: any well-formed inbound reply (statusRead OR bolusStatus) proves the faBolus app is
         // alive — stamp the liveness anchor before dispatching. appLive()/canBolus() read this.
         lastReplyEpoch = Time.now().value();
+        // VA-14: any phone reply reconciles the alerts list authoritatively, so clear the transient
+        // offline-dismiss notice here (its lifetime is "until the next handle()").
+        alertDismissFailedOffline = false;
         if (kind.equals("statusRead")) {
             // Guard the assignment (audit): a partial statusRead that omits bgMgdl must NOT null out the
             // last-known glucose (which would blank the value + disable correction dosing). Keep last.
@@ -1618,6 +1664,43 @@ module AppState {
     // handle the notifier uses to tell a genuinely NEW alert from a re-fetch of one already surfaced.
     function alertIdentity(a as Lang.Dictionary) as Lang.String {
         return a["kind"].toString() + "-" + a["id"].toString();
+    }
+
+    // VA-14 (pure): drop exactly the (id, kind) alert from the active list, leaving every other alert
+    // (and their order) untouched. The optimistic local removal after a DISPATCHED dismiss — the phone's
+    // next authoritative statusRead reconciles it. Extracted verbatim from the old inline loop in
+    // AlertConfirmDelegate so it's unit-testable (AlertConfirmDelegate is excluded from the test binary).
+    function removeAlert(id, kind) as Void {
+        var kept = [];
+        for (var i = 0; i < alerts.size(); i += 1) {
+            var a = alerts[i] as Lang.Dictionary;
+            if (!(a["id"] == id && a["kind"] == kind)) { kept.add(a); }
+        }
+        alerts = kept;
+    }
+
+    // VA-13 (pure): the active alerts whose identity is NOT in `seen` — i.e. genuinely new since the last
+    // notify — preserving the list's most-serious-first order (the phone sends `alerts` most-serious
+    // first). FaBolusApp.notifyNewAlerts surfaces EACH of these (the old code surfaced only the first but
+    // marked ALL seen, so a 2nd simultaneous new alert was suppressed forever). Bounded by sanitizeAlerts.
+    function newAlertsSince(seen as Lang.Array) as Lang.Array {
+        var out = [];
+        for (var i = 0; i < alerts.size(); i += 1) {
+            var a = alerts[i] as Lang.Dictionary;
+            if (!containsStr(seen, alertIdentity(a))) { out.add(a); }
+        }
+        return out;
+    }
+
+    // VA-13 (pure): every currently-active alert identity (most-serious-first order). notifyNewAlerts
+    // rewrites the persisted seen-set to exactly this after surfacing — so a cleared alert drops out and
+    // re-notifies if it re-fires, and newAlertsSince(activeAlertIdentities()) is empty (nothing left new).
+    function activeAlertIdentities() as Lang.Array {
+        var out = [];
+        for (var i = 0; i < alerts.size(); i += 1) {
+            out.add(alertIdentity(alerts[i] as Lang.Dictionary));
+        }
+        return out;
     }
 
     // The set of alert identities the wearer has already been notified about, persisted (as an Array of

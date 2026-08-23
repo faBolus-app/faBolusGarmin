@@ -2,6 +2,8 @@ using Toybox.Communications as Comm;
 using Toybox.Lang;
 using Toybox.System;
 using Toybox.Time;
+using Toybox.Application.Storage;
+using Toybox.WatchUi as Ui;
 
 // Phone↔remote command builder + transport. Mirrors the faBolus contract
 // (faBolus/schema/command.schema.json, source of truth; Swift mirror in faBolusCore/RemoteCommand.swift).
@@ -113,19 +115,57 @@ module RemoteComm {
     }
 
     // Sends a command dictionary to the paired phone app. No-ops safely offline; never crashes.
-    function send(cmd as Lang.Dictionary) as Void {
-        if (!phoneReachable()) { return; }
+    //
+    // VA-14: returns whether the command was DISPATCHED to the transport (true) or dropped because the
+    // phone was unreachable / Comm.transmit threw synchronously (false). Routine callers (statusRead / HR
+    // / cancel) ignore the return exactly as before — a returned-but-unused value is fine in Monkey C, so
+    // this stays backward-compatible. AlertConfirmDelegate (VA-14) reads it so an offline alert-dismiss
+    // isn't shown as cleared while the alert is still active on the pump. (For the bolus path use
+    // sendBolus(), which also reports ASYNC transport failures via BolusCommListener.)
+    function send(cmd as Lang.Dictionary) as Lang.Boolean {
+        if (!phoneReachable()) { return false; }
         try {
             Comm.transmit(cmd, null, new CommListener());
+            return true;
         } catch (e) {
             // swallow transport errors; the UI reflects reachability separately
+            return false;
         }
     }
 
+    // VA-12: the BOLUS-specific send — reports dispatch so sendBolusNow never leaves a stuck "delivering…".
+    // Returns false (no bolus went out) when the phone is unreachable or Comm.transmit throws
+    // synchronously. A LATE/ASYNC transport failure (reachable at transmit, the send fails afterward) is
+    // surfaced by BolusCommListener.onError → AppState.noteBolusSendFailed(reqId) (reqId-guarded so a late
+    // error for a superseded request is a no-op). Separate from the generic swallowing send() above, which
+    // stays fire-and-forget for routine traffic.
+    function sendBolus(cmd as Lang.Dictionary, reqId as Lang.String) as Lang.Boolean {
+        if (!phoneReachable()) { return false; }
+        try {
+            Comm.transmit(cmd, null, new BolusCommListener(reqId));
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // VA-17: a request id unique across a reboot / a background↔foreground process split / a
+    // System.getTimer() rollover. The OLD id (getTimer() ms-since-boot + a per-process module counter)
+    // collided across sessions — the host ledger keys on (peer, requestId), so a reused id could replay an
+    // old outcome or report a duplicate. The core fix is the PERSISTED monotonic sequence: read the last
+    // sequence from Storage (0 if absent — fresh install / first ever id), advance it, and persist it
+    // BEFORE composing the id, so the very next mint (in ANY process, after ANY reboot) never reuses it.
+    // Reading Storage every call keeps the two separate processes (foreground app + background service,
+    // each starting _counter at 0) globally monotonic. Folding in the wall clock (Time.now().value()) and
+    // the boot timer (System.getTimer()) is defense-in-depth. Schema: requestId is a string, minLength 1,
+    // with NO maxLength/pattern (../../schema) — the longer composite is contract-safe.
+    const KEY_REQ_SEQ = "reqSeq";
     var _counter = 0;
     function newRequestId() as Lang.String {
-        _counter += 1;
-        return System.getTimer().toString() + "-" + _counter.toString();
+        var seq = Storage.getValue(KEY_REQ_SEQ);
+        _counter = (seq instanceof Lang.Number) ? (seq as Lang.Number) + 1 : 1;
+        Storage.setValue(KEY_REQ_SEQ, _counter);
+        return Time.now().value().toString() + "-" + _counter.toString() + "-" + System.getTimer().toString();
     }
 }
 
@@ -135,4 +175,22 @@ class CommListener extends Comm.ConnectionListener {
     function initialize() { ConnectionListener.initialize(); }
     function onComplete() as Void {}
     function onError() as Void {}
+}
+
+// VA-12: the BOLUS transmit listener. Unlike CommListener (routine traffic, no-op), an ASYNC transport
+// error on a bolus send must not leave the wearer staring at a stuck "delivering…" — onError() flips the
+// in-flight status to "failed" via AppState.noteBolusSendFailed(reqId), guarded by reqId so a late error
+// for a superseded request is ignored, then requests a redraw. The authoritative terminal outcome still
+// comes from the phone's bolusStatus echo (by requestId); this only handles the send never landing.
+class BolusCommListener extends Comm.ConnectionListener {
+    private var _reqId as Lang.String;
+    function initialize(reqId as Lang.String) {
+        ConnectionListener.initialize();
+        _reqId = reqId;
+    }
+    function onComplete() as Void {}
+    function onError() as Void {
+        AppState.noteBolusSendFailed(_reqId);
+        Ui.requestUpdate();
+    }
 }
