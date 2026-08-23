@@ -11,6 +11,10 @@ using Toybox.Lang;
 // foreground opens/glances remain the reliable refresh path.
 (:background)
 class BgServiceDelegate extends System.ServiceDelegate {
+    // R2-15: the requestId minted for THIS service's statusRead request, retained so onPhoneMessage can
+    // accept ONLY the correlated reply (the phone echoes it back). Same instance handles both callbacks.
+    var mintedReqId as Lang.String? = null;
+
     function initialize() { ServiceDelegate.initialize(); }
 
     function onTemporalEvent() as Void {
@@ -25,7 +29,9 @@ class BgServiceDelegate extends System.ServiceDelegate {
         if (System.getDeviceSettings().phoneConnected) {
             Comm.registerForPhoneAppMessages(method(:onPhoneMessage));
             try {
-                Comm.transmit(RemoteComm.statusRead(RemoteComm.newRequestId()), null, new BgCommListener());
+                // R2-15: retain the minted id so we accept ONLY the phone's correlated reply (it echoes it).
+                mintedReqId = RemoteComm.newRequestId();
+                Comm.transmit(RemoteComm.statusRead(mintedReqId), null, new BgCommListener());
                 return;   // wait for the reply; the system bounds our runtime
             } catch (e) {
                 Background.exit(null);
@@ -38,12 +44,13 @@ class BgServiceDelegate extends System.ServiceDelegate {
     function onPhoneMessage(msg as Comm.PhoneAppMessage) as Void {
         var data = msg.data;
         if (data instanceof Lang.Dictionary) {
-            // R2-15/VA-16: this service sent a statusRead and must publish + exit ONLY on the matching
-            // statusRead reply. A non-statusReply dict (an eating_sense/hr_ctl toggle, a stray bolusStatus
-            // echo, etc.) that lands first is IGNORED — return WITHOUT exiting so the service stays alive
-            // for the real reply (the system still bounds our total runtime). Exiting on it would drop the
-            // fresh read we're waiting for and republish stale state.
-            if (!AppState.isStatusReply(data as Lang.Dictionary)) { return; }
+            // R2-15/VA-16: this service sent a statusRead and must publish + exit ONLY on the CORRELATED
+            // reply — the phone echoes our minted requestId, so we match on it (falling back to the kind
+            // discriminator for a legacy phone that doesn't echo). A non-reply dict (an eating_sense/hr_ctl
+            // toggle, a stray bolusStatus echo, etc.) OR a reply carrying a DIFFERENT requestId is IGNORED —
+            // return WITHOUT exiting so the service stays alive for the real reply (the system still bounds
+            // our total runtime). Exiting on it would drop the fresh read we're waiting for and republish stale.
+            if (!AppState.isCorrelatedStatusReply(data as Lang.Dictionary, mintedReqId)) { return; }
             AppState.handle(data as Lang.Dictionary);
             BgComplication.publishFromState();
             // A background service process CANNOT vibrate or pushView, so it must not surface a new

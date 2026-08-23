@@ -37,4 +37,42 @@ module StatusReplyTest {
             "non-string kind ⇒ false (never coerce / crash)");
         return true;
     }
+
+    // R2-15 (V-Audit addendum): TRUE request-id correlation. The background service retains the requestId
+    // it minted for its statusRead REQUEST; the phone now ECHOES that id in the reply
+    // (faBolus AppModel.statusCommand(replyingTo:)). A reply is OURS iff it is a statusRead AND its echoed
+    // requestId matches our minted id.
+    (:test)
+    function correlatedReplyMatchesMintedId(logger as Test.Logger) as Lang.Boolean {
+        Test.assertMessage(
+            AppState.isCorrelatedStatusReply({ "kind" => "statusRead", "requestId" => "r-42" }, "r-42"),
+            "matching echoed requestId ⇒ correlated");
+        return true;
+    }
+
+    // A statusRead reply carrying a DIFFERENT requestId is someone else's / stale — rejected. And a
+    // bolusStatus (or any non-statusRead) dict is never a correlated statusRead reply regardless of id.
+    (:test)
+    function mismatchedOrWrongKindIsNotCorrelated(logger as Test.Logger) as Lang.Boolean {
+        Test.assertMessage(
+            !AppState.isCorrelatedStatusReply({ "kind" => "statusRead", "requestId" => "r-OTHER" }, "r-42"),
+            "a statusRead reply with a different requestId is not ours");
+        Test.assertMessage(
+            !AppState.isCorrelatedStatusReply({ "kind" => "bolusStatus", "requestId" => "r-42" }, "r-42"),
+            "bolusStatus is not a statusRead reply");
+        return true;
+    }
+
+    // Backward-compat: a legacy phone that doesn't echo requestId ⇒ fall back to the kind discriminator;
+    // a null minted id (we somehow didn't retain one) also falls back to kind so a real reply isn't dropped.
+    (:test)
+    function legacyOrNoMintedIdFallsBackToKind(logger as Test.Logger) as Lang.Boolean {
+        Test.assertMessage(
+            AppState.isCorrelatedStatusReply({ "kind" => "statusRead" }, "r-42"),
+            "no echoed requestId (legacy phone) ⇒ accept on kind");
+        Test.assertMessage(
+            AppState.isCorrelatedStatusReply({ "kind" => "statusRead", "requestId" => "r-42" }, null),
+            "null minted id ⇒ kind fallback");
+        return true;
+    }
 }
