@@ -114,6 +114,16 @@ module RemoteComm {
         return System.getDeviceSettings().phoneConnected;
     }
 
+    // Unit-test seam (mirrors FaBolusApp's documented scheduleCount()/setHrRelay() test seams). The
+    // Connect IQ simulator has no phone companion, so a REAL Comm.transmit() during the unit suite pops a
+    // modal "There is no data connection … connect an Android device to ADB" dialog for EVERY send the
+    // tests drive (pollTick's statusRead, sendBolus, the cancel path) — and pollTick's re-armed poll timers
+    // keep firing more until the sim is quit. Unit builds set this true once at startup (see
+    // tests/TestEntryApp.mc) so send()/sendBolus() skip ONLY the physical radio call; the phoneReachable()
+    // gate, the returned dispatched-Bool, and the try/catch are all UNCHANGED — the tests exercise the exact
+    // same decision paths, just without the dialog. Always false in shipping (never assigned there).
+    var testSuppressTransmit = false;
+
     // Sends a command dictionary to the paired phone app. No-ops safely offline; never crashes.
     //
     // VA-14: returns whether the command was DISPATCHED to the transport (true) or dropped because the
@@ -125,7 +135,7 @@ module RemoteComm {
     function send(cmd as Lang.Dictionary) as Lang.Boolean {
         if (!phoneReachable()) { return false; }
         try {
-            Comm.transmit(cmd, null, new CommListener());
+            if (!testSuppressTransmit) { Comm.transmit(cmd, null, new CommListener()); }
             return true;
         } catch (e) {
             // swallow transport errors; the UI reflects reachability separately
@@ -142,7 +152,7 @@ module RemoteComm {
     function sendBolus(cmd as Lang.Dictionary, reqId as Lang.String) as Lang.Boolean {
         if (!phoneReachable()) { return false; }
         try {
-            Comm.transmit(cmd, null, new BolusCommListener(reqId));
+            if (!testSuppressTransmit) { Comm.transmit(cmd, null, new BolusCommListener(reqId)); }
             return true;
         } catch (e) {
             return false;
