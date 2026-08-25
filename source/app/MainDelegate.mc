@@ -19,16 +19,28 @@ class MainDelegate extends Ui.BehaviorDelegate {
     // scheduleCount) so tests/BolusSendFailedTest.mc + tests/OutcomeWatchdogTest.mc can drive the real
     // cancel path directly — onTap's Ui.ClickEvent (and onSelect/onKey's DeviceProfile.isTouch() gate on
     // a touch device like venu3s) have no test-constructible/test-controllable path in.
-    // CX-G-04/C5-04: RED — the cancel branch below still ignores RemoteComm.send()'s Bool and
-    // unconditionally sets "cancelling" with no outcomeSentEpoch re-stamp; the fix lands next commit.
     function pressBolusButton() as Lang.Boolean {
         // No bolus button on the CGM-only screen: swallow the input.
         if (!_showBolus) { return true; }
         // GA-02: read-only must block STARTING a bolus, but NEVER block CANCELLING one already in
         // flight — cancel is a safety action. So check canCancel() BEFORE the read-only gate.
         if (AppState.canCancel()) {
-            RemoteComm.send(RemoteComm.cancelBolus(AppState.pendingRequestId as Lang.String));
-            AppState.status = "cancelling";
+            // CX-G-04/C5-04: honor RemoteComm.send()'s Bool — mirrors the sibling failed-transmit
+            // handling (AppState.sendBolusNow / noteBolusSendFailed, VA-12). On a failed dispatch, do
+            // NOT flip to "cancelling" (that would look done and non-retryable — canCancel() itself
+            // doesn't consult `status`, only bolusing()+pendingRequestId, so leaving status untouched
+            // keeps the cancel retryable) and surface an error via `message`. On a successful dispatch,
+            // set "cancelling" AND re-stamp `outcomeSentEpoch` — copied verbatim from
+            // HoldDelegate.cancelDelivery — since a cancel REQUEST isn't a confirmed cancellation and
+            // needs its own watchdog deadline if no terminal echo arrives. Do NOT extend RemoteComm.mc's
+            // routine-caller send()-ignore exemption to this path.
+            var dispatched = RemoteComm.send(RemoteComm.cancelBolus(AppState.pendingRequestId as Lang.String));
+            if (dispatched) {
+                AppState.status = "cancelling";
+                AppState.outcomeSentEpoch = Time.now().value();
+            } else {
+                AppState.message = "Cancel failed — try again.";
+            }
             Ui.requestUpdate();
             return true;
         }
