@@ -37,6 +37,9 @@ class EatingRelay {
         if (_timer != null) { _timer.stop(); }
     }
 
+    // Test-observable running state (see tests/RelayResilienceTest.mc, C5-02).
+    function isRunning() as Lang.Boolean { return _running; }
+
     function beginBurst() as Void {
         if (!_running || _sensor == null) { return; }
         try {
@@ -60,6 +63,12 @@ class EatingRelay {
         var msg = { "v" => 1, "type" => "imu_window", "fs" => RATE, "n" => WINDOW,
                     "ch" => ["ax", "ay", "az", "gx", "gy", "gz"],
                     "t0" => Time.now().value(), "data" => window };
+        transmitWindow(msg);
+    }
+
+    // Isolated so a test double (see tests/RelayResilienceTest.mc) can force a synchronous throw without a
+    // real BLE transport.
+    function transmitWindow(msg as Lang.Dictionary) as Void {
         Comm.transmit(msg, null, new EatingCommListener());
     }
 }

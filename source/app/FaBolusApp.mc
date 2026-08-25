@@ -24,6 +24,10 @@ class FaBolusApp extends App.AppBase {
     private var _backoff as Lang.Number = 0;
     private var _pollOutstanding as Lang.Boolean = false;
     private var _pollSentEpoch as Lang.Number = 0;
+    // C5-01/CX-G-05 (13-04): counts scheduleNextPoll() invocations. This is the most direct externally-
+    // observable proof that the one-shot poll loop keeps re-arming itself — including when _hr.emitIfDue()
+    // throws — without needing to inspect a live Timer.Timer instance. See tests/RelayResilienceTest.mc.
+    private var _scheduleCount as Lang.Number = 0;
     // True once a real view is on the stack (set in getInitialView). Gates surfacing a background-
     // arrived alert: a CIQ app must not pushView before its first view exists (cold-launch order is
     // onStart → onBackgroundData → getInitialView), so onBackgroundData only vibrates/pushes once this
@@ -105,10 +109,19 @@ class FaBolusApp extends App.AppBase {
         scheduleNextPoll();
     }
 
+    // Test-observable proof that scheduleNextPoll() ran (see tests/RelayResilienceTest.mc, C5-01/CX-G-05).
+    function scheduleCount() as Lang.Number { return _scheduleCount; }
+
+    // Test-only seam: swap the HR relay for a double (e.g. one whose emitIfDue() throws) so
+    // RelayResilienceTest.mc can exercise pollTick's guard above without real BLE/HR hardware. Harmless in
+    // shipping use — it's the same assignment initialize() already makes.
+    function setHrRelay(hr as HeartRateRelay?) as Void { _hr = hr; }
+
     // R2-19: arm the next one-shot poll. Backoff is SUPPRESSED (level 0, fast cadence) while an outcome is
     // pending so a terminal-echo recovery is quick; otherwise it follows `_backoff`. A random jitter (0..
     // 3999 ms) decorrelates repeated polls / multiple watches from hammering the phone in lockstep.
     function scheduleNextPoll() as Void {
+        _scheduleCount += 1;
         var level = AppState.outcomePending() ? 0 : _backoff;
         var delay = AppState.pollBaseDelayMs(level) + (Math.rand() % 4000);
         if (_timer != null) { _timer.stop(); }
