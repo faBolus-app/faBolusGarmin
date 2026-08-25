@@ -126,7 +126,8 @@ module UnresolvedDeliveryTombstoneTest {
         Test.assertEqualMessage(AppState.unresolvedTombstoneDoseKey, "units:1.00", "doseKey recorded");
         var persisted = Storage.getValue(AppState.KEY_UNRESOLVED_TOMBSTONE);
         Test.assertMessage(persisted instanceof Lang.Dictionary, "persisted to Storage as a dictionary");
-        Test.assertEqualMessage(persisted["requestId"], "req-dispatched-1", "persisted requestId matches");
+        var persistedDict = persisted as Lang.Dictionary;
+        Test.assertEqualMessage(persistedDict["requestId"], "req-dispatched-1", "persisted requestId matches");
         wipeStorage();
         return true;
     }

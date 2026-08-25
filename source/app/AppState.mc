@@ -305,6 +305,20 @@ module AppState {
         if (pf0 instanceof Lang.Number && pf0 > 0 && pf0 < 1000) { plotFloor = pf0; }
         if (pc0 instanceof Lang.Number && pc0 > 0 && pc0 < 1000) { plotCeiling = pc0; }
         if (plotFloor >= plotCeiling) { plotFloor = 40; plotCeiling = 300; }   // D-01 min-gap invariant
+        // CX-G-01 (wrist half): restore the durable unresolved-delivery tombstone (if any) so a cold
+        // relaunch still knows a prior dispatch is unresolved — reattemptBlocked() consults this in
+        // sendBolusNow, independent of pendingRequestId (deliberately NOT restored here — the tombstone
+        // alone is sufficient to block a re-send; see the field's own doc comment).
+        var tomb = Storage.getValue(KEY_UNRESOLVED_TOMBSTONE);
+        if (tomb instanceof Lang.Dictionary) {
+            var trid = strCap(tomb["requestId"], 64);
+            if (trid != null) {
+                unresolvedTombstoneReqId = trid;
+                var tsa = tomb["sentAt"];
+                unresolvedTombstoneSentAt = (tsa instanceof Lang.Number) ? tsa : 0;
+                unresolvedTombstoneDoseKey = strCap(tomb["doseKey"], 64);
+            }
+        }
     }
 
     // Frozen wire-token set for the display-unit field (Pitfall 6 — never a raw enum on the wire).
@@ -849,6 +863,61 @@ module AppState {
     // terminal echo can be recovered from the connection state (see handle()).
     var sawPhoneBolusing as Lang.Boolean = false;
 
+    // CX-G-01 (wrist half): a DURABLE unresolved-delivery tombstone {requestId, sentAt, doseKey},
+    // persisted to Application.Storage — UNLIKE `pendingRequestId` above, which is in-memory only and
+    // lost on a nav/restart/kill. Written ONLY once dispatch to the phone might have occurred (i.e.
+    // AFTER RemoteComm.sendBolus returns dispatched==true in sendBolusNow, via
+    // maybeWriteUnresolvedTombstone below), NEVER at the point pendingRequestId is armed above (that
+    // happens BEFORE the phoneReachable() check; a synchronously-failed dispatch there — the outOfRange
+    // return, or a `dispatched==false` transmit failure — means nothing reached the phone, so no phone
+    // echo can EVER arrive, and a durable tombstone in that case would be an unrecoverable permanent
+    // lock — the codex HIGH this fixes). Consulted by reattemptBlocked() so a fresh sendBolusNow — even
+    // after a cold relaunch that lost pendingRequestId — is refused while unresolved. Cleared ONLY on an
+    // authoritative terminal echo (delivered/cancelled/failed) for the MATCHING requestId — see
+    // handle()'s bolusStatus branch, which checks this independently of pendingRequestId (onBack's
+    // clearInFlight() below wipes pendingRequestId/status locally WITHOUT touching the tombstone, so a
+    // back-out before the echo lands must not orphan it). `doseKey` is diagnostic content-identity
+    // metadata only — requestId is the sole correlation key used to block a re-send / clear on echo.
+    const KEY_UNRESOLVED_TOMBSTONE = "unresolvedTombstone";
+    var unresolvedTombstoneReqId as Lang.String? = null;
+    var unresolvedTombstoneSentAt as Lang.Number = 0;
+    var unresolvedTombstoneDoseKey as Lang.String? = null;
+
+    function hasUnresolvedTombstone() as Lang.Boolean {
+        return unresolvedTombstoneReqId != null;
+    }
+
+    // A short content-identity string for the tombstone's `doseKey` field — diagnostic metadata only,
+    // mirroring the mode-specific compose inputs sendBolusNow already sends on the wire (no NEW
+    // dose-identity concept introduced). The requestId, not this, is what reattemptBlocked() / the
+    // terminal-echo clear actually key on.
+    function doseKeyFor() as Lang.String {
+        return mode.equals("carbs") ? ("carbs:" + carbsValue.toString()) : ("units:" + deliverUnits.format("%.2f"));
+    }
+
+    function persistUnresolvedTombstone(reqId as Lang.String, sentAt as Lang.Number, doseKey as Lang.String) as Void {
+        unresolvedTombstoneReqId = reqId;
+        unresolvedTombstoneSentAt = sentAt;
+        unresolvedTombstoneDoseKey = doseKey;
+        Storage.setValue(KEY_UNRESOLVED_TOMBSTONE, { "requestId" => reqId, "sentAt" => sentAt, "doseKey" => doseKey });
+    }
+
+    function clearUnresolvedTombstone() as Void {
+        unresolvedTombstoneReqId = null;
+        unresolvedTombstoneSentAt = 0;
+        unresolvedTombstoneDoseKey = null;
+        Storage.deleteValue(KEY_UNRESOLVED_TOMBSTONE);
+    }
+
+    // codex HIGH: the write is gated on `dispatched` here, structurally separated from sendBolusNow's
+    // own control flow, specifically so "no durable tombstone unless dispatch might have occurred" is
+    // directly unit-testable — RemoteComm.sendBolus's own true/false outcome depends on
+    // System.getDeviceSettings().phoneConnected, which is not sim-controllable in this environment (see
+    // tests/UnresolvedDeliveryTombstoneTest.mc, which drives this seam with both booleans directly).
+    function maybeWriteUnresolvedTombstone(dispatched as Lang.Boolean, reqId as Lang.String, sentAt as Lang.Number, doseKey as Lang.String) as Void {
+        if (dispatched) { persistUnresolvedTombstone(reqId, sentAt, doseKey); }
+    }
+
     // VA-07: armed-dose eligibility generation. `bolusEligibilityGen` increments whenever the bolus
     // eligibility fingerprint changes on a statusRead (see handle()); `armBolus()` snapshots it into
     // `armedEligibilityGen` at compose (BolusEntryDelegate.captureDose). A mismatch means the therapy/
@@ -947,6 +1016,10 @@ module AppState {
         } else {
             dispatched = RemoteComm.sendBolus(RemoteComm.bolusRequest(deliverUnits, reqId, code), reqId);
         }
+        // CX-G-01 (wrist half): persist the durable tombstone ONLY when dispatch might have occurred —
+        // see maybeWriteUnresolvedTombstone's own doc for why this exact gate matters (codex HIGH: a
+        // provably-unsent request must never leave a permanent lock).
+        maybeWriteUnresolvedTombstone(dispatched, reqId, outcomeSentEpoch, doseKeyFor());
         // VA-12: a synchronously-failed dispatch (the phone dropped between the reachability check above
         // and transmit, or Comm.transmit threw) must surface as "failed" — never a stuck "delivering…".
         // An ASYNC transport failure AFTER a true dispatch is caught by BolusCommListener.onError →
@@ -1003,8 +1076,12 @@ module AppState {
 
     // R2-02: a NEW send must be refused while an outcome is still pending — never mint a second reqId on
     // top of an in-flight one. Checked in sendBolusNow before minting.
+    // CX-G-01 (wrist half): ALSO refused while a durable unresolved-delivery tombstone survives from a
+    // PRIOR process (a cold relaunch loses `status`/`outcomePending()`'s in-memory backing, but the
+    // tombstone is durable) — this is what makes a relaunch honor an unresolved dispatch, not just the
+    // current process's own in-memory outcome tracking.
     function reattemptBlocked() as Lang.Boolean {
-        return outcomePending();
+        return outcomePending() || hasUnresolvedTombstone();
     }
 
     // VA-12: mark an in-flight bolus send as FAILED — pure/guarded so it can never regress a terminal
@@ -1600,10 +1677,20 @@ module AppState {
             _prevEligibilityFp = fp;
         } else if (kind.equals("bolusStatus")) {
             var rid = strCap(data["requestId"], 64);
+            // GA-09: only adopt a recognized status token, and cap the message length.
+            var st = data["status"];
+            var incoming = (st instanceof Lang.String && containsStr(STATUS_TOKENS, st as Lang.String)) ? st as Lang.String : null;
+            // CX-G-01 (wrist half): clear the durable tombstone on ANY authoritative terminal echo for
+            // its requestId, independent of pendingRequestId/status — onBack's clearInFlight() may have
+            // already wiped those locally WITHOUT touching the tombstone (see its own comment), so
+            // gating the clear on pendingRequestId (which a back-out nulls) would leave a tombstone
+            // stuck forever once a matching late echo can no longer be recognized. A non-terminal echo
+            // (delivering/cancelling) must NOT clear it — the outcome is still unknown.
+            if (unresolvedTombstoneReqId != null && rid != null && rid.equals(unresolvedTombstoneReqId)
+                    && isTerminalStatus(incoming)) {
+                clearUnresolvedTombstone();
+            }
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {
-                // GA-09: only adopt a recognized status token, and cap the message length.
-                var st = data["status"];
-                var incoming = (st instanceof Lang.String && containsStr(STATUS_TOKENS, st as Lang.String)) ? st as Lang.String : null;
                 // VA-15: never regress an authoritative TERMINAL outcome (delivered/cancelled/failed/unknown)
                 // to a late duplicate NON-terminal token (delivering/cancelling) that arrives with the SAME
                 // requestId — a delayed/retransmitted echo must not overwrite the real result. A later
