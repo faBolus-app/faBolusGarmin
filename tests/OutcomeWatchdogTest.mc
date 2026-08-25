@@ -19,6 +19,10 @@ module OutcomeWatchdogTest {
         AppState.pendingRequestId = null;
         AppState.sawPhoneBolusing = false;
         AppState.outcomeSentEpoch = 0;
+        // CX-G-01 (14-07): reattemptBlocked() (used by reattemptBlockedWhilePending below) also consults
+        // the durable tombstone now — clear any leftover from another test file so this stays
+        // order-independent.
+        AppState.clearUnresolvedTombstone();
     }
 
     // Past the deadline while delivering ⇒ flip to unknown + set a message; idempotent afterward.

@@ -1,5 +1,6 @@
 using Toybox.Lang;
 using Toybox.Test;
+using Toybox.Time;
 
 // VA-07: an armed Garmin dose freezes `deliverUnits` at compose and used to survive an intervening
 // therapy/policy change (a second bolus could then be accepted by the host once its in-flight mutex

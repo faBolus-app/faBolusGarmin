@@ -525,14 +525,29 @@ module AppState {
     // VA-07: a fingerprint of everything that makes an armed Garmin dose still valid to send. When ANY of
     // these change on a statusRead the armed dose is no longer the one the wearer confirmed against, so
     // `bolusEligibilityGen` is bumped (see handle()) and the armed confirm is torn down / the send refused
-    // (re-confirm). Deterministic (no wall-clock, no reachability) → unit-testable. `lastBolus` is folded
-    // in so an OBSERVED completed bolus (a new "last bolus" amount) between arm and send also invalidates.
+    // (re-confirm). `lastBolus` is folded in so an OBSERVED completed bolus (a new "last bolus" amount)
+    // between arm and send also invalidates.
+    //
+    // CX-G-09: also folds in `appLive()` and `armContextExpired()` — liveness + elapsed-time-since-arm.
+    // Note both are evaluated ONLY from inside handle() (the sole caller), where `lastReplyEpoch` has
+    // JUST been stamped a few lines above (top of handle()) — so `appLive()` is unconditionally true at
+    // THIS evaluation point every time; it is folded in anyway so the fingerprint's identity is already
+    // liveness-aware if a future caller ever evaluates it from elsewhere. `armContextExpired()` is where
+    // the REAL signal lives here: it is false at arm and for the whole window after, but flips true once
+    // the CURRENTLY-armed context has aged past ARM_CONTEXT_STALE_SEC — so a statusRead landing after
+    // that point differs from the last-seen fingerprint and bumps the gen, tearing the stale arm down
+    // even though nothing else about eligibility changed. (The harder backstop — no intervening
+    // statusRead at all — is sendBolusNow()'s own direct armContextExpired()/appLive() re-check at the
+    // final send.) Otherwise deterministic (no OTHER wall-clock read) → unit-testable.
     function eligibilityFingerprint() as Lang.String {
         var ro = readOnly ? "1" : "0";
         var gbe = garminBolusEnabled ? "1" : "0";
         var pba = pumpBolusAllowed() ? "1" : "0";
         var bpr = bolusPasscodeRequired ? "1" : "0";
-        return ro + "|" + gbe + "|" + pba + "|" + bpr + "|" + connection + "|" + lastBolus.format("%.2f");
+        var live = appLive() ? "1" : "0";
+        var expired = armContextExpired() ? "1" : "0";
+        return ro + "|" + gbe + "|" + pba + "|" + bpr + "|" + connection + "|" + lastBolus.format("%.2f")
+            + "|" + live + "|" + expired;
     }
 
     // VA-07: snapshot the current eligibility generation at compose (BolusEntryDelegate.captureDose, after
@@ -540,6 +555,7 @@ module AppState {
     // past this snapshot → mustTeardownArmedBolus()/sendBolusNow() refuse the now-stale arm.
     function armBolus() as Void {
         armedEligibilityGen = bolusEligibilityGen;
+        armedAtEpoch = Time.now().value();   // CX-G-09: elapsed-time anchor for armContextExpired()
     }
 
     // G4 + VA-07: whether an armed, pre-delivery confirm must be torn down RIGHT NOW — nothing has been
@@ -928,6 +944,23 @@ module AppState {
     var armedEligibilityGen as Lang.Number = 0;
     var _prevEligibilityFp as Lang.String? = null;
 
+    // CX-G-09: the wall-clock instant the CURRENT arm (armBolus()) was snapshotted — 0 before the first
+    // ever arm. This is the "elapsed-time" half of CX-G-09, distinct from `appLive()`'s own liveness
+    // anchor (`lastReplyEpoch`, refreshed by every inbound reply): a dose can stay "live" the whole time
+    // (the phone keeps replying to routine polls) yet the wearer's OWN confirm can still land long after
+    // they armed it — this tracks THAT gap specifically. `armContextExpired()` is the pure decision;
+    // sendBolusNow() re-checks it at the final send (belt), and eligibilityFingerprint() folds it in so
+    // an intervening statusRead can also catch it via the existing gen-bump teardown path (suspenders).
+    var armedAtEpoch as Lang.Number = 0;
+    const ARM_CONTEXT_STALE_SEC = 120;
+
+    // CX-G-09 (pure): has the CURRENTLY-armed context aged past ARM_CONTEXT_STALE_SEC since armBolus()?
+    // Guards on armedAtEpoch > 0 so "never armed" can never spuriously read as expired. Deterministic
+    // (wall-clock only, no reachability) → unit-testable.
+    function armContextExpired() as Lang.Boolean {
+        return armedAtEpoch > 0 && (Time.now().value() - armedAtEpoch) > ARM_CONTEXT_STALE_SEC;
+    }
+
     // R2-02: outcome watchdog. `outcomeSentEpoch` is the wall-clock (Unix sec) a bolus/cancel was sent;
     // if no authoritative terminal echo arrives within OUTCOME_DEADLINE_SEC the watchdog flips a stuck
     // "delivering"/"cancelling" to an honest "unknown" (never fabricating delivered/cancelled). Distinct
@@ -979,6 +1012,10 @@ module AppState {
     //   • P15 §2.3 / G4 policy-disabled (read-only ON or Garmin bolusing OFF pushed while confirming);
     //   • VA-07 the eligibility generation moved since the arm (therapy/policy/last-bolus changed);
     //   • VA-07 the pump no longer permits a bolus (pumpBolusAllowed() re-check at transmit);
+    //   • CX-G-09 the wrist context has gone stale/offline (appLive()) or the arm itself has aged past
+    //     ARM_CONTEXT_STALE_SEC (armContextExpired()) — re-checked HERE, at the literal final send, so a
+    //     dose armed in a since-expired context is never transmitted even when no intervening statusRead
+    //     ever bumped bolusEligibilityGen to catch it;
     //   • R2-02 an outcome is still pending (reattemptBlocked() — never mint a second reqId in flight).
     // Returns true when a request was sent OR a terminal status was set (outOfRange), i.e. the confirm
     // surface is done and status now owns the screen.
@@ -988,6 +1025,12 @@ module AppState {
         // moved), and re-check the pump-side allowance right here at transmit — the caller de-arms its
         // view-local confirm on false so the wearer re-confirms against current state (never a stale dose).
         if (armedEligibilityGen != bolusEligibilityGen) { return false; }
+        // CX-G-09: re-check liveness + elapsed-time-since-arm at the FINAL send. Reuses the existing
+        // appLive() primitive (no new liveness concept) — this is the hard backstop independent of
+        // whether eligibilityFingerprint() ever got a chance to observe the change via an intervening
+        // statusRead (see that function's own CX-G-09 note).
+        if (!appLive()) { return false; }
+        if (armContextExpired()) { return false; }
         if (!pumpBolusAllowed()) { return false; }
         // R2-02: never mint a second reqId on top of an outcome that's still pending (double-dose decision
         // hazard); the caller de-arms and the existing in-flight outcome flow keeps ownership of the screen.
