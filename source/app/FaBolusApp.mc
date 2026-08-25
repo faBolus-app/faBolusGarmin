@@ -156,8 +156,6 @@ class FaBolusApp extends App.AppBase {
     // Extracted from onPhoneMessage (CX-G-03) so tests/StatusReplyTest.mc + tests/
     // PhoneMessageCastGuardTest.mc can drive the real dispatch logic directly — Comm.PhoneAppMessage is a
     // system-delivered type with no test-constructible instance. Kept non-private, mirroring pollTick().
-    // CX-G-03: RED — no reqId correlation gate yet; a mismatched-reqId statusRead reply still mutates
-    // state via AppState.handle() below exactly like before extraction. The fix lands next commit.
     function handlePhoneData(data as Lang.Dictionary) as Void {
         // Phone toggles wrist eating-sensing (out-of-band, not a RemoteCommand). Advisory feature.
         var type = data["type"];
@@ -173,12 +171,25 @@ class FaBolusApp extends App.AppBase {
             if (_hr != null) { _hr.setEnabled(data["on"] == true); }
             return;
         }
-        AppState.handle(data);
-        // R2-19: a statusRead reply clears the poll-outstanding gate and resets backoff so the fast
-        // cadence resumes as soon as the phone is answering again. statusRead replies aren't reqId-
-        // correlated — the arrival of ANY statusRead is the "the poll was answered" signal.
         var kind = data["kind"];
-        if (kind instanceof Lang.String && (kind as Lang.String).equals("statusRead")) {
+        var isStatusReadReply = (kind instanceof Lang.String) && (kind as Lang.String).equals("statusRead");
+        // CX-G-03: correlate a fg statusRead reply BEFORE any state mutation (AppState.handle() below
+        // mutates glucose/iob/carbRatio/etc.) — a mismatched-reqId reply is discarded here so it changes
+        // NOTHING (not merely "clears _pollOutstanding late"), mirroring BgServiceDelegate.onPhoneMessage
+        // exactly (reuses the SAME AppState.isCorrelatedStatusReply() the bg service uses — no second
+        // correlation implementation). RETAINED: isCorrelatedStatusReply's either-id-absent legacy
+        // fallback (a reply with no echoed requestId, or fgPollMintedReqId somehow unset, falls back to
+        // the kind discriminator) — kept because this fg path is advisory-display only (refreshes
+        // glucose/iob/etc.; it never delivers a dose, which is the ledgered phone-side path) and dropping
+        // it would break an older phone that doesn't echo requestId. Non-statusRead messages (a
+        // bolusStatus echo, etc.) are NEVER gated by this — they proceed to handle() exactly as before.
+        if (isStatusReadReply && !AppState.isCorrelatedStatusReply(data, AppState.fgPollMintedReqId)) {
+            return;
+        }
+        AppState.handle(data);
+        // R2-19: a CORRELATED statusRead reply clears the poll-outstanding gate and resets backoff so the
+        // fast cadence resumes as soon as the phone is answering again.
+        if (isStatusReadReply) {
             _pollOutstanding = false;
             _backoff = 0;
         }
