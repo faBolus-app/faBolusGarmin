@@ -880,6 +880,14 @@ module AppState {
     const POLL_BASE_MS = 15000;
     const POLL_MAX_MS = 120000;
 
+    // CX-G-03: the requestId minted for the FOREGROUND poll's statusRead REQUEST (FaBolusApp.pollTick),
+    // retained so FaBolusApp.handlePhoneData can accept ONLY the correlated reply — mirroring
+    // BgServiceDelegate.mintedReqId (BgService.mc) exactly. Before this, the fg path applied ANY
+    // statusRead-kind reply without checking it was the one WE asked for; a stale/late reply (e.g. from a
+    // superseded poll) could mutate glucose/iob/etc. isCorrelatedStatusReply() is the shared correlation
+    // primitive (already used by the bg service) — this field is the fg side's counterpart storage.
+    var fgPollMintedReqId as Lang.String? = null;
+
     function reset() as Void {
         mode = defaultMode; unitsValue = 0.0; carbsValue = 0;
         pendingRequestId = null; status = null; message = null; sawPhoneBolusing = false;

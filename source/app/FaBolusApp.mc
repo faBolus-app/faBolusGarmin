@@ -100,7 +100,12 @@ class FaBolusApp extends App.AppBase {
         }
         // A prior poll went unanswered past its reply deadline → back off (capped at level 4).
         if (_pollOutstanding && _backoff < 4) { _backoff += 1; }
-        RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRequestId()));
+        // CX-G-03: mint + RETAIN the reqId (mirrors BgServiceDelegate.mintedReqId) so handlePhoneData can
+        // accept ONLY the correlated statusRead reply — the same true id-correlation the background
+        // service already does, now applied to the foreground poll too.
+        var reqId = RemoteComm.newRequestId();
+        AppState.fgPollMintedReqId = reqId;
+        RemoteComm.send(RemoteComm.statusRead(reqId));
         _pollOutstanding = true;
         _pollSentEpoch = now;
         // Piggyback ambient HR on the existing status cadence (D-08) — no new timer/radio wake. No-op
@@ -118,6 +123,11 @@ class FaBolusApp extends App.AppBase {
 
     // Test-observable proof that scheduleNextPoll() ran (see tests/RelayResilienceTest.mc, C5-01/CX-G-05).
     function scheduleCount() as Lang.Number { return _scheduleCount; }
+
+    // Test-only seam (CX-G-03, mirrors scheduleCount()): whether a foreground poll's reply is still
+    // outstanding — lets tests/StatusReplyTest.mc assert a mismatched-reqId reply does NOT clear the
+    // gate while a matched/legacy one does. Harmless in shipping use (read-only).
+    function pollOutstanding() as Lang.Boolean { return _pollOutstanding; }
 
     // Test-only seam: swap the HR relay for a double (e.g. one whose emitIfDue() throws) so
     // RelayResilienceTest.mc can exercise pollTick's guard above without real BLE/HR hardware. Harmless in
@@ -139,33 +149,42 @@ class FaBolusApp extends App.AppBase {
     function onPhoneMessage(msg as Comm.PhoneAppMessage) as Void {
         var data = msg.data;
         if (data instanceof Lang.Dictionary) {
-            // Phone toggles wrist eating-sensing (out-of-band, not a RemoteCommand). Advisory feature.
-            var type = data["type"];
-            if (type != null && (type as Lang.String).equals("eating_sense")) {
-                if (_eating != null) {
-                    if (data["on"] == true) { _eating.start(); } else { _eating.stop(); }
-                }
-                return;
-            }
-            // Phone toggles ambient HR chart context (out-of-band, not a RemoteCommand). D-08/D-09:
-            // enables/disables the phone-gated relay; when off the watch skips reading + sending HR.
-            if (type != null && (type as Lang.String).equals("hr_ctl")) {
-                if (_hr != null) { _hr.setEnabled(data["on"] == true); }
-                return;
-            }
-            AppState.handle(data as Lang.Dictionary);
-            // R2-19: a statusRead reply clears the poll-outstanding gate and resets backoff so the fast
-            // cadence resumes as soon as the phone is answering again. statusRead replies aren't reqId-
-            // correlated — the arrival of ANY statusRead is the "the poll was answered" signal.
-            var kind = data["kind"];
-            if (kind instanceof Lang.String && (kind as Lang.String).equals("statusRead")) {
-                _pollOutstanding = false;
-                _backoff = 0;
-            }
-            BgComplication.publishFromState();
-            notifyNewAlerts(true);   // foreground: the app is open, so a view is up — safe to surface
-            Ui.requestUpdate();
+            handlePhoneData(data as Lang.Dictionary);
         }
+    }
+
+    // Extracted from onPhoneMessage (CX-G-03) so tests/StatusReplyTest.mc + tests/
+    // PhoneMessageCastGuardTest.mc can drive the real dispatch logic directly — Comm.PhoneAppMessage is a
+    // system-delivered type with no test-constructible instance. Kept non-private, mirroring pollTick().
+    // CX-G-03: RED — no reqId correlation gate yet; a mismatched-reqId statusRead reply still mutates
+    // state via AppState.handle() below exactly like before extraction. The fix lands next commit.
+    function handlePhoneData(data as Lang.Dictionary) as Void {
+        // Phone toggles wrist eating-sensing (out-of-band, not a RemoteCommand). Advisory feature.
+        var type = data["type"];
+        if (type != null && (type as Lang.String).equals("eating_sense")) {
+            if (_eating != null) {
+                if (data["on"] == true) { _eating.start(); } else { _eating.stop(); }
+            }
+            return;
+        }
+        // Phone toggles ambient HR chart context (out-of-band, not a RemoteCommand). D-08/D-09:
+        // enables/disables the phone-gated relay; when off the watch skips reading + sending HR.
+        if (type != null && (type as Lang.String).equals("hr_ctl")) {
+            if (_hr != null) { _hr.setEnabled(data["on"] == true); }
+            return;
+        }
+        AppState.handle(data);
+        // R2-19: a statusRead reply clears the poll-outstanding gate and resets backoff so the fast
+        // cadence resumes as soon as the phone is answering again. statusRead replies aren't reqId-
+        // correlated — the arrival of ANY statusRead is the "the poll was answered" signal.
+        var kind = data["kind"];
+        if (kind instanceof Lang.String && (kind as Lang.String).equals("statusRead")) {
+            _pollOutstanding = false;
+            _backoff = 0;
+        }
+        BgComplication.publishFromState();
+        notifyNewAlerts(true);   // foreground: the app is open, so a view is up — safe to surface
+        Ui.requestUpdate();
     }
 
     // When a NEW pump alert arrives, vibrate and show an actionable confirmation to clear it. "New" =
