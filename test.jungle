@@ -1,20 +1,33 @@
 # Unit-test build for the direct-pump engine (oracle-parity + resume) + the AppState statusRead parse
-# (E5 history-epochs invariant), minimal TestEntryApp entry.
+# (E5 history-epochs invariant) + (CX-G-12, 13-04) the full app lifecycle, minimal TestEntryApp entry.
 #   monkeyc -f test.jungle -o bin/faBolusGarmin-test.prg -y developer_key.der -d venu3s --unit-test -w
 #   monkeydo bin/faBolusGarmin-test.prg venu3s -t
 #
 # The AppState parse tests (tests/HistoryEpochsTest.mc, tests/GlucosePlotBoundsTest.mc — Phase 09.13
-# glucose plot height customization, D-05/D-06/D-07/D-08/D-10) need AppState.mc compiled in. AppState's
-# only app-code dependencies are RemoteComm.mc and BgComplication.mc (verified: every other capitalized
-# ref is comment-only), so we pull in exactly those three files — NOT the whole source/app tree, which
-# would drag in EatingRelay.mc and its private EatingSense barrel (absent here / in CI). GlucosePlotBoundsTest.mc
-# needs no additional source files beyond AppState.mc; the `tests` sourcePath glob below picks it up
-# automatically like every other file in tests/. excludeAnnotations drops BgComplication's no-op stub so
-# only the real (:complications) publisher compiles on venu3s.
-# VA-32 (V-Audit): DetailsView.mc is also pulled in so tests/DetailsRowYTest.mc can exercise the pure
-# DetailsView.rowY collapsed-layout guard. DetailsView depends only on AppState (already compiled) + SDK
-# WatchUi/Graphics — it references no EatingRelay/EatingSense barrel — so it compiles cleanly here (a
-# WatchUi.View subclass already compiles in this binary: see TestEntryView in tests/TestEntryApp.mc).
+# glucose plot height customization, D-05/D-06/D-07/D-08/D-10) need AppState.mc compiled in; VA-32 needs
+# DetailsView.mc (tests/DetailsRowYTest.mc). These used to be cherry-picked (AppState.mc + RemoteComm.mc +
+# BgComplication.mc + DetailsView.mc — AppState's only app-code deps, verified: every other capitalized ref
+# in it is comment-only) specifically to AVOID EatingRelay.mc and its private EatingSense barrel.
+#
+# CX-G-12 (13-04): that exclusion left the HIGH/CRIT poll-liveness (C5-01/CX-G-05, FaBolusApp.pollTick +
+# HeartRateRelay.emitIfDue) and dedup-reset (CX-G-07, FaBolusApp.notifyNewAlerts) mechanisms completely
+# outside the test binary — see the old headers on PollBackoffTest.mc/OutcomeWatchdogTest.mc/
+# HoldTeardownTest.mc ("the FaBolusApp poll that drives them isn't test-compiled — see test.jungle").
+# FaBolusApp.mc's dependency graph (onStart/getInitialView/notifyNewAlerts → Nav → the full screen carousel
+# → every View/Delegate in source/app) can't be cherry-picked without re-deriving the same closure
+# monkey.jungle already declares, so base.sourcePath now takes source/app WHOLESALE (mirroring
+# monkey.jungle/official.jungle) instead of an enumerated file list, and base.resourcePath is added to
+# resolve the Rez.Drawables/Rez.Strings references those Views pull in. base.barrelPath is declared so
+# EatingRelay.mc's `using EatingSenseKit;` resolves.
+#
+# This makes the test binary barrel-gated + Sensor/Background-permission-gated exactly like the two
+# shipping jungles: a machine without barrels/EatingSense.barrel (the private faBolusNudge SDK output)
+# can no longer build test.jungle either. That is an accepted, deliberate trade-off — CX-G-12 requires the
+# real shipping lifecycle code (not a subset) in the test binary — not a regression to fix here; see
+# 13-04-SUMMARY.md. excludeAnnotations still drops BgComplication's no-op stub so only the real
+# (:complications) publisher compiles on venu3s.
 project.manifest = manifest-test.xml
-base.sourcePath = direct-pump/engine/protocol;direct-pump/engine/auth;direct-pump/engine/messages;direct-pump/engine/ble;source/app/AppState.mc;source/app/RemoteComm.mc;source/app/BgComplication.mc;source/app/DetailsView.mc;tests
+base.sourcePath = direct-pump/engine/protocol;direct-pump/engine/auth;direct-pump/engine/messages;direct-pump/engine/ble;source/app;tests
+base.resourcePath = resources;resources-complications
+base.barrelPath = barrels/EatingSense.barrel
 base.excludeAnnotations = nocomplications
