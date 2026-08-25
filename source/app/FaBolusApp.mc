@@ -105,7 +105,14 @@ class FaBolusApp extends App.AppBase {
         _pollSentEpoch = now;
         // Piggyback ambient HR on the existing status cadence (D-08) — no new timer/radio wake. No-op
         // unless the phone's hr_ctl toggle enabled it (D-09).
-        if (_hr != null) { _hr.emitIfDue(); }
+        // C5-01/CX-G-05: emitIfDue() (its Comm.transmit) must NEVER be allowed to skip scheduleNextPoll()
+        // below — an unguarded throw here used to permanently halt the one-shot poll loop, since
+        // scheduleNextPoll() is the loop's ONLY re-arm path and lives here on FaBolusApp (NOT on
+        // HeartRateRelay). Guarded at the owner of scheduleNextPoll, not inside the relay.
+        try {
+            if (_hr != null) { _hr.emitIfDue(); }
+        } catch (e) {
+        }
         scheduleNextPoll();
     }
 

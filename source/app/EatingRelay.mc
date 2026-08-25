@@ -63,7 +63,15 @@ class EatingRelay {
         var msg = { "v" => 1, "type" => "imu_window", "fs" => RATE, "n" => WINDOW,
                     "ch" => ["ax", "ay", "az", "gx", "gy", "gz"],
                     "t0" => Time.now().value(), "data" => window };
-        transmitWindow(msg);
+        // C5-02: EatingRelay owns its OWN timer lifecycle (beginBurst/endBurst above), completely
+        // independent of FaBolusApp's poll loop — so pollTick's "scheduleNextPoll still runs" guarantee
+        // does not apply here. onWindow is invoked as an EatingSenseKit callback; an unguarded transmit
+        // throw propagating out of it could crash the relay's owning process out from under its own
+        // still-armed duty-cycle timer. Guard independently.
+        try {
+            transmitWindow(msg);
+        } catch (e) {
+        }
     }
 
     // Isolated so a test double (see tests/RelayResilienceTest.mc) can force a synchronous throw without a
