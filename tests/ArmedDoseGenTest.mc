@@ -39,6 +39,13 @@ module ArmedDoseGenTest {
         AppState.bolusPasscodeRequired = false;
         AppState.connection = "Connected";
         AppState.lastBolus = -1.0;
+        // CX-G-09 (Task 2 of this same plan): keep this baseline forward-compatible with the liveness +
+        // elapsed-time-since-arm re-checks landing in sendBolusNow/armBolus — a fresh reply + a zeroed
+        // arm-anchor mean every EXISTING case here (none of which are about liveness/elapsed-time) keeps
+        // its original pass/fail shape.
+        AppState.lastReplyEpoch = Time.now().value();
+        AppState.armedAtEpoch = 0;
+        AppState.clearUnresolvedTombstone();
     }
 
     // Unchanged eligibility across a repeat statusRead ⇒ no gen bump, no teardown, send proceeds (true).
@@ -117,6 +124,58 @@ module ArmedDoseGenTest {
         Test.assertMessage(!AppState.mustTeardownArmedBolus(),
             "gens+policy look valid ⇒ mustTeardown does NOT fire (the at-send re-check is the guard)");
         Test.assertMessage(!AppState.sendBolusNow(null), "pump-not-allowed re-check at send ⇒ refused");
+        return true;
+    }
+
+    // CX-G-09 (elapsed-time half): arm, then let the CURRENTLY-armed context age past
+    // ARM_CONTEXT_STALE_SEC (simulated directly via armedAtEpoch, mirroring how AppLivenessTest
+    // manipulates lastReplyEpoch directly). No intervening statusRead lands — gens still match — yet the
+    // direct armContextExpired() re-check at sendBolusNow's final send must refuse it regardless.
+    (:test)
+    function armContextExpiredRefusesSendEvenWithMatchingGens(logger as Test.Logger) as Lang.Boolean {
+        baseline();
+        AppState.handle(statusRead({ "canBolus" => true }));
+        AppState.armBolus();
+        Test.assertMessage(!AppState.armContextExpired(), "fresh arm ⇒ not yet expired");
+        AppState.armedAtEpoch = Time.now().value() - (AppState.ARM_CONTEXT_STALE_SEC + 1);
+        Test.assertMessage(AppState.armContextExpired(), "arm has now aged past the window");
+        Test.assertMessage(AppState.armedEligibilityGen == AppState.bolusEligibilityGen,
+            "gens still match — no intervening statusRead ever bumped them");
+        Test.assertMessage(!AppState.sendBolusNow(null), "expired arm context ⇒ send refused (CX-G-09)");
+        return true;
+    }
+
+    // The fingerprint-fold half: an intervening statusRead landing AFTER the arm has expired changes
+    // eligibilityFingerprint()'s "expired" token relative to the last-seen one, bumping the gen and
+    // tearing the stale arm down — even though nothing else (readOnly/garminBolusEnabled/pumpBolusAllowed/
+    // bolusPasscodeRequired/connection/lastBolus) changed at all.
+    (:test)
+    function interveningStatusReadAfterExpiryBumpsGenViaFingerprint(logger as Test.Logger) as Lang.Boolean {
+        baseline();
+        AppState.handle(statusRead({ "canBolus" => true }));
+        AppState.armBolus();
+        var g0 = AppState.bolusEligibilityGen;
+        AppState.armedAtEpoch = Time.now().value() - (AppState.ARM_CONTEXT_STALE_SEC + 1);
+        AppState.handle(statusRead({ "canBolus" => true }));   // otherwise IDENTICAL fingerprint inputs
+        Test.assertMessage(AppState.bolusEligibilityGen != g0,
+            "the expired-context token flipped ⇒ fingerprint changed ⇒ gen bumped");
+        Test.assertMessage(AppState.mustTeardownArmedBolus(), "stale arm ⇒ must tear down");
+        Test.assertMessage(!AppState.sendBolusNow(null), "stale arm ⇒ send refused");
+        return true;
+    }
+
+    // Positive companion: an unchanged, in-window arm across a repeat statusRead does NOT bump the gen
+    // due to the newly-folded expired/live tokens (they must stay stable across two back-to-back calls).
+    (:test)
+    function inWindowArmAcrossRepeatStatusReadStillUnchanged(logger as Test.Logger) as Lang.Boolean {
+        baseline();
+        AppState.handle(statusRead({ "canBolus" => true }));
+        AppState.armBolus();
+        var g0 = AppState.bolusEligibilityGen;
+        AppState.handle(statusRead({ "canBolus" => true }));   // still well within ARM_CONTEXT_STALE_SEC
+        Test.assertEqualMessage(AppState.bolusEligibilityGen, g0,
+            "in-window arm ⇒ the liveness/expired tokens stay stable ⇒ no spurious gen bump");
+        Test.assertMessage(AppState.sendBolusNow(null), "in-window, eligible arm ⇒ send still proceeds");
         return true;
     }
 }

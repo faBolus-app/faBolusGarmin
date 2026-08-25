@@ -105,4 +105,58 @@ module AppLivenessTest {
         Test.assertMessage(AppState.appLive(), "even a bolusStatus reply proves liveness");
         return true;
     }
+
+    // Full arm→send eligibility state, independent of ArmedDoseGenTest's own baseline() (kept local so
+    // this module's liveness-specific cases don't depend on that module's setup order).
+    function armEligible() as Void {
+        AppState.bolusEligibilityGen = 0;
+        AppState.armedEligibilityGen = 0;
+        AppState._prevEligibilityFp = null;
+        AppState.status = null;
+        AppState.message = null;
+        AppState.pendingRequestId = null;
+        AppState.sawPhoneBolusing = false;
+        AppState.outcomeSentEpoch = 0;
+        AppState.hostCanBolus = true;
+        AppState.hostBolusBlockReason = null;
+        AppState.connection = "Connected";
+        AppState.bolusPasscodeRequired = false;
+        AppState.lastBolus = -1.0;
+        AppState.clearUnresolvedTombstone();
+    }
+
+    // CX-G-09: sendBolusNow() re-checks appLive() at the FINAL send — a dose armed while the wrist
+    // context was live, but whose confirm lands after the phone has gone stale (no reply within
+    // CONNECTION_STALE_SEC), must NOT transmit — even though nothing else about eligibility (the VA-07
+    // gen, pump-allowed) ever changed, since no intervening statusRead ever arrived to catch it via the
+    // gen-bump path. This is the "hard backstop" appLive()-at-send is for.
+    (:test)
+    function staleLivenessAtFinalSendRefusesDispatch(logger as Test.Logger) as Lang.Boolean {
+        baseline();
+        armEligible();
+        AppState.handle(statusRead({ "canBolus" => true }));   // fresh, live baseline
+        AppState.armBolus();
+        Test.assertMessage(AppState.armedEligibilityGen == AppState.bolusEligibilityGen, "armed cleanly (gens match)");
+        // The phone has since gone silent past CONNECTION_STALE_SEC — no intervening statusRead, so the
+        // gen never got a chance to bump.
+        AppState.lastReplyEpoch = Time.now().value() - (AppState.CONNECTION_STALE_SEC + 1);
+        Test.assertMessage(!AppState.appLive(), "liveness has lapsed since arm");
+        Test.assertMessage(AppState.armedEligibilityGen == AppState.bolusEligibilityGen,
+            "gen never bumped — only the direct appLive() re-check can catch this");
+        Test.assertMessage(!AppState.sendBolusNow(null), "stale liveness at final send ⇒ refused (CX-G-09)");
+        return true;
+    }
+
+    // Positive companion: a live, in-window dose still sends (sendBolusNow returns true whether or not
+    // the phone is reachable — outOfRange is still a completed, status-owning outcome).
+    (:test)
+    function liveInWindowDoseStillSends(logger as Test.Logger) as Lang.Boolean {
+        baseline();
+        armEligible();
+        AppState.handle(statusRead({ "canBolus" => true }));
+        AppState.armBolus();
+        Test.assertMessage(AppState.appLive(), "still live immediately after arm");
+        Test.assertMessage(AppState.sendBolusNow(null), "live, in-window dose ⇒ send proceeds (true)");
+        return true;
+    }
 }
