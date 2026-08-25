@@ -1759,6 +1759,34 @@ module AppState {
         Storage.setValue(KEY_SEEN_ALERTS, seen);
     }
 
+    // CX-G-06 (13-07): the set of alert identities already surfaced as a BACKGROUND system notification
+    // (Toybox.Notifications.showNotification(), called from BgServiceDelegate — see 13-CXG06-FEASIBILITY.md).
+    // Tracked SEPARATELY from KEY_SEEN_ALERTS (the foreground vibrate+confirm dedup set, above) so the
+    // background notification is a purely ADDITIVE early signal: it never marks an alert "seen" for the
+    // foreground path, so the in-app confirm-to-clear flow the wearer sees once they open the app still
+    // fires normally, unaffected by whether a background notification already fired for the same alert.
+    const KEY_BG_NOTIFIED_ALERTS = "bgNotifiedAlerts";
+    function loadBgNotifiedAlerts() as Lang.Array {
+        var s = Storage.getValue(KEY_BG_NOTIFIED_ALERTS);
+        return (s instanceof Lang.Array) ? s : [];
+    }
+    function saveBgNotifiedAlerts(seen as Lang.Array) as Void {
+        Storage.setValue(KEY_BG_NOTIFIED_ALERTS, seen);
+    }
+
+    // CX-G-06 (pure): the active alerts not yet surfaced as a background notification, then rewrites the
+    // bg-notified set to exactly activeAlertIdentities() — mirroring notifyNewAlerts()'s own seen-set
+    // discipline (VA-13/CX-G-07) so a cleared-then-refired alert notifies again in the background too, and
+    // a still-active alert is not re-notified on every temporal-event/phone-message tick. Pure except for
+    // the Storage read/write, so it is unit-testable without Toybox.Notifications (not invokable from the
+    // simulator's unit-test harness) — BgServiceDelegate.onPhoneMessage is the only caller that actually
+    // shows a notification for what this returns.
+    function newBackgroundAlertsToNotify() as Lang.Array {
+        var newOnes = newAlertsSince(loadBgNotifiedAlerts());
+        saveBgNotifiedAlerts(activeAlertIdentities());
+        return newOnes;
+    }
+
     function glucoseColor() as Gfx.ColorValue {
         if (glucose == null) { return Gfx.COLOR_LT_GRAY; }
         return rangeColor(glucose as Lang.Number);

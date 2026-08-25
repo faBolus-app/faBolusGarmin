@@ -28,6 +28,9 @@
                  manifest.xml. This is a compile-time requirement only; the test entry (TestEntryApp)
                  never actually registers a temporal event. -->
             <iq:uses-permission id="Background"/>
+            <!-- CX-G-06 (13-07): BgService.mc now calls Toybox.Notifications.showNotification() from the
+                 (:background) BgServiceDelegate — mirrors manifest.xml/manifest-official.xml. -->
+            <iq:uses-permission id="Notifications"/>
         </iq:permissions>
         <iq:languages>
             <iq:language>eng</iq:language>

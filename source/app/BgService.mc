@@ -2,6 +2,7 @@ using Toybox.System;
 using Toybox.Background;
 using Toybox.Communications as Comm;
 using Toybox.Lang;
+using Toybox.Notifications;
 
 // Background service that refreshes the BG complication while the app is closed. On each
 // temporal event it re-publishes the last-known reading (so a newly-added complication isn't
@@ -53,15 +54,41 @@ class BgServiceDelegate extends System.ServiceDelegate {
             if (!AppState.isCorrelatedStatusReply(data as Lang.Dictionary, mintedReqId)) { return; }
             AppState.handle(data as Lang.Dictionary);
             BgComplication.publishFromState();
-            // A background service process CANNOT vibrate or pushView, so it must not surface a new
-            // alert itself. Instead it hands the freshly-parsed alerts to the main app; the main app's
-            // onBackgroundData re-runs the new-alert check and surfaces it at the next foreground
-            // moment. Forward ONLY the compact alerts list — NOT the full status (its history array can
-            // be large) — to stay within the background-data payload limit.
+            // A background service process CANNOT vibrate or pushView (Toybox.Attention isn't a
+            // documented background runtime context, and WatchUi.pushView() explicitly throws
+            // Lang.OperationNotAllowedException when called from background — see
+            // 13-CXG06-FEASIBILITY.md), so the FULL in-app confirm-to-clear surface still can't happen
+            // here. But CX-G-06: it CAN show a system notification (Toybox.Notifications.showNotification,
+            // documented by the SDK itself as the mechanism for "notify the user of an event from the
+            // background") — so a critical pump alert is not left completely silent on the wrist while
+            // the app is suspended/closed. This is an ADDITIVE early signal only, tracked via its own
+            // dedup set (AppState.newBackgroundAlertsToNotify()); it does not mark anything "seen" for the
+            // main app's own notifyNewAlerts(), which still runs its full vibrate+confirm flow the next
+            // time a view exists. Forward ONLY the compact alerts list — NOT the full status (its history
+            // array can be large) — to stay within the background-data payload limit.
+            surfaceNewAlertsInBackground();
             Background.exit(AppState.alerts);
             return;
         }
         Background.exit(null);
+    }
+
+    // CX-G-06: show a system notification for every alert AppState.newBackgroundAlertsToNotify() reports
+    // as not-yet-background-notified. Non-private (mirroring this codebase's existing test-only-seam
+    // convention, e.g. FaBolusApp.scheduleCount()/EatingRelay.isRunning()) so BgCriticalSurfaceTest.mc
+    // could drive it directly if a future change makes that useful; today the pure dedup logic it wraps
+    // (AppState.newBackgroundAlertsToNotify()) is what's actually unit-tested, since
+    // Toybox.Notifications.showNotification() itself has no test-harness double. Gated on
+    // `Notifications has :showNotification` for older-firmware/device safety, mirroring this codebase's
+    // existing `Attention has :vibrate` idiom (FaBolusApp.notifyNewAlerts).
+    function surfaceNewAlertsInBackground() as Void {
+        var newOnes = AppState.newBackgroundAlertsToNotify();
+        if (newOnes.size() == 0) { return; }
+        if (!(Toybox.Notifications has :showNotification)) { return; }
+        for (var i = 0; i < newOnes.size(); i += 1) {
+            var a = newOnes[i] as Lang.Dictionary;
+            Notifications.showNotification("faBolus", a["title"] as Lang.String, null);
+        }
     }
 }
 

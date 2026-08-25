@@ -21,6 +21,10 @@
             <iq:uses-permission id="Background"/>
             <!-- Raw accel+gyro streaming for the eating-detection relay (EatingSenseKit barrel). -->
             <iq:uses-permission id="Sensor"/>
+            <!-- CX-G-06 (13-07): Toybox.Notifications.showNotification(), called from BgServiceDelegate
+                 so a critical pump alert is not silent on the wrist while the app is suspended/closed
+                 (see 13-CXG06-FEASIBILITY.md). Mirrors manifest.xml. -->
+            <iq:uses-permission id="Notifications"/>
         </iq:permissions>
         <iq:languages>
             <iq:language>eng</iq:language>

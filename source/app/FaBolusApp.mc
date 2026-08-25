@@ -237,9 +237,15 @@ class FaBolusApp extends App.AppBase {
     // status off-screen; BgService forwards ONLY the compact alerts list here (not the full status —
     // its history array can be large and would risk the background-data size limit). We refresh the
     // complication from the persisted reading and re-run the new-alert check. A background SERVICE
-    // process cannot vibrate or pushView, so it never surfaces itself — surfacing happens HERE, in the
-    // main app, and only once a view exists (_foreground). If we're not foreground yet (cold launch),
-    // the alert is left unseen and the next foreground statusRead surfaces it.
+    // process still cannot vibrate or pushView, so the FULL confirm-to-clear surface never happens here —
+    // that happens HERE, in the main app, and only once a view exists (_foreground). If we're not
+    // foreground yet (cold launch), this specific vibrate+confirm surfacing is left for the next
+    // foreground statusRead. CX-G-06 (13-07): the background service ITSELF (BgServiceDelegate, a
+    // separate process — see BgService.mc) already fired an early Toybox.Notifications system
+    // notification for any genuinely new alert before forwarding here, via its own independent
+    // bgNotifiedAlerts dedup set — so a critical alert is not left completely silent even when this
+    // callback's canSurface is false. That background notification never marks anything "seen" here;
+    // this method's own dedup/surfacing below is unaffected and always still runs when a view exists.
     function onBackgroundData(data as App.PersistableType) as Void {
         if (data instanceof Lang.Array) {
             AppState.alerts = AppState.sanitizeAlerts(data as Lang.Array);
