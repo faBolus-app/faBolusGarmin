@@ -1291,7 +1291,11 @@ module AppState {
     }
 
     function handle(data as Lang.Dictionary) as Void {
-        var kind = data["kind"] as Lang.String?;
+        // CX-G-11: reuse the existing strCap() guard (instanceof-checked, GA-09) instead of the bare
+        // `as Lang.String?` cast — a non-null, non-String `kind` (malformed/hostile wire dict) used to hit
+        // an unguarded cast here and crash the handler. A non-String kind now safely resolves to null,
+        // same as an absent kind.
+        var kind = strCap(data["kind"], 64);
         if (kind == null) { return; }
         // R2-03: any well-formed inbound reply (statusRead OR bolusStatus) proves the faBolus app is
         // alive — stamp the liveness anchor before dispatching. appLive()/canBolus() read this.

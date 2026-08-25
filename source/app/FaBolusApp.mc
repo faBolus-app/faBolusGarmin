@@ -158,8 +158,11 @@ class FaBolusApp extends App.AppBase {
     // system-delivered type with no test-constructible instance. Kept non-private, mirroring pollTick().
     function handlePhoneData(data as Lang.Dictionary) as Void {
         // Phone toggles wrist eating-sensing (out-of-band, not a RemoteCommand). Advisory feature.
+        // CX-G-11: instanceof-guard `type` before the cast — a non-String value (malformed/hostile wire
+        // dict) used to hit an unguarded `as Lang.String` here and crash the handler. Mirrors
+        // BgService.mc's already-guarded pattern.
         var type = data["type"];
-        if (type != null && (type as Lang.String).equals("eating_sense")) {
+        if (type instanceof Lang.String && (type as Lang.String).equals("eating_sense")) {
             if (_eating != null) {
                 if (data["on"] == true) { _eating.start(); } else { _eating.stop(); }
             }
@@ -167,7 +170,7 @@ class FaBolusApp extends App.AppBase {
         }
         // Phone toggles ambient HR chart context (out-of-band, not a RemoteCommand). D-08/D-09:
         // enables/disables the phone-gated relay; when off the watch skips reading + sending HR.
-        if (type != null && (type as Lang.String).equals("hr_ctl")) {
+        if (type instanceof Lang.String && (type as Lang.String).equals("hr_ctl")) {
             if (_hr != null) { _hr.setEnabled(data["on"] == true); }
             return;
         }
