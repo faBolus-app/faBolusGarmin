@@ -109,6 +109,32 @@ module CanBolusTest {
         return true;
     }
 
+    // 17-09: MainView's disabled glance bolus button now surfaces AppState.bolusBlockLabel() beneath it,
+    // the same way BolusOnlyView already does. That presentation is only useful if the label is never
+    // empty while the button is disabled — pin that invariant, including the ultimate "Unavailable"
+    // fallback (host withholds the bolus with NO reason token, pump link up, not delivering), the one
+    // bolusBlockLabel() branch no other test exercises. canBolus() ANDs phoneReachable() (not
+    // sim-controllable), so the non-empty check is guarded on it and stays deterministic either way
+    // (unreachable ⇒ the phone reason, still non-empty).
+    (:test)
+    function blockLabelNeverEmptyWhenBlocked(logger as Test.Logger) as Lang.Boolean {
+        AppState.hostBolusBlockReason = null;   // clear any token leaked from a prior test (handle() never resets it)
+        // Pump link up + Garmin bolusing on, but the host withholds the bolus (canBolus=false) with no
+        // reason token → the disabled branch MainView reaches, falling through to "Unavailable". handle()
+        // stamps lastReplyEpoch, so appLive() is true (no "Reconnecting…").
+        AppState.handle(statusRead({ "message" => "Connected", "canBolus" => false,
+                                     "garminBolusEnabled" => true }));
+        Test.assertMessage(!AppState.canBolus(), "host withholds ⇒ canBolus() false (button disabled)");
+        var why = AppState.bolusBlockLabel();
+        if (RemoteComm.phoneReachable()) {
+            Test.assertMessage(!why.equals(""), "blocked + reachable ⇒ a reason is always shown, never a silent gray button");
+            Test.assertEqualMessage(why, "Unavailable", "no token + pump up + live ⇒ the Unavailable fallback");
+        } else {
+            Test.assertEqualMessage(why, "Phone not connected", "unreachable ⇒ the phone reason (still non-empty)");
+        }
+        return true;
+    }
+
     // The reason token maps to short display text (pure, deterministic — no reachability dependency).
     (:test)
     function reasonTextMapsTokens(logger as Test.Logger) as Lang.Boolean {
