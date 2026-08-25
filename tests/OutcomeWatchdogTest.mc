@@ -104,6 +104,28 @@ module OutcomeWatchdogTest {
         return true;
     }
 
+    // CX-G-04/C5-04: MainDelegate.pressBolusButton's cancel path, on a SUCCESSFUL RemoteComm.send()
+    // dispatch, sets status="cancelling" AND re-stamps outcomeSentEpoch — matching
+    // HoldDelegate.cancelDelivery exactly. RemoteComm.send() depends on
+    // System.getDeviceSettings().phoneConnected, which is NOT sim-controllable (see
+    // tests/CanBolusTest.mc's established idiom) — guard the positive-dispatch assertion on it exactly
+    // like CanBolusTest does; the negative (undispatched) path is pinned deterministically in
+    // tests/BolusSendFailedTest.mc (the sim/CI default is "unreachable").
+    (:test)
+    function cancelDispatchSuccessSetsCancellingAndRestampsWatchdog(logger as Test.Logger) as Lang.Boolean {
+        baseline();
+        AppState.connection = "Delivering";   // bolusing() true
+        AppState.pendingRequestId = "rid-cancel-2";
+        var md = new MainDelegate(true, "glance");
+        md.pressBolusButton();
+        if (RemoteComm.phoneReachable()) {
+            Test.assertEqualMessage(AppState.status, "cancelling", "successful cancel dispatch ⇒ cancelling");
+            Test.assertMessage(AppState.outcomeSentEpoch > 0,
+                "successful cancel dispatch ⇒ outcomeSentEpoch re-stamped");
+        }
+        return true;
+    }
+
     // reattemptBlocked() is true exactly while an outcome is pending (delivering/cancelling), false for
     // terminal or idle — this is the gate that stops sendBolusNow minting a second reqId.
     (:test)

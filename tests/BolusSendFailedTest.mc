@@ -71,4 +71,31 @@ module BolusSendFailedTest {
         Test.assertEqualMessage(AppState.status, "delivering", "no pending request ⇒ no-op");
         return true;
     }
+
+    // CX-G-04 (V-Audit): MainDelegate.pressBolusButton's CANCEL path must honor RemoteComm.send()'s Bool
+    // exactly like the sibling bolus-send failure handling above — a failed dispatch (the phone
+    // unreachable; System.getDeviceSettings().phoneConnected is NOT sim-controllable, so the sim/CI
+    // default of "unreachable" gives us this branch deterministically — see tests/CanBolusTest.mc's
+    // "not sim-controllable" note) must NOT flip status to "cancelling" (which would look done and
+    // non-retryable) and must surface an error. canCancel() consults only bolusing()+pendingRequestId
+    // (never `status`), so leaving status untouched keeps the cancel retryable — asserted directly.
+    (:test)
+    function cancelDispatchFailureKeepsRetryableAndSurfacesError(logger as Test.Logger) as Lang.Boolean {
+        AppState.connection = "Delivering";   // bolusing() true
+        AppState.pendingRequestId = "rid-cancel-1";
+        AppState.status = "delivering";
+        AppState.message = null;
+        AppState.outcomeSentEpoch = 0;
+        var md = new MainDelegate(true, "glance");
+        md.pressBolusButton();
+        if (!RemoteComm.phoneReachable()) {
+            Test.assertEqualMessage(AppState.status, "delivering",
+                "failed cancel dispatch ⇒ status untouched (never shows 'cancelling')");
+            Test.assertMessage(AppState.message != null, "failed cancel dispatch ⇒ an error is surfaced");
+            Test.assertEqualMessage(AppState.outcomeSentEpoch, 0,
+                "failed cancel dispatch ⇒ the outcome watchdog is NOT re-stamped");
+            Test.assertMessage(AppState.canCancel(), "cancel is still retryable (canCancel() unaffected)");
+        }
+        return true;
+    }
 }

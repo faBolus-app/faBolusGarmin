@@ -1,6 +1,7 @@
 using Toybox.WatchUi as Ui;
 using Toybox.System;
 using Toybox.Lang;
+using Toybox.Time;
 
 // Glance input: tap the Bolus button (only) to open bolus entry. The top physical button
 // (SELECT) is also a shortcut. Tapping elsewhere on the glance does nothing.
@@ -14,8 +15,13 @@ class MainDelegate extends Ui.BehaviorDelegate {
     }
 
     // Bolus-button press: cancel an in-flight bolus, open bolus entry, or do nothing (disabled) —
-    // matching the button's appearance in MainView.
-    private function pressBolusButton() as Lang.Boolean {
+    // matching the button's appearance in MainView. Kept non-private (mirrors FaBolusApp.pollTick /
+    // scheduleCount) so tests/BolusSendFailedTest.mc + tests/OutcomeWatchdogTest.mc can drive the real
+    // cancel path directly — onTap's Ui.ClickEvent (and onSelect/onKey's DeviceProfile.isTouch() gate on
+    // a touch device like venu3s) have no test-constructible/test-controllable path in.
+    // CX-G-04/C5-04: RED — the cancel branch below still ignores RemoteComm.send()'s Bool and
+    // unconditionally sets "cancelling" with no outcomeSentEpoch re-stamp; the fix lands next commit.
+    function pressBolusButton() as Lang.Boolean {
         // No bolus button on the CGM-only screen: swallow the input.
         if (!_showBolus) { return true; }
         // GA-02: read-only must block STARTING a bolus, but NEVER block CANCELLING one already in
