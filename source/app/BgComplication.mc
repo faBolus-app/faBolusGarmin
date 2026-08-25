@@ -48,13 +48,24 @@ module BgComplication {
     //     explicit " old" marker when stale so a string-rendering face cannot show a stale reading as
     //     current. (The pure-NUMERIC :value display remains structurally unable to convey staleness — see
     //     the LIMITATION note above — so the honest marker lives here, in the text label.)
-    // Pure/string-only (no Complications dependency) so it is unit-testable in the P6 harness.
+    // C5-03 (V-Audit): `value` renders here via `AppState.formatMgdl` — the SAME mg/dL→mmol funnel every
+    // other Garmin glucose surface uses — so this text sub-surface honors the phone's selected unit
+    // (mgdl/mmol) instead of a raw `.toString()`. This makes `shortLabelFor` depend on the AppState
+    // module's `glucoseUnit` (no longer purely a function of its own parameters, though it still has no
+    // Complications-module dependency and remains unit-testable in the P6 harness — AppState.mc imports
+    // only Lang/Graphics/Math/Time/System/Storage). The `value` PARAMETER passed in — and the numeric
+    // `:value`/`:ranges` slots this label is paired with in pushComplication — stay raw mg/dL Numbers
+    // throughout; only the rendered text changes. (The numeric slot itself cannot show a converted mmol
+    // float: a `String` :value regresses the complication to its range floor — see the "MUST be a
+    // Number" comment in pushComplication below — so unit conversion is fixable ONLY on this text half,
+    // per C5-03's own finding.)
     function shortLabelFor(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean,
                            stringMode as Lang.Boolean) as Lang.String {
+        var display = AppState.formatMgdl(value);
         if (stringMode) {
-            return stale ? "--" : (value.toString() + arrow);
+            return stale ? "--" : (display + arrow);
         }
-        return stale ? (value.toString() + " old") : (value.toString() + arrow);
+        return stale ? (display + " old") : (display + arrow);
     }
 
     function remember(bg as Lang.Number?, token as Lang.String, epoch as Lang.Number) as Void {
