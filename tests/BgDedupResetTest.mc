@@ -1,34 +1,41 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// 13-04 (CX-G-07 re-verification): a background clear/re-fire must not leave stale dedup state so a new
-// critical episode is suppressed. RE-VERIFIED against current source (not a new fix): the foreground
-// FaBolusApp.notifyNewAlerts() (FaBolusApp.mc — the notifyNewAlerts() method) already rewrites the
-// persisted seen-set to EXACTLY AppState.activeAlertIdentities() after surfacing:
-//     var newAlerts = AppState.newAlertsSince(AppState.loadSeenAlerts());
-//     AppState.saveSeenAlerts(AppState.activeAlertIdentities());
-// — so a cleared alert's identity drops out of the seen-set the moment it leaves AppState.alerts, and a
-// later re-fire of the SAME identity is NOT suppressed (newAlertsSince() sees it as new again).
-// BgService.mc (the background temporal-event service, BgServiceDelegate.onTemporalEvent/onPhoneMessage)
-// does not itself read or write the seen-set at all — it only forwards the compact alerts list via
-// Background.exit(AppState.alerts); the seen-set rewrite happens ONLY in the foreground path above, which
-// re-runs on the very next foreground statusRead regardless of whether the refresh that produced the new
-// alerts list arrived via a background temporal event or a foreground poll. CX-G-07 is therefore ALREADY
-// CLOSED by the existing VA-13 rewrite — this file pins that behavior as a regression guard rather than
-// adding new (and redundant) background dedup-reset code. See 13-04-SUMMARY.md.
+// 13-04 (CX-G-07 re-verification) + 14-08 (CX-G-10 realignment): a background clear/re-fire must not
+// leave stale dedup state so a new critical episode is suppressed. RE-VERIFIED against current source
+// (not a new fix for CX-G-07 itself): the foreground FaBolusApp.notifyNewAlerts() rewrites the persisted
+// seen-set to (previously-seen ∩ still-active) ∪ presented-this-batch (AppState.reconciledSeenAlerts,
+// CX-G-10) — so a cleared alert's identity drops out of the seen-set the moment it leaves
+// AppState.alerts (same as the old, simpler `activeAlertIdentities()` rewrite this mirror used before
+// CX-G-10), and a later re-fire of the SAME identity is NOT suppressed (newAlertsSince() sees it as new
+// again). BgService.mc (the background temporal-event service,
+// BgServiceDelegate.onTemporalEvent/onPhoneMessage) does not itself read or write the seen-set at all —
+// it only forwards the compact alerts list via Background.exit(AppState.alerts); the seen-set rewrite
+// happens ONLY in the foreground path above, which re-runs on the very next foreground statusRead
+// regardless of whether the refresh that produced the new alerts list arrived via a background temporal
+// event or a foreground poll. CX-G-07 is therefore ALREADY CLOSED by the existing VA-13/CX-G-10 rewrite —
+// this file pins that behavior as a regression guard rather than adding new (and redundant) background
+// dedup-reset code. See 13-04-SUMMARY.md / 14-08-SUMMARY.md.
 module BgDedupResetTest {
 
     function alert(id as Lang.Number, kind as Lang.Number, title as Lang.String) as Lang.Dictionary {
         return { "id" => id, "kind" => kind, "title" => title };
     }
 
-    // Mirrors the exact two-line rewrite FaBolusApp.notifyNewAlerts() performs, without its UI side
-    // effects (Attention.vibrate / Ui.pushView via AlertConfirmDelegate) — notifyNewAlerts is private and
-    // those side effects aren't what CX-G-07 is about, so this test module stays UI-free like its
-    // AppState-pinning siblings (AppLivenessTest, HoldTeardownTest, OutcomeWatchdogTest).
+    // CX-G-10 (14-08): mirrors FaBolusApp.notifyNewAlerts()'s CORRECTED seen-set rewrite for the
+    // all-successful-presents case (`presented` = every new alert's identity), without its UI side
+    // effects (Attention.vibrate / Ui.pushView via AlertConfirmDelegate) — this test module stays
+    // UI-free like its AppState-pinning siblings (AppLivenessTest, HoldTeardownTest,
+    // OutcomeWatchdogTest). The OLD mirror here (`saveSeenAlerts(activeAlertIdentities())`) was the exact
+    // anti-pattern CX-G-10 fixed in the real function — updated so this regression guard tracks the real,
+    // now-fixed algorithm instead of silently drifting onto a stale copy of the bug. The partial-failure
+    // / count-bound cases are covered separately in tests/SeenAlertsOrderingTest.mc, which DOES exercise
+    // the real notifyNewAlerts()/pushAlertConfirm() via a FaBolusApp subclass.
     function notifyAndRewriteSeenSet() as Lang.Array {
         var newAlerts = AppState.newAlertsSince(AppState.loadSeenAlerts());
-        AppState.saveSeenAlerts(AppState.activeAlertIdentities());
+        var presented = [];
+        for (var i = 0; i < newAlerts.size(); i += 1) { presented.add(AppState.alertIdentity(newAlerts[i])); }
+        AppState.saveSeenAlerts(AppState.reconciledSeenAlerts(presented));
         return newAlerts;
     }
 

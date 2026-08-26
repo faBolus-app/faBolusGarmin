@@ -210,26 +210,64 @@ class FaBolusApp extends App.AppBase {
     // to onBackgroundData before the first view exists). In that case we do NOTHING — crucially we do
     // NOT mark the alert seen — so it stays new and the next foreground statusRead surfaces it. Vibrate/
     // pushView therefore only ever happen in the foreground; the background never fakes them.
-    private function notifyNewAlerts(canSurface as Lang.Boolean) as Void {
+    //
+    // CX-G-10 (14-08): NO LONGER private — mirrors handlePhoneData's own CX-G-03 rationale, so
+    // tests/SeenAlertsOrderingTest.mc can drive the real per-alert seen-commit ordering + push-count
+    // bound directly (via a FaBolusApp subclass overriding pushAlertConfirm() below to simulate a
+    // pushView failure without a live view stack).
+    function notifyNewAlerts(canSurface as Lang.Boolean) as Void {
         if (!canSurface) { return; }
-        // VA-13: surface EVERY genuinely-new alert, not just the most-serious one. The old code found only
-        // `firstNew` but marked ALL active identities seen — so a 2nd simultaneous new alert was suppressed
-        // forever. newAlertsSince() returns the new ones (most-serious first); we then rewrite the seen-set
-        // to exactly the active identities (a cleared alert drops out and re-notifies if it re-fires).
+        // VA-13: surface EVERY genuinely-new alert, not just the most-serious one. newAlertsSince()
+        // returns the new ones (most-serious first).
         var newAlerts = AppState.newAlertsSince(AppState.loadSeenAlerts());
-        AppState.saveSeenAlerts(AppState.activeAlertIdentities());
-        if (newAlerts.size() == 0) { return; }
-        // Vibrate ONCE for the batch, then push a Confirmation for EACH new alert. Push LEAST-serious
-        // first (iterate the most-serious-first list in reverse) so the most-serious confirmation ends on
-        // TOP of the view stack — the one the wearer sees + acts on first. Bounded by sanitizeAlerts +
-        // AlertsListView.MAX_ROWS == 4.
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(75, 400)]);
+        var presented = [];
+        if (newAlerts.size() > 0) {
+            // CX-G-08/CX-G-10 count bound (the "50-vs-4 mismatch"): at most AppState.MAX_ALERT_PUSHES
+            // are actively surfaced in ONE batch — matching AlertsListView.MAX_ROWS's 4-row display cap,
+            // which this comment already claimed but nothing previously enforced (sanitizeAlerts alone
+            // allows up to 50 stored alerts, so an unbounded burst could stack up to 50 Confirmation
+            // views). Anything beyond the bound is simply left "new" — it is picked up by the NEXT
+            // notifyNewAlerts() call, never dropped.
+            var toPush = AppState.capAlertPushes(newAlerts);
+            // Vibrate ONCE for the batch, then push a Confirmation for EACH alert in the capped set.
+            // Push LEAST-serious first (iterate the most-serious-first list in reverse) so the
+            // most-serious confirmation ends on TOP of the view stack — the one the wearer sees + acts
+            // on first.
+            if (Attention has :vibrate) {
+                Attention.vibrate([new Attention.VibeProfile(75, 400)]);
+            }
+            // CX-G-10: commit 'seen' PER successfully-presented alert, not a single write of every
+            // active identity made BEFORE this loop ran (the old bug — a partial-loop failure could
+            // suppress an alert whose Confirmation never actually reached the wearer). pushAlertConfirm's
+            // explicit failure model tells us which ones actually ran.
+            for (var i = toPush.size() - 1; i >= 0; i -= 1) {
+                var a = toPush[i] as Lang.Dictionary;
+                if (pushAlertConfirm(a)) {
+                    presented.add(AppState.alertIdentity(a));
+                }
+            }
         }
-        for (var i = newAlerts.size() - 1; i >= 0; i -= 1) {
-            var a = newAlerts[i] as Lang.Dictionary;
+        // Persist EXACTLY (previously-seen ∩ still-active) ∪ presented-this-batch — ALWAYS, even when
+        // newAlerts was empty, so a cleared alert still drops out of the seen-set (VA-13/CX-G-07's own
+        // "a cleared alert re-notifies if it re-fires"), while an identity that wasn't actually
+        // presented (skipped by the count bound, or a failed pushView) is never marked seen.
+        AppState.saveSeenAlerts(AppState.reconciledSeenAlerts(presented));
+    }
+
+    // CX-G-10: the single explicit "did this alert actually get presented" seam. The Connect IQ 9.2.0
+    // SDK docs (doc/Toybox/WatchUi.html) document WatchUi.pushView as throwing
+    // Lang.OperationNotAllowedException when called from a context that cannot show a view (background,
+    // data field, glance, watch face app, or a widget's base page) — treated here as "not presented" so
+    // the caller never marks that identity seen. Non-private (mirrors notifyNewAlerts's own CX-G-10
+    // rationale above) so tests/SeenAlertsOrderingTest.mc can override it to inject a failure without a
+    // live view stack.
+    function pushAlertConfirm(a as Lang.Dictionary) as Lang.Boolean {
+        try {
             Ui.pushView(new Ui.Confirmation("Pump alert: " + a["title"] + " — clear?"),
                         new AlertConfirmDelegate(a["id"], a["kind"]), Ui.SLIDE_UP);
+            return true;
+        } catch (e) {
+            return false;
         }
     }
 
