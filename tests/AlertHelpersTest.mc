@@ -130,14 +130,15 @@ module AlertHelpersTest {
     function capAlertPushesBoundsToFour(logger as Test.Logger) as Lang.Boolean {
         Test.assertEqualMessage(AppState.MAX_ALERT_PUSHES, 4,
             "the intended push bound is 4, matching AlertsListView.MAX_ROWS");
-        var six = [];
+        var six = [] as Lang.Array;
         for (var i = 0; i < 6; i += 1) { six.add({ "id" => i, "kind" => 1, "title" => "A" + i.toString() }); }
         var capped = AppState.capAlertPushes(six);
         Test.assertEqualMessage(capped.size(), 4, "6 candidates ⇒ capped to 4 for this batch");
         Test.assertEqualMessage(capped[0]["id"], 0, "order preserved (keeps the first — most-serious-first slice)");
         Test.assertEqualMessage(capped[3]["id"], 3, "keeps exactly the first 4, drops the rest for THIS batch");
 
-        var three = [ six[0], six[1], six[2] ];
+        var three = [] as Lang.Array;
+        for (var i = 0; i < 3; i += 1) { three.add({ "id" => i, "kind" => 1, "title" => "A" + i.toString() }); }
         var uncapped = AppState.capAlertPushes(three);
         Test.assertEqualMessage(uncapped.size(), 3, "under the bound ⇒ unchanged");
         return true;

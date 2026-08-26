@@ -110,7 +110,7 @@ module SeenAlertsOrderingTest {
     (:test)
     function moreThanFourNewAlertsOnlyFourPushedAndSeenThisBatch(logger as Test.Logger) as Lang.Boolean {
         baseline();
-        var six = [];
+        var six = [] as Lang.Array;
         for (var i = 0; i < 6; i += 1) { six.add({ "id" => i, "kind" => 1, "title" => "A" + i.toString() }); }
         AppState.alerts = six;
         var app = new SelectivelyFailingApp([]);   // all would succeed
