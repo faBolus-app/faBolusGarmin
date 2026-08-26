@@ -1515,7 +1515,12 @@ module AppState {
                     historyEpochs = [];   // no/misaligned epochs → fall back to assumed spacing
                 }
             }
-            var al = data["alerts"]; if (al instanceof Lang.Array) { alerts = sanitizeAlerts(al); }
+            // CX-G-08: a fresh, authoritative alerts list just replaced the old one — this is the ONLY
+            // proof-of-absence event that reconciles a provisional "dismiss sent" flag (see
+            // markDismissSent/reconcileDismissSent above; AlertConfirmDelegate no longer removes an
+            // alert locally on a bare dispatch).
+            var al = data["alerts"];
+            if (al instanceof Lang.Array) { alerts = sanitizeAlerts(al); reconcileDismissSent(); }
             var ro = data["remotesReadOnly"]; if (ro instanceof Lang.Boolean) { readOnly = ro; }
             // P13 capability channel: whether a remote dismiss clears on the pump (Mobi) or only snoozes
             // locally (t:slim) — drives the alert confirm verb. Strict guard: a non-boolean is ignored.
@@ -1840,9 +1845,9 @@ module AppState {
     }
 
     // VA-14 (pure): drop exactly the (id, kind) alert from the active list, leaving every other alert
-    // (and their order) untouched. The optimistic local removal after a DISPATCHED dismiss — the phone's
-    // next authoritative statusRead reconciles it. Extracted verbatim from the old inline loop in
-    // AlertConfirmDelegate so it's unit-testable (AlertConfirmDelegate is excluded from the test binary).
+    // (and their order) untouched. NO LONGER called on a DISPATCHED dismiss (see CX-G-08 below) — kept
+    // for any future authenticated-ack path that would need a real local removal. Extracted verbatim
+    // from the old inline loop in AlertConfirmDelegate so it's unit-testable.
     function removeAlert(id, kind) as Void {
         var kept = [];
         for (var i = 0; i < alerts.size(); i += 1) {
@@ -1850,6 +1855,65 @@ module AppState {
             if (!(a["id"] == id && a["kind"] == kind)) { kept.add(a); }
         }
         alerts = kept;
+    }
+
+    // CX-G-08 (statusRead-reconcile, owner decision — see OWNER-DECISIONS.md Plan 14-08): identities
+    // whose dismiss was DISPATCHED to the phone (RemoteComm.send returned true) but not yet PROVEN
+    // absent by an authoritative statusRead reply. There is no correlated dismiss-ack path today (no
+    // retained request id, no ack state machine in handle()), so AlertConfirmDelegate.onResponse no
+    // longer removes the alert on a bare dispatch — it only flags it here. The alert stays visible/
+    // active until reconcileDismissSent() (called from handle() the moment a fresh `alerts` list
+    // replaces the old one) drops it because the phone's own authoritative list no longer contains it.
+    // In-memory only (mirrors the existing transient alertDismissFailedOffline flag) — a cold relaunch
+    // simply re-derives "not yet proven" from the next statusRead, which is always coming.
+    var dismissSentAlertIdentities as Lang.Array = [];
+
+    // Mark (id, kind) as a dispatched-but-unproven dismiss. Idempotent (re-dispatching the same alert
+    // doesn't duplicate the identity).
+    function markDismissSent(id, kind) as Void {
+        var ident = kind.toString() + "-" + id.toString();
+        if (!containsStr(dismissSentAlertIdentities, ident)) {
+            dismissSentAlertIdentities.add(ident);
+        }
+    }
+
+    // Whether (id, kind)'s dismiss is still an unproven, provisional "dismiss sent" — i.e. dispatched
+    // but not yet reconciled away by an authoritative statusRead.
+    function isDismissSent(id, kind) as Lang.Boolean {
+        return containsStr(dismissSentAlertIdentities, kind.toString() + "-" + id.toString());
+    }
+
+    // The ONLY thing that actually drops a provisional dismiss-sent identity: called right after a
+    // fresh, authoritative `alerts` list replaces the old one (handle()). An identity no longer present
+    // in the new active list has been proven absent by the phone — drop it. An identity still present
+    // (the phone hasn't cleared it yet, or rejected the dismiss) stays flagged; re-dispatching it is
+    // still safe/idempotent via markDismissSent.
+    function reconcileDismissSent() as Void {
+        var active = activeAlertIdentities();
+        var kept = [];
+        for (var i = 0; i < dismissSentAlertIdentities.size(); i += 1) {
+            var ident = dismissSentAlertIdentities[i];
+            if (containsStr(active, ident)) { kept.add(ident); }
+        }
+        dismissSentAlertIdentities = kept;
+    }
+
+    // CX-G-08 count bound (the "50-vs-4 mismatch"): sanitizeAlerts stores up to 50 alerts, but
+    // FaBolusApp.mc's own doc comment on notifyNewAlerts already claimed the actively-surfaced
+    // (vibrate + pushed Confirmation) count was bounded by AlertsListView.MAX_ROWS == 4 — nothing in
+    // code enforced that, so a burst of >4 simultaneously-new alerts could stack up to 50 Confirmation
+    // views on the nav stack. This is the actual, enforced bound (kept as its own named constant, not a
+    // reference to the View class, so this pure logic has no View-layer dependency).
+    const MAX_ALERT_PUSHES = 4;
+
+    // Pure: at most MAX_ALERT_PUSHES entries from `list`, preserving order (most-serious-first is the
+    // caller's existing convention for the active-alerts / new-alerts lists). Anything beyond the bound
+    // is left for the caller to pick up on its NEXT notify pass (never dropped outright).
+    function capAlertPushes(list as Lang.Array) as Lang.Array {
+        if (list.size() <= MAX_ALERT_PUSHES) { return list; }
+        var out = [];
+        for (var i = 0; i < MAX_ALERT_PUSHES; i += 1) { out.add(list[i]); }
+        return out;
     }
 
     // VA-13 (pure): the active alerts whose identity is NOT in `seen` — i.e. genuinely new since the last
@@ -1887,6 +1951,25 @@ module AppState {
     }
     function saveSeenAlerts(seen as Lang.Array) as Void {
         Storage.setValue(KEY_SEEN_ALERTS, seen);
+    }
+
+    // CX-G-10 (pure): the seen-set to persist after one notifyNewAlerts() batch. `presented` is exactly
+    // the identities whose Ui.pushView actually ran this batch (see FaBolusApp.pushAlertConfirm's
+    // explicit failure model) — NOT every active identity, and NOT every "new" identity (the old,
+    // buggy `saveSeenAlerts(activeAlertIdentities())` did both, marking an alert seen even when its
+    // Confirmation never reached the wearer, or when the push-count bound left it for a later batch).
+    // Result = (previously-seen ∩ still-active) ∪ presented — restricted to ACTIVE identities so a
+    // cleared/reconciled alert still drops out of the seen-set (preserving VA-13/CX-G-07's "a cleared
+    // alert re-notifies if it re-fires"), while never adding an identity that wasn't actually presented.
+    function reconciledSeenAlerts(presented as Lang.Array) as Lang.Array {
+        var active = activeAlertIdentities();
+        var prevSeen = loadSeenAlerts();
+        var out = [];
+        for (var i = 0; i < active.size(); i += 1) {
+            var ident = active[i];
+            if (containsStr(prevSeen, ident) || containsStr(presented, ident)) { out.add(ident); }
+        }
+        return out;
     }
 
     // CX-G-06 (13-07): the set of alert identities already surfaced as a BACKGROUND system notification

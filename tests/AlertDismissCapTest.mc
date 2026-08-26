@@ -49,4 +49,28 @@ module AlertDismissCapTest {
         Test.assertMessage(AppState.supportsRemoteAlertDismiss, "non-boolean ignored (stays true)");
         return true;
     }
+
+    // CX-G-08 (statusRead-reconcile, owner decision — OWNER-DECISIONS.md Plan 14-08): a DISPATCHED
+    // dismiss NEVER locally removes the alert — regardless of whether the action word is "Clear" (Mobi,
+    // supportsRemoteAlertDismiss=true) or "Snooze" (t:slim, false). Only an authoritative statusRead
+    // reply whose `alerts` no longer lists the identity (reconcileDismissSent(), pinned in
+    // AlertHelpersTest.mc) proves it's actually gone — the capability flag never changes that rule.
+    (:test)
+    function dispatchedDismissNeverLocallyRemovesRegardlessOfCapability(logger as Test.Logger) as Lang.Boolean {
+        AppState.alerts = [ { "id" => 5, "kind" => 6, "title" => "X" } ];
+        AppState.dismissSentAlertIdentities = [];
+
+        AppState.handle(statusRead({ "supportsRemoteAlertDismiss" => true }));   // Mobi ⇒ "Clear"
+        AppState.markDismissSent(5, 6);
+        Test.assertEqualMessage(AppState.alertActionWord(), "Clear", "Mobi ⇒ Clear wording");
+        Test.assertEqualMessage(AppState.alerts.size(), 1,
+            "NEGATIVE PATH: alert NOT removed locally on a dispatched Clear");
+        Test.assertMessage(AppState.isDismissSent(5, 6), "flagged provisional dismiss-sent");
+
+        AppState.handle(statusRead({ "supportsRemoteAlertDismiss" => false }));  // t:slim ⇒ "Snooze"
+        Test.assertEqualMessage(AppState.alertActionWord(), "Snooze", "t:slim ⇒ Snooze wording");
+        Test.assertEqualMessage(AppState.alerts.size(), 1,
+            "still not removed — the no-suppression-on-unproven-dismissal rule doesn't depend on capability");
+        return true;
+    }
 }

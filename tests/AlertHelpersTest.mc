@@ -1,12 +1,16 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// VA-13 + VA-14 (V-Audit): the pure alert-list helpers factored out of FaBolusApp.notifyNewAlerts and
-// AlertConfirmDelegate (both excluded from the test binary). VA-13: newAlertsSince()/
-// activeAlertIdentities() let the notifier surface EVERY new alert (the old code surfaced only the first
-// but marked ALL seen, suppressing a 2nd simultaneous new alert forever). VA-14: removeAlert() is the
-// optimistic-removal used only after a DISPATCHED dismiss. AppState is compiled into the test binary
-// (test.jungle). Style mirrors tests/CanBolusTest.mc.
+// VA-13 + VA-14 (V-Audit) + CX-G-08 (14-08): the pure alert-list helpers factored out of
+// FaBolusApp.notifyNewAlerts and AlertConfirmDelegate. VA-13: newAlertsSince()/activeAlertIdentities()
+// let the notifier surface EVERY new alert (the old code surfaced only the first but marked ALL seen,
+// suppressing a 2nd simultaneous new alert forever). VA-14: removeAlert() drops an exact (id, kind)
+// match (no longer called on a bare dispatch — see CX-G-08 below). CX-G-08 (statusRead-reconcile, owner
+// decision — OWNER-DECISIONS.md Plan 14-08): markDismissSent()/isDismissSent()/reconcileDismissSent()
+// replace the old optimistic local removal — a dispatched-but-unproven dismiss no longer suppresses the
+// alert; only a fresh authoritative statusRead (simulated here by reassigning AppState.alerts) proves it
+// absent. Also pins the corrected push-count bound (capAlertPushes/MAX_ALERT_PUSHES, the "50-vs-4"
+// mismatch). AppState is compiled into the test binary (test.jungle). Style mirrors tests/CanBolusTest.mc.
 module AlertHelpersTest {
 
     // Two active alerts, most-serious first (the order the phone sends and the list preserves).
@@ -74,6 +78,68 @@ module AlertHelpersTest {
         // A right-id/wrong-kind (and vice-versa) must also NOT match — both keys must agree.
         AppState.removeAlert(1, 99);
         Test.assertEqualMessage(AppState.alerts.size(), 2, "id match but kind mismatch ⇒ nothing removed");
+        return true;
+    }
+
+    // CX-G-08 (statusRead-reconcile): a dispatched dismiss is tracked as a PROVISIONAL flag — it must
+    // NEVER mutate the active alerts list directly (that optimistic removal is exactly what the owner
+    // decided to stop doing; see AlertConfirmDelegate.mc + OWNER-DECISIONS.md Plan 14-08).
+    (:test)
+    function markDismissSentFlagsWithoutRemoving(logger as Test.Logger) as Lang.Boolean {
+        AppState.alerts = twoAlerts();
+        AppState.dismissSentAlertIdentities = [];
+        Test.assertMessage(!AppState.isDismissSent(1, 2), "not flagged before a dispatch");
+        AppState.markDismissSent(1, 2);
+        Test.assertMessage(AppState.isDismissSent(1, 2), "flagged provisional after a dispatched dismiss");
+        Test.assertEqualMessage(AppState.alerts.size(), 2,
+            "NEGATIVE PATH: markDismissSent never suppresses/removes the alert — an unproven dismissal "
+            + "leaves the active list untouched");
+        // Re-dispatching the same alert is idempotent — no duplicate identity.
+        AppState.markDismissSent(1, 2);
+        Test.assertMessage(AppState.isDismissSent(1, 2), "still flagged (idempotent)");
+        return true;
+    }
+
+    // reconcileDismissSent(): an identity still present in `alerts` (the phone hasn't proven the dismiss
+    // took effect yet) STAYS flagged — the alert is never suppressed on the strength of the dispatch
+    // alone. Only once a fresh authoritative alerts list (simulated here) omits the identity does
+    // reconcileDismissSent() drop the provisional flag — that's the actual "proof of absence."
+    (:test)
+    function reconcileKeepsStillActiveDropsOnceProvenAbsent(logger as Test.Logger) as Lang.Boolean {
+        AppState.alerts = twoAlerts();          // "2-1", "4-3"
+        AppState.dismissSentAlertIdentities = [];
+        AppState.markDismissSent(1, 2);
+        AppState.markDismissSent(3, 4);
+        AppState.reconcileDismissSent();
+        Test.assertMessage(AppState.isDismissSent(1, 2), "still active ⇒ NOT reconciled away yet");
+        Test.assertMessage(AppState.isDismissSent(3, 4), "still active ⇒ NOT reconciled away yet");
+
+        // Simulate the next authoritative statusRead: "2-1" is gone, "4-3" remains.
+        AppState.alerts = [ twoAlerts()[1] ];
+        AppState.reconcileDismissSent();
+        Test.assertMessage(!AppState.isDismissSent(1, 2), "no longer active ⇒ proven absent ⇒ reconciled");
+        Test.assertMessage(AppState.isDismissSent(3, 4), "still active ⇒ still flagged");
+        return true;
+    }
+
+    // CX-G-08 count bound (the "50-vs-4 mismatch"): sanitizeAlerts stores up to 50 alerts, but a single
+    // notify batch may only actively surface (vibrate + push a Confirmation for) at most
+    // AppState.MAX_ALERT_PUSHES — matching AlertsListView.MAX_ROWS's 4-row display cap, which
+    // FaBolusApp.mc's own doc comment already claimed but nothing previously enforced.
+    (:test)
+    function capAlertPushesBoundsToFour(logger as Test.Logger) as Lang.Boolean {
+        Test.assertEqualMessage(AppState.MAX_ALERT_PUSHES, 4,
+            "the intended push bound is 4, matching AlertsListView.MAX_ROWS");
+        var six = [];
+        for (var i = 0; i < 6; i += 1) { six.add({ "id" => i, "kind" => 1, "title" => "A" + i.toString() }); }
+        var capped = AppState.capAlertPushes(six);
+        Test.assertEqualMessage(capped.size(), 4, "6 candidates ⇒ capped to 4 for this batch");
+        Test.assertEqualMessage(capped[0]["id"], 0, "order preserved (keeps the first — most-serious-first slice)");
+        Test.assertEqualMessage(capped[3]["id"], 3, "keeps exactly the first 4, drops the rest for THIS batch");
+
+        var three = [ six[0], six[1], six[2] ];
+        var uncapped = AppState.capAlertPushes(three);
+        Test.assertEqualMessage(uncapped.size(), 3, "under the bound ⇒ unchanged");
         return true;
     }
 }
