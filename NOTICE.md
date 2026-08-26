@@ -4,7 +4,7 @@ faBolusGarmin is an independent, open-source project, licensed under the MIT Lic
 
 ## The faBolus™ name
 
-**faBolus™** (including **faBolusGarmin**) is a trademark of Tia Geri. The MIT License covers this
+**faBolus™** (including **faBolusGarmin**) is a trademark of Zev Granowitz. The MIT License covers this
 project's **source code**; it does not grant any right to use the "faBolus" name, logo, or branding.
 You are free to fork and reuse the code under the MIT terms, but please do not use the faBolus name
 in a way that suggests your fork is the official project or is endorsed by it.

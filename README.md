@@ -11,7 +11,7 @@ A **Garmin (Connect IQ / Monkey C) remote** for bolusing and status viewing. It 
 **pump- and host-agnostic** JSON contract, so it isn't tied to any one pump or companion app.
 
 - **Today** it runs as a **phone-relay remote for [faBolus](https://github.com/faBolus-app/faBolus)**,
-  whose iPhone host owns the pump connection (currently a Tandem t:slim X2 / Mobi via PumpX2Kit).
+  whose iPhone host owns the pump connection (currently a Tandem t:slim X2 / Mobi via TandemKit).
 - Because the wire format is a generic contract (`faBolus/schema/command.schema.json`), **any host
   that implements it can drive this same watch app** — a different pump backend, or a different
   companion app (e.g. a future Loop integration). Nothing in the default phone-relay path is
@@ -94,10 +94,10 @@ with `faBolus/schema/command.schema.json` — see [CONTRIBUTING.md](CONTRIBUTING
   contract (`schema/`) this remote speaks; its
   [ARCHITECTURE.md](https://github.com/faBolus-app/faBolus/blob/master/ARCHITECTURE.md) explains how
   remotes and hosts fit together and how to host the remotes from another app.
-- [`PumpX2Kit`](https://github.com/faBolus-app/PumpX2Kit) — the Swift Tandem protocol / auth / BLE
+- [`TandemKit`](https://github.com/faBolus-app/TandemKit) — the Swift Tandem protocol / auth / BLE
   core; the reference the direct-pump engine ports from.
 
 ## License & trademark
 
-Code is MIT-licensed (see [LICENSE](LICENSE)). **faBolus™** is a trademark of Tia Geri — the license
+Code is MIT-licensed (see [LICENSE](LICENSE)). **faBolus™** is a trademark of Zev Granowitz — the license
 covers the source code, not the name or branding. See [NOTICE.md](NOTICE.md) for details.
