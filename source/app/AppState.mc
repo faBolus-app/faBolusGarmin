@@ -1343,6 +1343,13 @@ module AppState {
     // into ONE message ("" when SG1 wouldn't fire). DISPLAY-ONLY. NO new confirm step exists on this
     // watch for ANY tier — the SG3a friction ceiling here IS the existing single HoldView tap/hold
     // (never a second dialog, never a re-type); see BolusView.mc's render call site.
+    //
+    // CX-G-02 (14-08, owner decision — correct-copy, OWNER-DECISIONS.md Plan 14-08): the stacking guard
+    // is an EXPERIMENTAL feature for now. The higher-caution tiers' copy used to say "please re-enter to
+    // confirm" / "please confirm before delivering", which read as if a DISTINCT extra-confirm or
+    // re-entry step exists — it does not (see the comment immediately above: every tier resolves to the
+    // SAME single HoldView hold). The copy below says "hold to confirm" throughout, at increasing levels
+    // of caution language, so it never promises a mechanism this watch doesn't have.
     function sgDisclosureLine() as Lang.String {
         var sg1 = sgCalcOverrideLine();
         if (sg1.equals("")) { return ""; }
@@ -1350,22 +1357,23 @@ module AppState {
         var recommended = recommendedUnits();
         if (recommended == 0.0) {
             return "You're entering " + entered.format("%.2f")
-                 + " U with no calculator suggestion to compare against — please re-enter to confirm.";
+                 + " U with no calculator suggestion to compare against — hold to confirm carefully.";
         }
         var atOrAboveMax = (maxUnits > 0.0) && (entered >= maxUnits);
         var ratio = entered / recommended;
         if (ratio >= sgReenterOverrideRatio) {
-            return "This dose is far above what the pump's calculator suggested — please re-enter to confirm.";
+            return "This dose is far above what the pump's calculator suggested — hold to confirm very carefully.";
         }
         if (ratio >= sgConfirmExtraOverrideRatio || atOrAboveMax) {
-            return "This dose is well above what the pump's calculator suggested — please confirm before delivering.";
+            return "This dose is well above what the pump's calculator suggested — hold to confirm carefully.";
         }
         return sg1;
     }
 
-    // True when sgDisclosureLine() is at the confirmExtra/reenter tier (color it as a caution, like
-    // S1's lockout line); false for the disclose tier or "". Pairs with sgDisclosureLine() the way
-    // controllerDisclosureIsCaution() pairs with controllerDisclosureLine().
+    // True when sgDisclosureLine() is at the higher-caution tier (color it as a caution, like S1's
+    // lockout line); false for the disclose tier or "". Pairs with sgDisclosureLine() the way
+    // controllerDisclosureIsCaution() pairs with controllerDisclosureLine(). Still the SAME single
+    // hold-to-confirm mechanism at every tier (CX-G-02) — this only changes the COLOR/emphasis.
     function sgDisclosureIsCaution() as Lang.Boolean {
         var line = sgDisclosureLine();
         if (line.equals("")) { return false; }

@@ -8,9 +8,20 @@ using Toybox.Test;
 // §13 Rule-1 displaysNumericDose guard, the SG3a escalation ladder's exact boundaries
 // (confirmExtraOverrideRatio/reenterOverrideRatio default 1.5/2.0), the SG2 max-proximity floor, and the
 // verbatim contract copy. DISPLAY-ONLY: every function returns a string to show (or "") — nothing here
-// gates a bolus, and `computeUnits()`/`deliverUnits` are never mutated by any test here. Style mirrors
-// tests/ControllerDisclosureTest.mc / tests/StaleBolusTest.mc. AppState is compiled into the test binary
-// (test.jungle).
+// gates a bolus, and `computeUnits()`/`deliverUnits` are never mutated by any test here.
+//
+// CX-G-02 (14-08, owner decision: correct-copy — OWNER-DECISIONS.md Plan 14-08): the stacking guard is
+// an EXPERIMENTAL feature for now. The higher-caution tiers' copy used to say "please re-enter to
+// confirm" / "please confirm before delivering", implying a distinct extra-confirm/re-entry mechanism
+// that AppState.mc:1214-1217/1343-1345 documents does NOT exist (every tier is the same single HoldView
+// hold — no new dialog, no re-type, for ANY tier). The copy was corrected to "hold to confirm
+// carefully"/"...very carefully" (verbatim strings pinned below), and the one test NAME that literally
+// claimed a "Reenter" step (`zeroRecommendationGoesToFullOverrideThenReenter`) was renamed to
+// `zeroRecommendationGoesToFullOverrideThenHighestCautionTier`. No extra-confirm/re-entry tier was
+// implemented — the owner explicitly chose NOT to add one.
+//
+// Style mirrors tests/ControllerDisclosureTest.mc / tests/StaleBolusTest.mc. AppState is compiled into
+// the test binary (test.jungle).
 module StackingGuardTest {
 
     // Deterministic baseline: Carbs mode with a real calculator (carbRatio synced), glucose above the
@@ -103,8 +114,15 @@ module StackingGuardTest {
 
     // recommendedUnits==0 full-override branch — checked BEFORE any ratio, mirroring calcOverride's own
     // zero-recommendation guard (no NaN/inf, never a divide-by-zero in the escalation ratio either).
+    //
+    // CX-G-02 (14-08, owner decision: correct-copy): renamed from
+    // `zeroRecommendationGoesToFullOverrideThenReenter` — the old name (and the old copy it pinned,
+    // "...please re-enter to confirm.") implied a distinct "reenter" mechanism that does not exist on
+    // this watch; every SG3a tier resolves to the SAME single HoldView hold (AppState.mc:1214-1217/
+    // 1343-1345). This pins the CORRECTED copy ("...hold to confirm carefully.") at the same, highest
+    // caution tier.
     (:test)
-    function zeroRecommendationGoesToFullOverrideThenReenter(logger as Test.Logger) as Lang.Boolean {
+    function zeroRecommendationGoesToFullOverrideThenHighestCautionTier(logger as Test.Logger) as Lang.Boolean {
         seed();
         AppState.carbsValue = 0;                  // recommendedUnits() = 0.0 (carbs=0, no correction)
         AppState.mode = "units"; AppState.unitsValue = 3.0;
@@ -113,15 +131,19 @@ module StackingGuardTest {
             "You're entering 3.00 U — the pump's calculator did not suggest a dose.",
             "SG1 full-override message, verbatim");
         Test.assertEqualMessage(AppState.sgDisclosureLine(),
-            "You're entering 3.00 U with no calculator suggestion to compare against — please re-enter to confirm.",
-            "SG3a escalates zero-recommendation straight to reenter, verbatim");
-        Test.assertMessage(AppState.sgDisclosureIsCaution(), "reenter tier is a caution");
+            "You're entering 3.00 U with no calculator suggestion to compare against — hold to confirm carefully.",
+            "SG3a escalates zero-recommendation straight to the highest-caution tier, verbatim — no re-entry promise");
+        Test.assertMessage(AppState.sgDisclosureIsCaution(), "highest-caution tier is flagged as a caution");
         return true;
     }
 
-    // SG3a escalation ladder boundaries: disclose below confirmExtraOverrideRatio, confirmExtra at/above
-    // it (but below reenterOverrideRatio), reenter at/above reenterOverrideRatio. recommendedUnits()=5.0
-    // (carbsValue=50 @ 10 g/U) throughout; only unitsValue (entered) varies.
+    // SG3a escalation ladder boundaries: disclose below confirmExtraOverrideRatio, higher-caution
+    // at/above it (but below reenterOverrideRatio), highest-caution at/above reenterOverrideRatio.
+    // recommendedUnits()=5.0 (carbsValue=50 @ 10 g/U) throughout; only unitsValue (entered) varies.
+    // CX-G-02: the ratio constants keep their internal names (sgConfirmExtraOverrideRatio/
+    // sgReenterOverrideRatio — implementation-detail severity thresholds, not user-facing copy or the
+    // specific parity-test NAMES the owner flagged), but the asserted STRINGS below are the corrected
+    // copy: no tier promises re-entry or a distinct confirm step beyond the existing single hold.
     (:test)
     function escalationLadderStepsAtExactBoundaries(logger as Test.Logger) as Lang.Boolean {
         seed();
@@ -136,25 +158,25 @@ module StackingGuardTest {
 
         AppState.unitsValue = 7.5;                // ratio 1.5 — boundary (>=)
         Test.assertEqualMessage(AppState.sgDisclosureLine(),
-            "This dose is well above what the pump's calculator suggested — please confirm before delivering.",
-            "ratio 1.5 boundary → confirmExtra");
-        Test.assertMessage(AppState.sgDisclosureIsCaution(), "confirmExtra tier is a caution");
+            "This dose is well above what the pump's calculator suggested — hold to confirm carefully.",
+            "ratio 1.5 boundary → higher-caution tier (same single hold, stronger wording)");
+        Test.assertMessage(AppState.sgDisclosureIsCaution(), "higher-caution tier is a caution");
 
         AppState.unitsValue = 9.95;               // ratio 1.99 — just below 2.0
         Test.assertEqualMessage(AppState.sgDisclosureLine(),
-            "This dose is well above what the pump's calculator suggested — please confirm before delivering.",
-            "ratio 1.99 → still confirmExtra");
+            "This dose is well above what the pump's calculator suggested — hold to confirm carefully.",
+            "ratio 1.99 → still the higher-caution tier");
 
         AppState.unitsValue = 10.0;               // ratio 2.0 — boundary (>=)
         Test.assertEqualMessage(AppState.sgDisclosureLine(),
-            "This dose is far above what the pump's calculator suggested — please re-enter to confirm.",
-            "ratio 2.0 boundary → reenter");
-        Test.assertMessage(AppState.sgDisclosureIsCaution(), "reenter tier is a caution");
+            "This dose is far above what the pump's calculator suggested — hold to confirm very carefully.",
+            "ratio 2.0 boundary → highest-caution tier — no re-entry promise, still the same hold");
+        Test.assertMessage(AppState.sgDisclosureIsCaution(), "highest-caution tier is a caution");
         return true;
     }
 
-    // SG2's max-proximity floor: reaching the pump's OWN reported max forces at least confirmExtra even
-    // at a modest override ratio that alone would only disclose.
+    // SG2's max-proximity floor: reaching the pump's OWN reported max forces at least the higher-caution
+    // tier even at a modest override ratio that alone would only disclose.
     (:test)
     function maxProximityFloorsAtConfirmExtra(logger as Test.Logger) as Lang.Boolean {
         seed();
@@ -163,8 +185,8 @@ module StackingGuardTest {
         AppState.maxUnits = 6.0;                  // pump's own max, deliberately low
         AppState.unitsValue = 6.0;                // ratio 1.2 (would be disclose alone) AND == max
         Test.assertEqualMessage(AppState.sgDisclosureLine(),
-            "This dose is well above what the pump's calculator suggested — please confirm before delivering.",
-            "at pump max ⇒ confirmExtra even at a modest ratio");
+            "This dose is well above what the pump's calculator suggested — hold to confirm carefully.",
+            "at pump max ⇒ higher-caution tier even at a modest ratio");
 
         AppState.maxUnits = 25.0;                 // remove the floor — same ratio now only discloses
         Test.assertEqualMessage(AppState.sgDisclosureLine(),
@@ -180,12 +202,12 @@ module StackingGuardTest {
         seed();
         AppState.carbsValue = 50; AppState.mode = "units"; AppState.unitsValue = 6.0;   // ratio 1.2
         Test.assertMessage(!AppState.sgDisclosureLine().equals(
-            "This dose is well above what the pump's calculator suggested — please confirm before delivering."),
+            "This dose is well above what the pump's calculator suggested — hold to confirm carefully."),
             "ratio 1.2 is below the DEFAULT confirmExtra cut-point");
 
         AppState.sgConfirmExtraOverrideRatio = 1.1;   // lower the cut-point below the same 1.2 ratio
         Test.assertEqualMessage(AppState.sgDisclosureLine(),
-            "This dose is well above what the pump's calculator suggested — please confirm before delivering.",
+            "This dose is well above what the pump's calculator suggested — hold to confirm carefully.",
             "same ratio now crosses the LOWERED cut-point");
         return true;
     }
