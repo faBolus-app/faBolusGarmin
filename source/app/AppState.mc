@@ -1619,12 +1619,21 @@ module AppState {
             }
             // Staleness policy from the phone: glucoseStaleMinutes (>0), glucoseHideDelayMinutes
             // (0 = hide when stale, absent = never hide).
-            var sm = numRange(data["glucoseStaleMinutes"], 1, 720); if (sm != null) { staleSec = sm * 60; }
+            // 19-03 (G-M1/T-19-09): the persist below is now CONDITIONAL on glucoseStaleMinutes being
+            // present+in-range (sm != null) — previously it ran on EVERY statusRead reply regardless,
+            // which (a) clobbered the persisted policy with the in-memory default/last-good value on a
+            // reply that simply omitted the key (never the phone's intent — every other field in this
+            // parser already treats an absent/invalid key as "keep last", see numRange's own contract),
+            // and (b) rewrote the same flash cell on every ~15s poll even when the policy never changed.
+            var sm = numRange(data["glucoseStaleMinutes"], 1, 720);
+            if (sm != null) {
+                staleSec = sm * 60;
+                // GA-08: persist the staleness policy so the glance / complication (separate launch
+                // contexts) and a cold restart honor it before the next statusRead arrives.
+                Storage.setValue("staleSec", staleSec);
+            }
             var hd = numRange(data["glucoseHideDelayMinutes"], 0, 1440);
             hideDelaySec = (hd != null) ? hd * 60 : null;
-            // GA-08: persist the staleness policy so the glance / complication (separate launch contexts)
-            // and a cold restart honor it before the next statusRead arrives.
-            Storage.setValue("staleSec", staleSec);
             if (hideDelaySec != null) { Storage.setValue("hideDelaySec", hideDelaySec); }
             else { Storage.deleteValue("hideDelaySec"); }
             // E5: parse history and its per-point epochs in LOCKSTEP so the two arrays are guaranteed
@@ -1652,16 +1661,19 @@ module AppState {
             // garminBolusEnabled), NOT supportsRemoteAlertDismiss (declared false, never restored).
             var sda2 = data["supportsDismissAck"];
             if (sda2 instanceof Lang.Boolean) {
+                // 19-03 (G-M1/T-19-10): change-detected — this capability is present on EVERY reply, so
+                // writing unconditionally re-wrote the same flash cell on every poll even when unchanged.
+                if (supportsDismissAck != sda2) { Storage.setValue(KEY_SUPPORTS_DISMISS_ACK, sda2); }
                 supportsDismissAck = sda2;
-                Storage.setValue(KEY_SUPPORTS_DISMISS_ACK, supportsDismissAck);
             }
             // 14-10 (D1) — the raw-snapshot backstop's DYNAMIC capability, parsed+persisted alongside
             // supportsDismissAck (same H1 reason: BEFORE the alerts-replace below, so the first
             // post-relaunch statusRead resolves the correct tier).
             var sra = data["supportsRawAlertSnapshot"];
             if (sra instanceof Lang.Boolean) {
+                // 19-03 (G-M1/T-19-10): change-detected, same reasoning as supportsDismissAck above.
+                if (supportsRawAlertSnapshot != sra) { Storage.setValue(KEY_SUPPORTS_RAW_ALERT_SNAPSHOT, sra); }
                 supportsRawAlertSnapshot = sra;
-                Storage.setValue(KEY_SUPPORTS_RAW_ALERT_SNAPSHOT, supportsRawAlertSnapshot);
             }
             // 14-10 (D1) — detect whether `rawAlerts` is a PRESENT Array (nil/non-Array ⇒ absent) and, if
             // so, parse it into an identity set BEFORE the alerts-replace, using the TITLE-AGNOSTIC
@@ -1703,14 +1715,22 @@ module AppState {
             // P15 §2.3: whether bolusing from this Garmin is enabled on the phone (default OFF). Persist so a
             // cold launch stays fail-closed on the last-known value. Also the passcode-required flag (drives
             // confirm). Strict guards: a non-boolean is ignored (keeps the last / safe default).
+            // 19-03 (G-M1/T-19-10): change-detected — garminBolusEnabled/bolusPasscodeRequired are present
+            // on EVERY reply, so writing unconditionally re-wrote the same flash cell on every poll.
             var gbe2 = data["garminBolusEnabled"];
-            if (gbe2 instanceof Lang.Boolean) { garminBolusEnabled = gbe2; Storage.setValue("garminBolusEnabled", garminBolusEnabled); }
+            if (gbe2 instanceof Lang.Boolean) {
+                if (garminBolusEnabled != gbe2) { Storage.setValue("garminBolusEnabled", gbe2); }
+                garminBolusEnabled = gbe2;
+            }
             var bpr = data["bolusPasscodeRequired"];
             // C2 §2.3: persist like garminBolusEnabled so a cold launch / background context knows a
             // passcode is required before the first statusRead (loadPrefs restores it). Strict guard: a
             // non-boolean is ignored (keeps the last / safe default). The watch only COLLECTS the code and
             // sends it; the phone verifies + persists nothing here beyond this required flag.
-            if (bpr instanceof Lang.Boolean) { bolusPasscodeRequired = bpr; Storage.setValue("bolusPasscodeRequired", bolusPasscodeRequired); }
+            if (bpr instanceof Lang.Boolean) {
+                if (bolusPasscodeRequired != bpr) { Storage.setValue("bolusPasscodeRequired", bpr); }
+                bolusPasscodeRequired = bpr;
+            }
             // B2 (S1 + O3): the pump's controller identity + Control-IQ runtime on/off, for the LOCAL
             // auto-correction disclosure. FROZEN token set (CONTROLLER_VARIANTS = the schema
             // `controllerVariant` enum) — an unknown/garbage variant is ignored (keeps the last / safe
@@ -1821,26 +1841,39 @@ module AppState {
             if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
             var bi = fltRange(data["bolusIncrement"], 0.01, 5.0); if (bi != null) { stepU = bi; }
             var ci = numRange(data["carbIncrement"], 1, 100); if (ci != null) { stepC = ci; }
+            // 19-03 (G-M1/T-19-10): change-detected — screenOrder/defaultScreen/detailsOrder/
+            // watchChartRanges are sent on every reply the phone has them configured, so writing
+            // unconditionally re-wrote the same flash cell on every poll even when the layout never
+            // changed. Lang.Array has no built-in structural equality (sameArray() above); scalars use
+            // the same `!=`/`.equals()` idiom as the Boolean settings above.
             var so = data["screenOrder"];
             if (so instanceof Lang.Array) {
-                screenOrder = sanitizeOrder(so);
-                Storage.setValue("screenOrder", screenOrder);
+                var sanSo = sanitizeOrder(so);
+                if (!sameArray(screenOrder, sanSo)) { Storage.setValue("screenOrder", sanSo); }
+                screenOrder = sanSo;
             }
             var ds = data["defaultScreen"] as Lang.String?;
             if (ds != null && contains(screenOrder, ds)) {
+                if (!defaultScreen.equals(ds)) { Storage.setValue("defaultScreen", ds); }
                 defaultScreen = ds;
-                Storage.setValue("defaultScreen", ds);
             }
             ensureValidDefault();
             var detOrderRaw = data["detailsOrder"];
             if (detOrderRaw instanceof Lang.Array) {
                 var detOrderSan = sanitizeAgainst(detOrderRaw, ALL_DETAILS);
-                if (detOrderSan.size() > 0) { detailsOrder = detOrderSan; Storage.setValue("detailsOrder", detailsOrder); }
+                if (detOrderSan.size() > 0) {
+                    if (!sameArray(detailsOrder, detOrderSan)) { Storage.setValue("detailsOrder", detOrderSan); }
+                    detailsOrder = detOrderSan;
+                }
             }
             var chartRaw = data["watchChartRanges"];
             if (chartRaw instanceof Lang.Array) {
                 var chartSan = sanitizeRanges(chartRaw);
-                if (chartSan.size() > 0) { chartRanges = chartSan; Storage.setValue("watchChartRanges", chartRanges); ensureValidPlotHours(); }
+                if (chartSan.size() > 0) {
+                    if (!sameArray(chartRanges, chartSan)) { Storage.setValue("watchChartRanges", chartSan); }
+                    chartRanges = chartSan;
+                    ensureValidPlotHours();
+                }
             }
             // Phase 09.13 (D-05/D-06/D-07/D-08/D-10, threat T-09.13-08): Garmin is in the SMALL-SCREEN
             // group (same as the Apple Watch) — resolve the small-screen OVERRIDE first
@@ -1854,7 +1887,11 @@ module AppState {
             if (pf == null) { pf = numRange(data["glucosePlotFloor"], 1, 1000); }
             var pc = numRange(data["glucosePlotCeilingSmall"], 1, 1000);
             if (pc == null) { pc = numRange(data["glucosePlotCeiling"], 1, 1000); }
+            // 19-03 (G-M1/T-19-10): change-detected — plotFloor/plotCeiling are recomputed and re-sent on
+            // every reply even when the resolved bounds are identical to last time.
             if (pf != null && pc != null) {
+                var priorPlotFloor = plotFloor;
+                var priorPlotCeiling = plotCeiling;
                 if (pf < pc) {
                     plotFloor = pf;
                     plotCeiling = pc;
@@ -1862,31 +1899,41 @@ module AppState {
                     plotFloor = 40;
                     plotCeiling = 300;
                 }
-                Storage.setValue("plotFloor", plotFloor);
-                Storage.setValue("plotCeiling", plotCeiling);
+                if (priorPlotFloor != plotFloor) { Storage.setValue("plotFloor", plotFloor); }
+                if (priorPlotCeiling != plotCeiling) { Storage.setValue("plotCeiling", plotCeiling); }
             }
+            // 19-03 (G-M1/T-19-10): change-detected, same reasoning as the settings keys above.
             var cdisp = data["garminComplicationDisplay"];
             if (cdisp instanceof Lang.String && ((cdisp as Lang.String).equals("numericColor") || (cdisp as Lang.String).equals("stringTrend"))) {
-                complicationDisplay = cdisp; Storage.setValue("complicationDisplay", complicationDisplay);
+                if (!complicationDisplay.equals(cdisp)) { Storage.setValue("complicationDisplay", cdisp); }
+                complicationDisplay = cdisp;
             }
             // P15 E4b: the clock screen's analog-vs-digital choice is now PHONE-DRIVEN, replacing the old
             // on-watch tap toggle. Persist under the SAME "clockAnalog" Storage key ClockView.analog()
             // reads, so a cold launch keeps the last phone-pushed value. Strict guard (mirrors
             // remotesReadOnly / garminBolusEnabled): a non-boolean is ignored, leaving the last persisted
             // value (or ClockView's digital default when never set) untouched.
+            // 19-03 (G-M1/T-19-10): change-detected against the CURRENT persisted value (this field has
+            // no in-memory AppState mirror — ClockView reads Storage directly — so the "before" value is
+            // read back rather than compared against a field).
             var ca = data["clockAnalog"];
-            if (ca instanceof Lang.Boolean) { Storage.setValue("clockAnalog", ca); }
+            if (ca instanceof Lang.Boolean) {
+                var priorCa = Storage.getValue("clockAnalog");
+                if (!(priorCa instanceof Lang.Boolean) || (priorCa as Lang.Boolean) != ca) {
+                    Storage.setValue("clockAnalog", ca);
+                }
+            }
             // P-mmol / D-04: display-unit token mirrored from the phone (RemoteCommand.
             // glucoseDisplayUnit, additive-optional). Strict guard (mirrors clockAnalog/
             // garminComplicationDisplay above): only a recognized "mgdl"|"mmol" token is adopted +
             // persisted; an absent/unrecognized token is ignored, keeping the last persisted value —
             // which fails closed to "mgdl" on a fresh install / older phone build that never sends it
             // (T-04-02). The canonical glucose/isf/targetBg Numbers are never touched here — only the
-            // label this token selects.
+            // label this token selects. 19-03 (G-M1/T-19-10): change-detected, same reasoning as above.
             var gu = data["glucoseDisplayUnit"];
             if (gu instanceof Lang.String && isValidUnitToken(gu as Lang.String)) {
+                if (!glucoseUnit.equals(gu)) { Storage.setValue("glucoseDisplayUnit", gu); }
                 glucoseUnit = gu;
-                Storage.setValue("glucoseDisplayUnit", glucoseUnit);
             }
             // VA-07: after EVERY field above is parsed, recompute the bolus eligibility fingerprint. When
             // it changes from the last-seen one, bump the generation — any armed confirm whose snapshot
@@ -1969,6 +2016,19 @@ module AppState {
         if (!(v instanceof Lang.String)) { return null; }
         var s = v as Lang.String;
         return (s.length() > max) ? s.substring(0, max) : s;
+    }
+    // 19-03 (G-M1/T-19-10): shallow element-wise equality for the settings-key change-detection below
+    // (screenOrder/detailsOrder/watchChartRanges are Arrays of Strings/Numbers). Lang.Array has no
+    // built-in structural equals() (it inherits Object's reference equality), so a change-detect guard
+    // needs its own compare; `==` is the same value-equality idiom this file already uses for boxed
+    // String/Number dictionary values (e.g. the dismissIdentity lookup's `a["id"] == id`).
+    (:background)
+    function sameArray(a as Lang.Array, b as Lang.Array) as Lang.Boolean {
+        if (a.size() != b.size()) { return false; }
+        for (var i = 0; i < a.size(); i += 1) {
+            if (a[i] != b[i]) { return false; }
+        }
+        return true;
     }
     (:background)
     const TREND_TOKENS = ["flat", "up", "down", "upup", "downdown", "up45", "down45", ""];
