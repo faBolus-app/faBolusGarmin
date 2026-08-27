@@ -10,7 +10,7 @@
                     launcherIcon="@Drawables.LauncherIcon"
                     name="@Strings.AppName"
                     type="watch-app"
-                    minSdkVersion="3.3.0">
+                    minSdkVersion="5.1.0">
         <iq:products>
             <!-- Touchscreen watches. venu3s is hardware-validated (the sole supported device). -->
             <iq:product id="venu3s"/>
