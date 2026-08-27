@@ -59,6 +59,10 @@ remotesReadOnly
 canBolus
 bolusBlockReason
 supportsRemoteAlertDismiss
+# CX-G-08 (14-09) — DYNAMIC pump-tied capability: true only when the phone build supports the
+# authenticated dismissAck path AND the connected pump honors a remote dismiss. Persisted (mirrors
+# garminBolusEnabled), parsed BEFORE the alerts replace (H1).
+supportsDismissAck
 garminBolusEnabled
 bolusPasscodeRequired
 controllerVariant

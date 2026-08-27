@@ -51,8 +51,17 @@ while IFS= read -r line; do
   fi
 done < "$KEYS"
 
+
+# (3) CX-G-08 (14-09) — the `dismissAck` kind must have a real handler in AppState.mc, not just a
+# schema entry: catches the T-14-27 drift class (adding the kind/capability to the shared contract
+# while the watch never actually handles the wire message — the gates above would pass vacuously).
+if ! grep -qE 'kind\.equals\("dismissAck"\)' source/app/AppState.mc; then
+  echo "DRIFT: schema kind.enum carries 'dismissAck' but AppState.mc has no dismissAck handle() branch"
+  fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "❌ Garmin remote is out of sync with $SCHEMA. Update schema/remote-keys.txt and the Monkey C keys together."
   exit 1
 fi
-echo "✅ Garmin remote keys match $SCHEMA (schema version $schema_ver, $count keys)."
+echo "✅ Garmin remote keys match $SCHEMA (schema version $schema_ver, $count keys, dismissAck handler present)."

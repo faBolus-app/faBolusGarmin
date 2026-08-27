@@ -108,6 +108,19 @@ class FaBolusApp extends App.AppBase {
         RemoteComm.send(RemoteComm.statusRead(reqId));
         _pollOutstanding = true;
         _pollSentEpoch = now;
+        // CX-G-08 (14-09): bounded retry, piggybacked on this SAME existing tick (no new timer/radio
+        // wake, mirrors the HR piggyback immediately below) — re-dispatch any unacked, UNEXPIRED dismiss
+        // REUSING the SAME requestId+generation the wearer's original confirm minted (a lost-ack retry
+        // never mints a new one). Guarded like emitIfDue() so a throw here can never skip
+        // scheduleNextPoll() (C5-01/CX-G-05 — the loop's only re-arm path).
+        try {
+            var dueRetries = AppState.dueDismissRetries(now);
+            for (var r = 0; r < dueRetries.size(); r += 1) {
+                var due = dueRetries[r] as Lang.Dictionary;
+                RemoteComm.send(RemoteComm.dismissAlert(due["requestId"], due["id"], due["kind"]));
+            }
+        } catch (e) {
+        }
         // Piggyback ambient HR on the existing status cadence (D-08) — no new timer/radio wake. No-op
         // unless the phone's hr_ctl toggle enabled it (D-09).
         // C5-01/CX-G-05: emitIfDue() (its Comm.transmit) must NEVER be allowed to skip scheduleNextPoll()

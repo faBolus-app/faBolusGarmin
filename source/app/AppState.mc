@@ -101,6 +101,15 @@ module AppState {
     // dismiss won't clear on the pump); the statusRead that carries an alert also carries this flag.
     var supportsRemoteAlertDismiss as Lang.Boolean = false;
 
+    // CX-G-08 (14-09, checkpoint #5/M2, H1) — DYNAMIC pump-tied capability: true only when the phone
+    // build supports the authenticated dismissAck path AND the connected pump honors a remote dismiss.
+    // UNLIKE supportsRemoteAlertDismiss above (declared false, NEVER persisted/restored), this one IS
+    // persisted (Storage.setValue on parse, mirroring garminBolusEnabled) and restored in loadPrefs —
+    // so a relaunch resumes in ack-mode instead of defaulting false and letting the FIRST post-relaunch
+    // filtered statusRead fall through to the 14-08 fallback with no authenticated ack (H1's exact
+    // fail-open). Parsed in handle() BEFORE the alerts-replace (below) for the same reason.
+    var supportsDismissAck as Lang.Boolean = false;
+
     // P12 group D: the host's authoritative "may a remote start a bolus right now?" (schema `canBolus`),
     // plus its reason token (`bolusBlockReason`: "pumpNotLinked" | "bolusInFlight" | "accessDenied").
     // null until the host sends them (older host) → pumpBolusAllowed() falls back to deriving from the
@@ -319,6 +328,11 @@ module AppState {
                 unresolvedTombstoneDoseKey = strCap(tomb["doseKey"], 64);
             }
         }
+        // CX-G-08 (14-09, H1/HIGH-B): restore the two-lane dismiss state (retry lane + display
+        // provisional lane) AND the persisted supportsDismissAck capability, so a cold relaunch resumes
+        // in ack-mode (last-known) and keeps a wearer-dismissed-but-unacked alert overlaid instead of
+        // starting fresh with no memory of it.
+        loadDismissState();
     }
 
     // Frozen wire-token set for the display-unit field (Pitfall 6 — never a raw enum on the wire).
@@ -1523,12 +1537,32 @@ module AppState {
                     historyEpochs = [];   // no/misaligned epochs → fall back to assumed spacing
                 }
             }
-            // CX-G-08: a fresh, authoritative alerts list just replaced the old one — this is the ONLY
-            // proof-of-absence event that reconciles a provisional "dismiss sent" flag (see
-            // markDismissSent/reconcileDismissSent above; AlertConfirmDelegate no longer removes an
-            // alert locally on a bare dispatch).
+            // CX-G-08 (14-09, H1): parse the DYNAMIC pump-tied capability BEFORE the alerts replace
+            // below — moving/gating this above :1531-era code is the H1 fix: a relaunch's first
+            // post-restart filtered statusRead (capability restored+re-parsed from THIS message) must
+            // not fall through to the 14-08 fallback with no authenticated ack. Persisted (mirrors
+            // garminBolusEnabled), NOT supportsRemoteAlertDismiss (declared false, never restored).
+            var sda2 = data["supportsDismissAck"];
+            if (sda2 instanceof Lang.Boolean) {
+                supportsDismissAck = sda2;
+                Storage.setValue(KEY_SUPPORTS_DISMISS_ACK, supportsDismissAck);
+            }
+            // CX-G-08: a fresh, authoritative alerts list just replaced the old one. CAPABILITY-GATED
+            // (checkpoint #5/M2): supportsDismissAck present+true ⇒ authenticated-ack-only — OVERLAY any
+            // retained unacked DISPLAY provisional(s) so the filtered snapshot can never drop one
+            // (T-14-25); absent/false ⇒ the 14-08 fallback (reconcileDismissSent — the ONLY proof-of-
+            // absence event for the dismissSentAlertIdentities mechanism; markDismissSent/
+            // reconcileDismissSent above). NEVER both: overlaying in the fallback branch would defeat its
+            // filtered-absence removal with a stale, never-to-be-acked provisional.
             var al = data["alerts"];
-            if (al instanceof Lang.Array) { alerts = sanitizeAlerts(al); reconcileDismissSent(); }
+            if (al instanceof Lang.Array) {
+                alerts = sanitizeAlerts(al);
+                if (supportsDismissAck) {
+                    overlayUnackedDismissProvisionals();
+                } else {
+                    reconcileDismissSent();
+                }
+            }
             var ro = data["remotesReadOnly"]; if (ro instanceof Lang.Boolean) { readOnly = ro; }
             // P13 capability channel: whether a remote dismiss clears on the pump (Mobi) or only snoozes
             // locally (t:slim) — drives the alert confirm verb. Strict guard: a non-boolean is ignored.
@@ -1763,6 +1797,10 @@ module AppState {
                     }
                 }
             }
+        } else if (kind.equals("dismissAck")) {
+            // CX-G-08 (14-09) — the SOLE authenticated remover of a wearer-initiated Garmin dismiss.
+            // handleDismissAck is CX-G-11-guarded (malformed/mismatched/expired ⇒ safe no-op).
+            handleDismissAck(strCap(data["requestId"], 64), data["alertId"], data["alertKind"]);
         }
     }
     const STATUS_TOKENS = ["delivering", "delivered", "cancelled", "cancelling", "failed", "unknown"];
@@ -1904,6 +1942,212 @@ module AppState {
             if (containsStr(active, ident)) { kept.add(ident); }
         }
         dismissSentAlertIdentities = kept;
+    }
+
+    // ========================================================================================
+    // CX-G-08 (14-09) — authenticated dismiss-ack: TWO-LANE durable state.
+    //
+    // Mirrors the phone's `GarminDismissReceiptStore` lifecycle exactly (see that type's own doc
+    // comment): Lane 1 (RETRY/PENDING, {requestId, generation, createdAt}, per identity) has a named
+    // TTL WELL under the pump's 30-min re-nag — MAY expire/prune, capped; pruning removes NO alert
+    // (M1/HIGH-C). Lane 2 (DISPLAY provisional, {id, kind, title}, per identity) is retained until an
+    // authenticated dismissAck removes it — NEVER TTL-pruned, NEVER evicted on cap overflow (eviction =
+    // fail-open). Both persisted (Application.Storage) so they survive a relaunch (HIGH-B); overlaid
+    // onto the statusRead alerts replace in handle() when `supportsDismissAck` is true (H1).
+    const KEY_DISMISS_PENDING = "dismissPending";           // identity -> {requestId, generation, createdAt}
+    const KEY_DISMISS_PROVISIONAL = "dismissProvisional";   // identity -> {id, kind, title}
+    const KEY_SUPPORTS_DISMISS_ACK = "supportsDismissAck";
+    // 10 minutes — WELL under the pump's 30-min re-nag (snoozeWindow, TandemBackend.swift) and matching
+    // the phone's own GarminDismissReceiptStore.ttl, so the two ends stop correlating together.
+    const DISMISS_RETRY_TTL_SEC = 600;
+    // Bounded RETRY lane only (oldest pruned on overflow) — the DISPLAY lane is never capped.
+    const DISMISS_RETRY_CAP = 8;
+
+    var dismissPending as Lang.Dictionary = {};
+    var dismissProvisional as Lang.Dictionary = {};
+
+    function dismissIdentity(id, kind) as Lang.String {
+        return kind.toString() + "-" + id.toString();
+    }
+
+    // L2: look up an active alert's title by identity, for the DISPLAY provisional snapshot —
+    // AlertConfirmDelegate only holds `_id`/`_kind`, never the title.
+    function alertTitleFor(id, kind) as Lang.String {
+        for (var i = 0; i < alerts.size(); i += 1) {
+            var a = alerts[i] as Lang.Dictionary;
+            if (a["id"] == id && a["kind"] == kind) {
+                var t = a["title"];
+                return (t instanceof Lang.String) ? t : "";
+            }
+        }
+        return "";
+    }
+
+    // AlertConfirmDelegate.onResponse calls this ONCE per wearer confirm: mints a NEW requestId +
+    // generation — a genuinely NEW occurrence always REPLACES any prior retry entry for the SAME
+    // identity (per-identity: at most one retry entry + one provisional) — persists BOTH lanes, and
+    // returns the requestId to send. A lost-ack RETRY (the bounded-retry mechanism below) reuses the
+    // SAME requestId+generation instead of calling this again.
+    function beginDismiss(id, kind, title as Lang.String) as Lang.String {
+        var ident = dismissIdentity(id, kind);
+        var prior = dismissPending[ident];
+        var generation = (prior instanceof Lang.Dictionary && prior["generation"] instanceof Lang.Number)
+            ? (prior["generation"] as Lang.Number) + 1 : 1;
+        var reqId = RemoteComm.newRequestId();
+        dismissPending[ident] = { "requestId" => reqId, "generation" => generation, "createdAt" => Time.now().value() };
+        capDismissPending();
+        dismissProvisional[ident] = { "id" => id, "kind" => kind, "title" => title };
+        saveDismissPending();
+        saveDismissProvisional();
+        return reqId;
+    }
+
+    // Bounded cap on the RETRY lane ONLY (oldest createdAt pruned) — the DISPLAY lane
+    // (dismissProvisional) is NEVER capped/evicted (M1/HIGH-C: eviction of a wearer-dismissed
+    // provisional would be fail-open).
+    function capDismissPending() as Void {
+        var keys = dismissPending.keys();
+        if (keys.size() <= DISMISS_RETRY_CAP) { return; }
+        var oldestKey = null;
+        var oldestCreated = null;
+        for (var i = 0; i < keys.size(); i += 1) {
+            var k = keys[i];
+            var e = dismissPending[k] as Lang.Dictionary;
+            var created = e["createdAt"];
+            if (created instanceof Lang.Number && (oldestCreated == null || created < oldestCreated)) {
+                oldestCreated = created;
+                oldestKey = k;
+            }
+        }
+        if (oldestKey != null) { dismissPending.remove(oldestKey); }
+    }
+
+    function saveDismissPending() as Void { Storage.setValue(KEY_DISMISS_PENDING, dismissPending); }
+    function saveDismissProvisional() as Void { Storage.setValue(KEY_DISMISS_PROVISIONAL, dismissProvisional); }
+
+    // Restore both lanes + the persisted capability on loadPrefs/restart. Strict shape validation
+    // (never trap): a malformed entry is DROPPED rather than adopted (mirrors the tombstone restore's
+    // strCap-guarded discipline just above).
+    function loadDismissState() as Void {
+        var pendRaw = Storage.getValue(KEY_DISMISS_PENDING);
+        if (pendRaw instanceof Lang.Dictionary) {
+            var pend = pendRaw as Lang.Dictionary;
+            var outP = {};
+            var pkeys = pend.keys();
+            for (var i = 0; i < pkeys.size(); i += 1) {
+                var k = pkeys[i];
+                var e = pend[k];
+                if (e instanceof Lang.Dictionary && (e["requestId"] instanceof Lang.String)
+                        && (e["generation"] instanceof Lang.Number) && (e["createdAt"] instanceof Lang.Number)) {
+                    outP[k] = e;
+                }
+            }
+            dismissPending = outP;
+        }
+        var provRaw = Storage.getValue(KEY_DISMISS_PROVISIONAL);
+        if (provRaw instanceof Lang.Dictionary) {
+            var prov = provRaw as Lang.Dictionary;
+            var outV = {};
+            var vkeys = prov.keys();
+            for (var i = 0; i < vkeys.size(); i += 1) {
+                var k = vkeys[i];
+                var e = prov[k];
+                if (e instanceof Lang.Dictionary && isNum(e["id"]) && isNum(e["kind"]) && (e["title"] instanceof Lang.String)) {
+                    outV[k] = e;
+                }
+            }
+            dismissProvisional = outV;
+        }
+        var sda = Storage.getValue(KEY_SUPPORTS_DISMISS_ACK);
+        if (sda instanceof Lang.Boolean) { supportsDismissAck = sda; }
+    }
+
+    // Clock-rollback / future-timestamp discipline (mirrors the phone's GarminDismissReceiptStore
+    // exactly): a future `createdAt` or a negative elapsed treats the RETRY entry as expired/invalid —
+    // it stops accepting acks + retries. The DISPLAY provisional (a SEPARATE map) is never touched by
+    // this check either way (M1/HIGH-C: expiry is never a remover).
+    function dismissRetryExpired(entry as Lang.Dictionary, now as Lang.Number) as Lang.Boolean {
+        var created = entry["createdAt"];
+        if (!(created instanceof Lang.Number)) { return true; }
+        var elapsed = now - (created as Lang.Number);
+        return elapsed < 0 || elapsed >= DISMISS_RETRY_TTL_SEC;
+    }
+
+    // The bounded-retry surface (called from FaBolusApp's existing foreground poll tick): identities
+    // with an unacked, UNEXPIRED retry entry — the caller re-dispatches RemoteComm.dismissAlert
+    // REUSING the SAME requestId (never minting a new one; a retry is not a new occurrence). Expired
+    // entries are lazily pruned here — this removes ONLY retry-lane bookkeeping, never an alert.
+    function dueDismissRetries(now as Lang.Number) as Lang.Array {
+        var out = [];
+        var keys = dismissPending.keys();
+        var toPrune = [];
+        for (var i = 0; i < keys.size(); i += 1) {
+            var k = keys[i];
+            var e = dismissPending[k] as Lang.Dictionary;
+            if (dismissRetryExpired(e, now)) {
+                toPrune.add(k);
+                continue;
+            }
+            var prov = dismissProvisional[k];
+            if (prov instanceof Lang.Dictionary) {
+                out.add({ "requestId" => e["requestId"], "id" => prov["id"], "kind" => prov["kind"] });
+            }
+        }
+        if (toPrune.size() > 0) {
+            for (var j = 0; j < toPrune.size(); j += 1) { dismissPending.remove(toPrune[j]); }
+            saveDismissPending();
+        }
+        return out;
+    }
+
+    // The `dismissAck` handle() branch (CX-G-11 guarded): removes the alert ONLY when the incoming
+    // requestId matches the retained retry entry for the ack's (alertId, alertKind) identity AND that
+    // entry is unexpired. A mismatched requestId, a mismatched identity (the ack's alertId/alertKind
+    // simply won't resolve to the entry that owns the matching requestId), an expired entry, or a
+    // malformed ack (missing/non-Number/non-String fields) all safely no-op — never a false removal
+    // (T-14-26). On success calls the PRESERVED `removeAlert` and clears BOTH persisted lanes for that
+    // identity (a later re-occurrence mints a fresh entry via beginDismiss).
+    function handleDismissAck(rid, aid, akind) as Void {
+        if (!(rid instanceof Lang.String) || !isNum(aid) || !isNum(akind)) { return; }
+        var ident = dismissIdentity(aid, akind);
+        var entry = dismissPending[ident];
+        if (!(entry instanceof Lang.Dictionary)) { return; }
+        var storedReqId = entry["requestId"];
+        if (!(storedReqId instanceof Lang.String) || !(storedReqId as Lang.String).equals(rid)) { return; }
+        if (dismissRetryExpired(entry, Time.now().value())) { return; }   // HIGH-C: expiry is never a remover
+        removeAlert(aid, akind);
+        dismissPending.remove(ident);
+        dismissProvisional.remove(ident);
+        saveDismissPending();
+        saveDismissProvisional();
+    }
+
+    // H1/HIGH-B/L1: re-add any retained-but-unacked DISPLAY provisional NOT present in the
+    // just-replaced `alerts` snapshot, so a filtered statusRead can never silently drop a
+    // wearer-dismissed-but-unacked alert — called from handle() ONLY when `supportsDismissAck` is true
+    // (ack-mode; the capability-absent/false branch runs the 14-08 `reconcileDismissSent()` fallback
+    // instead and must NOT overlay, or a stale provisional would defeat that fallback's filtered-
+    // absence removal). Force-marks each overlaid identity 'seen' (KEY_SEEN_ALERTS) so re-overlaying it
+    // on every subsequent statusRead never re-triggers a notify/vibrate (L1) — the wearer already knows.
+    function overlayUnackedDismissProvisionals() as Void {
+        var active = activeAlertIdentities();
+        var keys = dismissProvisional.keys();
+        if (keys.size() == 0) { return; }
+        var overlaidIdents = [];
+        for (var i = 0; i < keys.size(); i += 1) {
+            var ident = keys[i] as Lang.String;
+            if (containsStr(active, ident)) { continue; }   // already present — nothing to overlay
+            var prov = dismissProvisional[ident] as Lang.Dictionary;
+            alerts.add({ "id" => prov["id"], "kind" => prov["kind"], "title" => prov["title"] });
+            overlaidIdents.add(ident);
+        }
+        if (overlaidIdents.size() > 0) {
+            var seen = loadSeenAlerts();
+            for (var j = 0; j < overlaidIdents.size(); j += 1) {
+                if (!containsStr(seen, overlaidIdents[j])) { seen.add(overlaidIdents[j]); }
+            }
+            saveSeenAlerts(seen);
+        }
     }
 
     // CX-G-08 count bound (the "50-vs-4 mismatch"): sanitizeAlerts stores up to 50 alerts, but
