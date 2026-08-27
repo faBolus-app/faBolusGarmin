@@ -2167,7 +2167,8 @@ module AppState {
         var prior = dismissPending[ident];
         var generation = (prior instanceof Lang.Dictionary && prior["generation"] instanceof Lang.Number)
             ? (prior["generation"] as Lang.Number) + 1 : 1;
-        var reqId = RemoteComm.newRequestId();
+        // 19-03 (G-M1): ROUTINE mint (a wearer dismiss-confirm) — see RemoteComm.newRoutineRequestId().
+        var reqId = RemoteComm.newRoutineRequestId();
         dismissPending[ident] = { "requestId" => reqId, "generation" => generation, "createdAt" => Time.now().value() };
         capDismissPending();
         dismissProvisional[ident] = { "id" => id, "kind" => kind, "title" => title };

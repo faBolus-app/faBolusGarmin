@@ -31,7 +31,9 @@ class BgServiceDelegate extends System.ServiceDelegate {
             Comm.registerForPhoneAppMessages(method(:onPhoneMessage));
             try {
                 // R2-15: retain the minted id so we accept ONLY the phone's correlated reply (it echoes it).
-                mintedReqId = RemoteComm.newRequestId();
+                // 19-03 (G-M1): ROUTINE mint (fires every ~5-min temporal event) — see
+                // RemoteComm.newRoutineRequestId().
+                mintedReqId = RemoteComm.newRoutineRequestId();
                 Comm.transmit(RemoteComm.statusRead(mintedReqId), null, new BgCommListener());
                 return;   // wait for the reply; the system bounds our runtime
             } catch (e) {

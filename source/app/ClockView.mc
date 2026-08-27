@@ -21,7 +21,8 @@ class ClockView extends Ui.View {
     // self-redraw so the analog hands advance even with no phone push (E4: the minute hand must not sit
     // stale between the ~5-min status polls). 30 s keeps the minute hand crisp near minute boundaries.
     function onShow() as Void {
-        RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRequestId()));
+        // 19-03 (G-M1): ROUTINE mint (fires on every screen show) — see RemoteComm.newRoutineRequestId().
+        RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRoutineRequestId()));
         if (_timer == null) { _timer = new Timer.Timer(); }
         _timer.start(method(:onTick), 30000, true);
     }

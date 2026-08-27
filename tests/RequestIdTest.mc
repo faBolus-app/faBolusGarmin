@@ -8,6 +8,12 @@ using Toybox.Application.Storage;
 // the id. These pin (a) two successive ids differ and (b) the reboot invariant — a persisted seed of 5
 // yields the next counter segment 6 even though the in-process register resets on reboot. RemoteComm is
 // compiled into the test binary (test.jungle). Style mirrors tests/SentAtTest.mc.
+//
+// 19-03 (G-M1): newRequestId() is now specifically the DURABLE mint — the ONLY caller left is the
+// dose-authorizing bolus/resume send (AppState.sendBolusNow). Every other (routine) hot-path mint
+// (statusRead/HR/dismissAlert) moved to RemoteComm.newRoutineRequestId(), which performs NO Storage
+// read/write — see tests/RoutineRequestIdTest.mc. This file's invariants (reboot persistence, "reqSeq"
+// advance) are unchanged and now pin the durable path exclusively.
 module RequestIdTest {
 
     // Two successive ids differ (the monotonic counter guarantees it even within one process/second).

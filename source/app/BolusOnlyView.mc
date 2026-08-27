@@ -10,7 +10,8 @@ class BolusOnlyView extends Ui.View {
     function initialize() { View.initialize(); }
 
     function onShow() as Void {
-        RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRequestId()));
+        // 19-03 (G-M1): ROUTINE mint (fires on every screen show) — see RemoteComm.newRoutineRequestId().
+        RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRoutineRequestId()));
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {

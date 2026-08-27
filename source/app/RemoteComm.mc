@@ -193,6 +193,27 @@ module RemoteComm {
         Storage.setValue(KEY_REQ_SEQ, _counter);
         return Time.now().value().toString() + "-" + _counter.toString() + "-" + System.getTimer().toString();
     }
+
+    // 19-03 (G-M1): the ROUTINE counterpart of newRequestId() above, for every hot-path mint that is
+    // NOT dose-authorizing — statusRead / statusReadFresh (pollTick, every View.onShow, the background
+    // temporal service) and dismissAlert (a wearer's confirm). Those fire far more often than a bolus
+    // (every ~15s of foreground polling alone) and their ids are never ledgered by the host for
+    // (peer,requestId) dose dedup — display/correlation-only. Doing newRequestId()'s Storage.get+set on
+    // every one of those mints was pure hot-path flash churn with no dedup benefit, so this mint is a
+    // module-level in-memory counter (seeded once per process at 0, like _counter above) with NO Storage
+    // read and NO Storage write, folded with the wall clock + boot timer for cross-process uniqueness —
+    // the SAME defense-in-depth folding newRequestId() uses. The "r" infix keeps a routine id's format
+    // (`<wallSec>-r<n>-<timer>`) textually distinct from a durable id's (`<wallSec>-<n>-<timer>`), so
+    // the two id spaces can never collide even minted in the same wall-clock second. The persisted
+    // "reqSeq" sequence — and therefore VA-17's reboot invariant — stays reserved for newRequestId()
+    // alone; RoutineRequestIdTest pins that this mint never reads/advances it.
+    (:background)
+    var _routineCounter = 0;
+    (:background)
+    function newRoutineRequestId() as Lang.String {
+        _routineCounter += 1;
+        return Time.now().value().toString() + "-r" + _routineCounter.toString() + "-" + System.getTimer().toString();
+    }
 }
 
 // Minimal ConnectionListener (transmit requires one). Delivery status comes back via the

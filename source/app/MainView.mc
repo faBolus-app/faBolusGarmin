@@ -14,7 +14,8 @@ class MainView extends Ui.View {
     // reconnect whose recovery push never reached the watch — that would otherwise leave the Bolus
     // button stuck greyed until the next 15s poll happened to land.
     function onShow() as Void {
-        RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRequestId()));
+        // 19-03 (G-M1): ROUTINE mint (fires on every screen show) — see RemoteComm.newRoutineRequestId().
+        RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRoutineRequestId()));
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {

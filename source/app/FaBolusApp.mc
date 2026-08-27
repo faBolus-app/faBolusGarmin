@@ -130,7 +130,8 @@ class FaBolusApp extends App.AppBase {
         // CX-G-03: mint + RETAIN the reqId (mirrors BgServiceDelegate.mintedReqId) so handlePhoneData can
         // accept ONLY the correlated statusRead reply — the same true id-correlation the background
         // service already does, now applied to the foreground poll too.
-        var reqId = RemoteComm.newRequestId();
+        // 19-03 (G-M1): ROUTINE mint (fires every ~15s) — see RemoteComm.newRoutineRequestId().
+        var reqId = RemoteComm.newRoutineRequestId();
         AppState.fgPollMintedReqId = reqId;
         RemoteComm.send(RemoteComm.statusRead(reqId));
         _pollOutstanding = true;

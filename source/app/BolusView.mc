@@ -12,7 +12,8 @@ class BolusEntryView extends Ui.View {
     // Poll once on entering the bolus screen: ask the phone to force a fresh CGM read so the estimate
     // is current (not continuously — battery). The phone also re-reads + runs the guard at delivery.
     function onShow() as Void {
-        RemoteComm.send(RemoteComm.statusReadFresh(RemoteComm.newRequestId()));
+        // 19-03 (G-M1): ROUTINE mint (fires on every screen show) — see RemoteComm.newRoutineRequestId().
+        RemoteComm.send(RemoteComm.statusReadFresh(RemoteComm.newRoutineRequestId()));
     }
 
     // Shared geometry (pixels), so touch hit-testing matches what's drawn. [x,y,w,h] / [cx,cy].
