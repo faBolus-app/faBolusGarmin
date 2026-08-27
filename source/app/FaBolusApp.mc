@@ -60,7 +60,7 @@ class FaBolusApp extends App.AppBase {
     // own Glances lifecycle doc, so constructing there would just relocate the same problem). Every other
     // use site (onStop, pollTick's emitIfDue()) already null-guards, so a never-toggled relay simply
     // stays null and inert — no behavior change for a phone that DOES send the toggle.
-    function initialize() { AppBase.initialize(); _eating = new EatingRelay(); _hr = new HeartRateRelay(); }
+    function initialize() { AppBase.initialize(); }
 
     function onStart(state as Lang.Dictionary?) as Void {
         Comm.registerForPhoneAppMessages(method(:onPhoneMessage));
@@ -210,14 +210,17 @@ class FaBolusApp extends App.AppBase {
             // EatingRelay` cast (never null immediately after the assignment above) keeps typecheck -l3
             // strict happy — a bare `_eating.stop()` on the nullable field type errors there even though
             // it's unreachable-when-null at runtime.
-            if (data["on"] == true) { _eating.start(); } else { _eating.stop(); }
+            if (_eating == null) { _eating = new EatingRelay(); }
+            var eating = _eating as EatingRelay;
+            if (data["on"] == true) { eating.start(); } else { eating.stop(); }
             return;
         }
         // Phone toggles ambient HR chart context (out-of-band, not a RemoteCommand). D-08/D-09:
         // enables/disables the phone-gated relay; when off the watch skips reading + sending HR.
         if (type instanceof Lang.String && (type as Lang.String).equals("hr_ctl")) {
             // G-H2 (19-02, Task 2): same lazy-construct-on-first-toggle deferral as EatingRelay above.
-            _hr.setEnabled(data["on"] == true);
+            if (_hr == null) { _hr = new HeartRateRelay(); }
+            (_hr as HeartRateRelay).setEnabled(data["on"] == true);
             return;
         }
         var kind = data["kind"];
