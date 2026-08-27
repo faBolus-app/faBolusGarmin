@@ -2582,18 +2582,37 @@ module AppState {
         Storage.setValue(KEY_BG_NOTIFIED_ALERTS, seen);
     }
 
-    // CX-G-06 (pure): the active alerts not yet surfaced as a background notification, then rewrites the
-    // bg-notified set to exactly activeAlertIdentities() — mirroring notifyNewAlerts()'s own seen-set
-    // discipline (VA-13/CX-G-07) so a cleared-then-refired alert notifies again in the background too, and
-    // a still-active alert is not re-notified on every temporal-event/phone-message tick. Pure except for
-    // the Storage read/write, so it is unit-testable without Toybox.Notifications (not invokable from the
-    // simulator's unit-test harness) — BgServiceDelegate.onPhoneMessage is the only caller that actually
-    // shows a notification for what this returns.
+    // CX-G-06 / 13-HG-01 (pure, no side effect): the active alerts not yet surfaced as a background
+    // notification. Deliberately does NOT write bgNotifiedAlerts itself — 13-HG-01 (codex HIGH) found
+    // that the old newBackgroundAlertsToNotify() rewrote the bg-notified set to activeAlertIdentities()
+    // BEFORE BgServiceDelegate.surfaceNewAlertsInBackground() had even attempted
+    // Notifications.showNotification() for any of them, so a single throw there both permanently marked
+    // every active alert "already notified" (no self-heal) AND aborted Background.exit() for the whole
+    // batch. The caller must persist ONLY the identities that actually posted — see
+    // reconciledBgNotifiedAlerts() below, which BgService.mc calls with the post-attempt result.
     (:background)
-    function newBackgroundAlertsToNotify() as Lang.Array {
-        var newOnes = newAlertsSince(loadBgNotifiedAlerts());
-        saveBgNotifiedAlerts(activeAlertIdentities());
-        return newOnes;
+    function pendingBgNotifyAlerts() as Lang.Array {
+        return newAlertsSince(loadBgNotifiedAlerts());
+    }
+
+    // 13-HG-01 (pure): the bg-notified set to persist after one surfaceNewAlertsInBackground() pass.
+    // `presented` is exactly the identities whose Notifications.showNotification() call actually
+    // returned without throwing (BgService.mc's own per-item try/catch) — NOT every active identity, and
+    // NOT every pending identity. Mirrors reconciledSeenAlerts()'s identical fix for the foreground
+    // seen-set (CX-G-10): result = (previously-notified ∩ still-active) ∪ presented, restricted to
+    // ACTIVE identities so a cleared/reconciled alert still drops out of the set (preserving VA-13/
+    // CX-G-07's "a cleared alert re-notifies if it re-fires"), while never adding an identity that wasn't
+    // actually posted.
+    (:background)
+    function reconciledBgNotifiedAlerts(presented as Lang.Array) as Lang.Array {
+        var active = activeAlertIdentities();
+        var prevNotified = loadBgNotifiedAlerts();
+        var out = [];
+        for (var i = 0; i < active.size(); i += 1) {
+            var ident = active[i];
+            if (containsStr(prevNotified, ident) || containsStr(presented, ident)) { out.add(ident); }
+        }
+        return out;
     }
 
     function glucoseColor() as Gfx.ColorValue {

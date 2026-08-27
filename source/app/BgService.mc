@@ -85,7 +85,7 @@ class BgServiceDelegate extends System.ServiceDelegate {
             // documented by the SDK itself as the mechanism for "notify the user of an event from the
             // background") — so a critical pump alert is not left completely silent on the wrist while
             // the app is suspended/closed. This is an ADDITIVE early signal only, tracked via its own
-            // dedup set (AppState.newBackgroundAlertsToNotify()); it does not mark anything "seen" for the
+            // dedup set (AppState.pendingBgNotifyAlerts() / reconciledBgNotifiedAlerts()); it does not mark anything "seen" for the
             // main app's own notifyNewAlerts(), which still runs its full vibrate+confirm flow the next
             // time a view exists. Forward ONLY the compact alerts list — NOT the full status (its history
             // array can be large) — to stay within the background-data payload limit.
@@ -111,24 +111,45 @@ class BgServiceDelegate extends System.ServiceDelegate {
     // to send/hear back, independent of this counter.
     function onPhoneMessageError(err as Comm.PhoneAppMessageError) as Void { phoneMsgErrorCount += 1; }
 
-    // CX-G-06: show a system notification for every alert AppState.newBackgroundAlertsToNotify() reports
-    // as not-yet-background-notified. Non-private (mirroring this codebase's existing test-only-seam
+    // CX-G-06: show a system notification for every alert AppState.pendingBgNotifyAlerts() reports as
+    // not-yet-background-notified. Non-private (mirroring this codebase's existing test-only-seam
     // convention, e.g. FaBolusApp.scheduleCount()/EatingRelay.isRunning()) so BgCriticalSurfaceTest.mc
     // could drive it directly if a future change makes that useful; today the pure dedup logic it wraps
-    // (AppState.newBackgroundAlertsToNotify()) is what's actually unit-tested, since
-    // Toybox.Notifications.showNotification() itself has no test-harness double. The manifest's
-    // minSdkVersion is 5.1.0 (Notifications.showNotification's own @since level), so the
+    // (AppState.pendingBgNotifyAlerts() / AppState.reconciledBgNotifiedAlerts()) is what's actually unit-
+    // tested, since Toybox.Notifications.showNotification() itself has no test-harness double. The
+    // manifest's minSdkVersion is 5.1.0 (Notifications.showNotification's own @since level), so the
     // `Notifications has :showNotification` check below is always true at runtime on any firmware
     // this build can install on — kept as harmless defense-in-depth, mirroring this codebase's existing
     // `Attention has :vibrate` idiom (FaBolusApp.notifyNewAlerts), NOT as a signal of sub-5.1 support.
+    //
+    // 13-HG-01 (codex HIGH): this is the SOLE unguarded background exit path — the OLD code eagerly
+    // persisted the entire active set as "already notified" (AppState.newBackgroundAlertsToNotify())
+    // BEFORE attempting any Notifications.showNotification() call, so a single throw both permanently
+    // dedup-suppressed every alert in the batch (no self-heal — CX-G-06 silently defeated) AND, since
+    // nothing here was wrapped, propagated out of onPhoneMessage and skipped its Background.exit() call
+    // entirely. Fixed by trying EACH notification independently (a throw for one alert must not affect
+    // the others) and persisting the dedup set only AFTER the attempts, restricted to what actually
+    // posted (see AppState.reconciledBgNotifiedAlerts's own doc) — a failed post is left pending and
+    // retried on the next temporal-event/phone-message tick instead of being dropped forever.
     function surfaceNewAlertsInBackground() as Void {
-        var newOnes = AppState.newBackgroundAlertsToNotify();
-        if (newOnes.size() == 0) { return; }
+        var pending = AppState.pendingBgNotifyAlerts();
+        if (pending.size() == 0) { return; }
         if (!(Toybox.Notifications has :showNotification)) { return; }
-        for (var i = 0; i < newOnes.size(); i += 1) {
-            var a = newOnes[i] as Lang.Dictionary;
-            Notifications.showNotification("faBolus", a["title"] as Lang.String, null);
+        var presented = [];
+        for (var i = 0; i < pending.size(); i += 1) {
+            var a = pending[i] as Lang.Dictionary;
+            try {
+                Notifications.showNotification("faBolus", a["title"] as Lang.String, null);
+                presented.add(AppState.alertIdentity(a));
+            } catch (e) {
+                // Deliberately NOT added to `presented`: reconciledBgNotifiedAlerts() below will NOT mark
+                // this alert notified, so it is retried next cycle rather than permanently suppressed.
+            }
         }
+        // Persist EXACTLY (previously-notified ∩ still-active) ∪ presented-this-batch — ALWAYS, even when
+        // `presented` ends up empty (every attempt threw), so a cleared alert still drops out (a re-fire
+        // notifies again), while an alert whose post failed is never marked notified.
+        AppState.saveBgNotifiedAlerts(AppState.reconciledBgNotifiedAlerts(presented));
     }
 }
 
