@@ -144,6 +144,17 @@ module AppState {
     (:background)
     var supportsDismissAck as Lang.Boolean = false;
 
+    // 14-10 (D1) — DYNAMIC pump-tied capability, the exact NEGATION of supportsDismissAck: true only
+    // when the phone build supports the raw-snapshot backstop AND the connected pump does NOT honor a
+    // remote dismiss (t:slim X2 — no op-184 dismissAck is ever emitted for it). Mirrors
+    // supportsDismissAck exactly: persisted (Storage.setValue on parse) and restored in loadPrefs, so a
+    // relaunch resumes on the raw-snapshot tier instead of defaulting false and falling through to the
+    // 14-08 fallback on the first post-relaunch reply. Parsed in handle() BEFORE the alerts-replace,
+    // alongside supportsDismissAck, for the same H1 reason. The two capabilities can never both be true
+    // for the same connected pump.
+    (:background)
+    var supportsRawAlertSnapshot as Lang.Boolean = false;
+
     // P12 group D: the host's authoritative "may a remote start a bolus right now?" (schema `canBolus`),
     // plus its reason token (`bolusBlockReason`: "pumpNotLinked" | "bolusInFlight" | "accessDenied").
     // null until the host sends them (older host) → pumpBolusAllowed() falls back to deriving from the
@@ -1644,17 +1655,39 @@ module AppState {
                 supportsDismissAck = sda2;
                 Storage.setValue(KEY_SUPPORTS_DISMISS_ACK, supportsDismissAck);
             }
-            // CX-G-08: a fresh, authoritative alerts list just replaced the old one. CAPABILITY-GATED
-            // (checkpoint #5/M2): supportsDismissAck present+true ⇒ authenticated-ack-only — OVERLAY any
-            // retained unacked DISPLAY provisional(s) so the filtered snapshot can never drop one
-            // (T-14-25); absent/false ⇒ the 14-08 fallback (reconcileDismissSent — the ONLY proof-of-
-            // absence event for the dismissSentAlertIdentities mechanism; markDismissSent/
-            // reconcileDismissSent above). NEVER both: overlaying in the fallback branch would defeat its
-            // filtered-absence removal with a stale, never-to-be-acked provisional.
+            // 14-10 (D1) — the raw-snapshot backstop's DYNAMIC capability, parsed+persisted alongside
+            // supportsDismissAck (same H1 reason: BEFORE the alerts-replace below, so the first
+            // post-relaunch statusRead resolves the correct tier).
+            var sra = data["supportsRawAlertSnapshot"];
+            if (sra instanceof Lang.Boolean) {
+                supportsRawAlertSnapshot = sra;
+                Storage.setValue(KEY_SUPPORTS_RAW_ALERT_SNAPSHOT, supportsRawAlertSnapshot);
+            }
+            // 14-10 (D1) — detect whether `rawAlerts` is a PRESENT Array (nil/non-Array ⇒ absent) and, if
+            // so, parse it into an identity set BEFORE the alerts-replace, using the TITLE-AGNOSTIC
+            // absence-oracle parser (rawAlertIdentities, below) — never sanitizeAlerts, which would drop
+            // a valid (id,kind) over a malformed title and falsely treat it as absent.
+            var ra = data["rawAlerts"];
+            var rawPresent = (ra instanceof Lang.Array);
+            var rawIdents = rawPresent ? rawAlertIdentities(ra as Lang.Array) : [];
+            // CX-G-08/14-10: a fresh, authoritative alerts list just replaced the old one.
+            // CAPABILITY-FIRST 3-way (never chosen by rawAlerts' presence): (1) supportsDismissAck ⇒
+            // 14-09 authenticated-ack-only (unchanged); (2) else supportsRawAlertSnapshot ⇒ the NEW
+            // raw-snapshot tier — prune provisionals proven absent from a PRESENT rawAlerts (skip the
+            // prune entirely when absent — fail-closed, keep-visible), THEN always overlay; (3) else ⇒
+            // the 14-08 fallback (reconcileDismissSent — the ONLY proof-of-absence event for the
+            // dismissSentAlertIdentities mechanism; markDismissSent/reconcileDismissSent above). NEVER
+            // more than one branch: overlaying in the fallback branch would defeat its filtered-absence
+            // removal with a stale, never-to-be-acked provisional; falling through from the raw tier to
+            // the 14-08 fallback on an absent rawAlerts would reintroduce the local-snooze fail-open this
+            // plan exists to close.
             var al = data["alerts"];
             if (al instanceof Lang.Array) {
                 alerts = sanitizeAlerts(al);
                 if (supportsDismissAck) {
+                    overlayUnackedDismissProvisionals();
+                } else if (supportsRawAlertSnapshot) {
+                    if (rawPresent) { pruneProvisionalsAbsentFromRawSnapshot(rawIdents); }
                     overlayUnackedDismissProvisionals();
                 } else {
                     reconcileDismissSent();
@@ -1999,6 +2032,25 @@ module AppState {
         return a["kind"].toString() + "-" + a["id"].toString();
     }
 
+    // 14-10 (D1) — the raw-snapshot proof-of-absence oracle's OWN identity parser. Deliberately NOT
+    // sanitizeAlerts (which DROPS any item whose `title` is not a Lang.String) — a raw item with a valid
+    // (id,kind) but a malformed/absent title must still count as PRESENT (title-agnostic), or a bad
+    // title on the wire would falsely remove a still-pump-active wearer dismiss. Only a missing/non-
+    // numeric id OR kind skips an item (never traps).
+    (:background)
+    function rawAlertIdentities(arr as Lang.Array) as Lang.Array {
+        var out = [];
+        var lim = (arr.size() > 50) ? 50 : arr.size();
+        for (var k = 0; k < lim; k += 1) {
+            var e = arr[k];
+            if (e instanceof Lang.Dictionary && isNum(e["id"]) && isNum(e["kind"])) {
+                var ident = e["kind"].toString() + "-" + e["id"].toString();
+                if (!containsStr(out, ident)) { out.add(ident); }
+            }
+        }
+        return out;
+    }
+
     // VA-14 (pure): drop exactly the (id, kind) alert from the active list, leaving every other alert
     // (and their order) untouched. NO LONGER called on a DISPATCHED dismiss (see CX-G-08 below) — kept
     // for any future authenticated-ack path that would need a real local removal. Extracted verbatim
@@ -2072,6 +2124,9 @@ module AppState {
     const KEY_DISMISS_PROVISIONAL = "dismissProvisional";   // identity -> {id, kind, title}
     (:background)
     const KEY_SUPPORTS_DISMISS_ACK = "supportsDismissAck";
+    // 14-10 (D1) — mirrors KEY_SUPPORTS_DISMISS_ACK exactly, for the raw-snapshot backstop's capability.
+    (:background)
+    const KEY_SUPPORTS_RAW_ALERT_SNAPSHOT = "supportsRawAlertSnapshot";
     // 10 minutes — WELL under the pump's 30-min re-nag (snoozeWindow, TandemBackend.swift) and matching
     // the phone's own GarminDismissReceiptStore.ttl, so the two ends stop correlating together.
     (:background)
@@ -2182,6 +2237,11 @@ module AppState {
         }
         var sda = Storage.getValue(KEY_SUPPORTS_DISMISS_ACK);
         if (sda instanceof Lang.Boolean) { supportsDismissAck = sda; }
+        // 14-10 (D1) — mirrors the supportsDismissAck restore exactly, so a cold relaunch resumes on the
+        // raw-snapshot tier (last-known) rather than defaulting false and falling through to the 14-08
+        // fallback on the first post-relaunch reply.
+        var sra = Storage.getValue(KEY_SUPPORTS_RAW_ALERT_SNAPSHOT);
+        if (sra instanceof Lang.Boolean) { supportsRawAlertSnapshot = sra; }
     }
 
     // Clock-rollback / future-timestamp discipline (mirrors the phone's GarminDismissReceiptStore
@@ -2272,6 +2332,41 @@ module AppState {
                 if (!containsStr(seen, overlaidIdents[j])) { seen.add(overlaidIdents[j]); }
             }
             saveSeenAlerts(seen);
+        }
+    }
+
+    // 14-10 (D1) — the raw-snapshot tier's remover: for each wearer `dismissProvisional` identity ABSENT
+    // from `rawIdents` (a PRESENT rawAlerts snapshot's parsed identity set — the caller only invokes this
+    // when rawAlerts was present; an absent rawAlerts skips this call entirely, fail-closed), the pump has
+    // proven the alert cleared — remove it from the display (the PRESERVED `removeAlert`) and clear ALL
+    // of its bookkeeping across every dismiss-tracking lane (retry, provisional, and the 14-08 dismiss-
+    // sent lane too, so a later capability flip doesn't resurrect stale state for this identity). An
+    // identity STILL present in rawIdents is left untouched here — `overlayUnackedDismissProvisionals()`
+    // (always called right after this, by the caller) is what keeps it visible-but-quiet.
+    (:background)
+    function pruneProvisionalsAbsentFromRawSnapshot(rawIdents as Lang.Array) as Void {
+        var keys = dismissProvisional.keys();
+        if (keys.size() == 0) { return; }
+        var changed = false;
+        for (var i = 0; i < keys.size(); i += 1) {
+            var ident = keys[i] as Lang.String;
+            if (containsStr(rawIdents, ident)) { continue; }   // still pump-active — keep, don't touch
+            var prov = dismissProvisional[ident] as Lang.Dictionary;
+            removeAlert(prov["id"], prov["kind"]);
+            dismissProvisional.remove(ident);
+            dismissPending.remove(ident);
+            if (containsStr(dismissSentAlertIdentities, ident)) {
+                var kept = [];
+                for (var j = 0; j < dismissSentAlertIdentities.size(); j += 1) {
+                    if (!(dismissSentAlertIdentities[j] as Lang.String).equals(ident)) { kept.add(dismissSentAlertIdentities[j]); }
+                }
+                dismissSentAlertIdentities = kept;
+            }
+            changed = true;
+        }
+        if (changed) {
+            saveDismissProvisional();
+            saveDismissPending();
         }
     }
 

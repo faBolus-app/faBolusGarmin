@@ -60,6 +60,15 @@ if ! grep -qE 'kind\.equals\("dismissAck"\)' source/app/AppState.mc; then
   fail=1
 fi
 
+# (4) 14-10 — the `supportsRawAlertSnapshot` capability must have a REAL parse in AppState.mc, not just
+# a schema/remote-keys.txt entry: mirrors the dismissAck-handler assertion above (T-14-27 drift class).
+# Grepped as the actual PARSE (`data["supportsRawAlertSnapshot"]`), not a bare mention, which a comment
+# would satisfy vacuously.
+if ! grep -qE 'data\["supportsRawAlertSnapshot"\]' source/app/AppState.mc; then
+  echo "DRIFT: schema carries 'supportsRawAlertSnapshot' but AppState.mc has no real parse of it"
+  fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "❌ Garmin remote is out of sync with $SCHEMA. Update schema/remote-keys.txt and the Monkey C keys together."
   exit 1

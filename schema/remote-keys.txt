@@ -63,6 +63,14 @@ supportsRemoteAlertDismiss
 # authenticated dismissAck path AND the connected pump honors a remote dismiss. Persisted (mirrors
 # garminBolusEnabled), parsed BEFORE the alerts replace (H1).
 supportsDismissAck
+# 14-10 — DYNAMIC pump-tied capability, the exact negation of supportsDismissAck: the raw-snapshot
+# proof-of-absence backstop for a pump that does NOT honor a remote dismiss (t:slim X2). Persisted
+# (mirrors supportsDismissAck), parsed BEFORE the alerts replace (same H1 reason).
+supportsRawAlertSnapshot
+# 14-10 — the pump's TRUE pre-local-snooze-filter active-alert bitmap for this poll, emitted only when
+# supportsRawAlertSnapshot is true AND the host's raw set is known. A reconciliation oracle for the
+# wearer's own pending dismissals only — never a display source.
+rawAlerts
 garminBolusEnabled
 bolusPasscodeRequired
 controllerVariant
