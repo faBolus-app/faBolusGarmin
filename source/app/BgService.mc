@@ -15,6 +15,10 @@ class BgServiceDelegate extends System.ServiceDelegate {
     // R2-15: the requestId minted for THIS service's statusRead request, retained so onPhoneMessage can
     // accept ONLY the correlated reply (the phone echoes it back). Same instance handles both callbacks.
     var mintedReqId as Lang.String? = null;
+    // G-L2 (19-04): observable count of inbound phoneAppMessage delivery errors — this is a SEPARATE
+    // process from FaBolusApp, so it gets its own counter (mirrors FaBolusApp._phoneMsgErrorCount's
+    // seam style). Purely additive observability; no change to onTemporalEvent/onPhoneMessage.
+    var phoneMsgErrorCount as Lang.Number = 0;
 
     function initialize() { ServiceDelegate.initialize(); }
 
@@ -28,7 +32,24 @@ class BgServiceDelegate extends System.ServiceDelegate {
         BgComplication.publish(null, null, 0);   // keep last-known reading visible (or "--" if stale)
 
         if (System.getDeviceSettings().phoneConnected) {
+            // G-M2 (19-04, D-03): this reply uses the SAME foreground-style
+            // Comm.registerForPhoneAppMessages the app itself uses, inside the temporal event's
+            // ~30s-bounded runtime window (the system terminates the service after ~30s regardless of
+            // whether a reply arrived — see the onTemporalEvent try/catch below, which exits on any
+            // failure). This is the ACCEPTED INTERIM best-effort bound: a reply that lands after the
+            // window closes is simply missed (no crash, no stuck service — the next ~5-min temporal
+            // event tries again). The documented, more-robust mechanism is
+            // Background.registerForPhoneAppMessageEvent (API 3.2.0), a push-wake callback that doesn't
+            // depend on the service's own bounded runtime — implementing THAT is Phase 20 R2's job, not
+            // this plan's (per D-03, this plan documents the bound rather than double-implementing the
+            // push-wake).
             Comm.registerForPhoneAppMessages(method(:onPhoneMessage));
+            // G-L2: register for inbound delivery errors where the device/firmware supports it (see
+            // FaBolusApp.onStart's matching registration + comment for the `has` capability-guard
+            // rationale — API Level 6.0.0, not on venu3s).
+            if (Comm has :registerForPhoneAppMessageErrors) {
+                Comm.registerForPhoneAppMessageErrors(method(:onPhoneMessageError));
+            }
             try {
                 // R2-15: retain the minted id so we accept ONLY the phone's correlated reply (it echoes it).
                 // 19-03 (G-M1): ROUTINE mint (fires every ~5-min temporal event) — see
@@ -84,6 +105,11 @@ class BgServiceDelegate extends System.ServiceDelegate {
         }
         Background.exit(null);
     }
+
+    // G-L2: records an inbound phoneAppMessage delivery error for observability. Never throws, never
+    // alters message handling — onTemporalEvent's try/catch already exits the service on any failure
+    // to send/hear back, independent of this counter.
+    function onPhoneMessageError(err as Comm.PhoneAppMessageError) as Void { phoneMsgErrorCount += 1; }
 
     // CX-G-06: show a system notification for every alert AppState.newBackgroundAlertsToNotify() reports
     // as not-yet-background-notified. Non-private (mirroring this codebase's existing test-only-seam
