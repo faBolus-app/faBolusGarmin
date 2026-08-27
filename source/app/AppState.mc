@@ -2084,6 +2084,44 @@ module AppState {
         return out;
     }
 
+    // G-L1 (19-04): a conservative safety margin well under Toybox.Background.exit's documented ~8 KB
+    // ExitDataSizeLimitException threshold — absorbs the unknown per-entry background-data
+    // serialization overhead (the SDK does not document its on-wire encoding), leaving headroom for
+    // future exit-data growth alongside the alerts list.
+    (:background)
+    const SAFE_EXIT_BUDGET_BYTES = 6000;
+
+    // G-L1: a conservative OVERESTIMATE of one {id,kind,title} alert dict's Background.exit serialized
+    // size — the numeric id/kind (small ints) plus the title string (generously assumed up to 2
+    // bytes/char for non-ASCII) plus dict/key-name framing overhead (~40 bytes for the three key
+    // names). Deliberately pessimistic since the SDK never documents its background-data encoding.
+    (:background)
+    function estimatedAlertExitBytes(a as Lang.Dictionary) as Lang.Number {
+        var title = a["title"];
+        var titleLen = (title instanceof Lang.String) ? title.length() : 0;
+        return 60 + (titleLen * 2);
+    }
+
+    // G-L1: the byte-budget-safe subset of `arr` (an alerts array) to forward across
+    // Background.exit's documented ~8 KB ExitDataSizeLimitException boundary. PURE — never mutates
+    // `arr` — and preserves the caller's existing most-serious-first ordering (the phone already sends
+    // `alerts` in that order; sanitizeAlerts/notifyNewAlerts rely on it), so the kept subset is always
+    // an unbroken PREFIX, never a reshuffled/sampled one. A small (already-within-budget) array is
+    // returned unchanged.
+    (:background)
+    function alertsForBackgroundExit(arr as Lang.Array) as Lang.Array {
+        var out = [];
+        var used = 0;
+        for (var i = 0; i < arr.size(); i += 1) {
+            var a = arr[i];
+            var cost = estimatedAlertExitBytes(a as Lang.Dictionary);
+            if (used + cost > SAFE_EXIT_BUDGET_BYTES) { break; }
+            out.add(a);
+            used += cost;
+        }
+        return out;
+    }
+
     // Alert identity = kind + "-" + id. This is the (kind, id) pair the dismiss path already keys on
     // (see AlertConfirmDelegate / RemoteComm.dismissAlert) — NOT a new schema field. It's the stable
     // handle the notifier uses to tell a genuinely NEW alert from a re-fetch of one already surfaced.

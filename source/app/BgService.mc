@@ -69,7 +69,17 @@ class BgServiceDelegate extends System.ServiceDelegate {
             // time a view exists. Forward ONLY the compact alerts list — NOT the full status (its history
             // array can be large) — to stay within the background-data payload limit.
             surfaceNewAlertsInBackground();
-            Background.exit(AppState.alerts);
+            // G-L1: Background.exit's own doc documents an ExitDataSizeLimitException at ~8 KB ("the
+            // process will not exit and should attempt to call Background.exit() again with less
+            // data") — alertsForBackgroundExit() already budgets defensively under that limit, but the
+            // fallback below is belt-and-suspenders for an unanticipated overshoot: Background.exit(null)
+            // guarantees the exit ALWAYS completes rather than the temporal event silently expiring
+            // unconsumed.
+            try {
+                Background.exit(AppState.alertsForBackgroundExit(AppState.alerts));
+            } catch (e) {
+                Background.exit(null);
+            }
             return;
         }
         Background.exit(null);
