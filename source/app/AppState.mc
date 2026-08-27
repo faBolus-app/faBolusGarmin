@@ -1208,6 +1208,18 @@ module AppState {
         return s != null && (s.equals("delivered") || s.equals("cancelled") || s.equals("failed") || s.equals("unknown"));
     }
 
+    // 14-CR-01 (CX-G-01 durable tombstone, BLOCKER): a status is AUTHORITATIVELY RESOLVED only for a
+    // genuine outcome — delivered/cancelled/failed. Deliberately EXCLUDES "unknown": that token is
+    // R2-02's honest-timeout / the phone's FB-02 indeterminate echo, meaning the outcome is still
+    // genuinely AMBIGUOUS — exactly the case the unresolved-delivery tombstone exists to guard against a
+    // race re-send. isTerminalStatus() above INCLUDES "unknown" because it serves a different purpose
+    // (stopping a late non-terminal echo from regressing an honest timeout in the block below) — do not
+    // reuse it for the tombstone-clear gate, and do not add "unknown" here.
+    (:background)
+    function isAuthoritativelyResolved(s as Lang.String?) as Lang.Boolean {
+        return s != null && (s.equals("delivered") || s.equals("cancelled") || s.equals("failed"));
+    }
+
     // R2-02: the outcome deadline has passed with no authoritative terminal echo. Guards on
     // outcomeSentEpoch > 0 so a pending status with no send-stamp can never spuriously expire.
     function outcomeDeadlineExpired() as Lang.Boolean {
@@ -1947,14 +1959,18 @@ module AppState {
             // GA-09: only adopt a recognized status token, and cap the message length.
             var st = data["status"];
             var incoming = (st instanceof Lang.String && containsStr(STATUS_TOKENS, st as Lang.String)) ? st as Lang.String : null;
-            // CX-G-01 (wrist half): clear the durable tombstone on ANY authoritative terminal echo for
+            // CX-G-01 (wrist half): clear the durable tombstone on an AUTHORITATIVELY RESOLVED echo for
             // its requestId, independent of pendingRequestId/status — onBack's clearInFlight() may have
             // already wiped those locally WITHOUT touching the tombstone (see its own comment), so
             // gating the clear on pendingRequestId (which a back-out nulls) would leave a tombstone
             // stuck forever once a matching late echo can no longer be recognized. A non-terminal echo
-            // (delivering/cancelling) must NOT clear it — the outcome is still unknown.
+            // (delivering/cancelling) must NOT clear it — the outcome is still unknown. 14-CR-01
+            // (BLOCKER): nor must an "unknown" echo (FB-02 indeterminate) — that is the ambiguous-outcome
+            // case this tombstone exists to protect, so this gate deliberately uses
+            // isAuthoritativelyResolved(), NOT isTerminalStatus() (which treats "unknown" as terminal for
+            // an unrelated purpose below).
             if (unresolvedTombstoneReqId != null && rid != null && rid.equals(unresolvedTombstoneReqId)
-                    && isTerminalStatus(incoming)) {
+                    && isAuthoritativelyResolved(incoming)) {
                 clearUnresolvedTombstone();
             }
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {

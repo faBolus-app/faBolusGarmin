@@ -230,6 +230,22 @@ module UnresolvedDeliveryTombstoneTest {
         return true;
     }
 
+    // 14-CR-01 (BLOCKER regression): an "unknown" echo (R2-02's honest-timeout / the phone's FB-02
+    // indeterminate) for the SAME requestId must NOT clear the tombstone either — it is the
+    // ambiguous-outcome case the tombstone exists to protect. Before this fix, the clear site reused
+    // isTerminalStatus() (which treats "unknown" as terminal), so this echo would have wrongly cleared
+    // the tombstone and unblocked a re-send while the real outcome was still unresolved.
+    (:test)
+    function unknownEchoDoesNotClearTombstone(logger as Test.Logger) as Lang.Boolean {
+        baseline();
+        wipeStorage();
+        AppState.maybeWriteUnresolvedTombstone(true, "req-unknown-1", Time.now().value(), "units:1.00");
+        AppState.handle(bolusStatusMsg("req-unknown-1", "unknown"));
+        Test.assertMessage(AppState.hasUnresolvedTombstone(), "an 'unknown' echo leaves the tombstone in place");
+        Test.assertMessage(AppState.reattemptBlocked(), "a re-send is still blocked after an 'unknown' echo");
+        return true;
+    }
+
     // A terminal echo for a DIFFERENT (unrelated) requestId — out-of-band / stale — must not clear it.
     (:test)
     function unrelatedRequestIdEchoDoesNotClearTombstone(logger as Test.Logger) as Lang.Boolean {
