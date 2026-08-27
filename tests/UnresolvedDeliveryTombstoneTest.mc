@@ -31,6 +31,10 @@ module UnresolvedDeliveryTombstoneTest {
     // Reset every field the tombstone mechanics touch (in-memory + Storage) so cases are
     // order-independent regardless of prior tests / a prior simulator session.
     function baseline() as Void {
+        // Reset the test-only reachability override to real behavior at the start of EVERY case, so a
+        // value one case forces (below) never leaks into the next (or, since this module runs last, into
+        // another test file). Only outOfRangeAttemptLeavesNoTombstone opts into forcing it.
+        RemoteComm.testPhoneReachable = null;
         AppState.status = null;
         AppState.message = null;
         AppState.pendingRequestId = null;
@@ -75,14 +79,17 @@ module UnresolvedDeliveryTombstoneTest {
     // --- codex HIGH: no permanent lock on a provably-unsent request -------------------------------
 
     // The `!phoneReachable()` outOfRange path sends NOTHING — sendBolusNow must leave no durable
-    // tombstone. This sim's device-settings default is "phone unreachable" (not sim-controllable —
-    // same documented fact tests/CanBolusTest.mc / tests/AppLivenessTest.mc rely on), so this exercises
-    // the REAL sendBolusNow code path, not just the extracted seam.
+    // tombstone. Reachability is environment-specific (the venu3s simulator reports the phone CONNECTED by
+    // default, unlike the sims tests/CanBolusTest.mc / tests/AppLivenessTest.mc were written against), so we
+    // force it unreachable through RemoteComm.testPhoneReachable — the test-only seam that mirrors
+    // testSuppressTransmit — to drive the REAL sendBolusNow code path deterministically (not just the
+    // extracted maybeWriteUnresolvedTombstone seam). baseline() resets the override afterward.
     (:test)
     function outOfRangeAttemptLeavesNoTombstone(logger as Test.Logger) as Lang.Boolean {
         baseline();
         wipeStorage();
-        Test.assertMessage(!RemoteComm.phoneReachable(), "sim default: phone unreachable");
+        RemoteComm.testPhoneReachable = false;   // force the outOfRange path regardless of the sim default
+        Test.assertMessage(!RemoteComm.phoneReachable(), "seam forces the phone unreachable");
         var sent = AppState.sendBolusNow(null);
         Test.assertMessage(sent, "sendBolusNow still returns true (outOfRange is a completed outcome)");
         Test.assertEqualMessage(AppState.status, "outOfRange", "status settled to outOfRange");
@@ -94,6 +101,7 @@ module UnresolvedDeliveryTombstoneTest {
         simulateRelaunch();
         AppState.loadPrefs();
         Test.assertMessage(!AppState.reattemptBlocked(), "relaunch after outOfRange never blocks a fresh send");
+        RemoteComm.testPhoneReachable = null;   // restore real reachability for subsequent cases/files
         return true;
     }
 
@@ -155,7 +163,11 @@ module UnresolvedDeliveryTombstoneTest {
         var priorPending = AppState.pendingRequestId;
         var sent = AppState.sendBolusNow(null);
         Test.assertMessage(!sent, "sendBolusNow refuses while an unresolved tombstone survives the relaunch");
-        Test.assertEqualMessage(AppState.pendingRequestId, priorPending, "no new requestId minted");
+        // Both are null here (pendingRequestId is deliberately not restored across a relaunch, and the
+        // tombstone guard refuses the send before any new reqId is minted). Assert equality with `==`
+        // rather than Test.assertEqualMessage, whose SDK impl invokes a method on the operands and throws
+        // an "Unexpected Type Error: Failed invoking <symbol>" when they are null.
+        Test.assertMessage(AppState.pendingRequestId == priorPending, "no new requestId minted");
         wipeStorage();
         return true;
     }

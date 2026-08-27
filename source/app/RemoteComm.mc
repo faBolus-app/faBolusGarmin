@@ -109,8 +109,19 @@ module RemoteComm {
         };
     }
 
+    // Unit-test seam (mirrors testSuppressTransmit below and FaBolusApp's documented test seams). The
+    // venu3s simulator reports System.getDeviceSettings().phoneConnected == TRUE by default — an
+    // environment-specific default (other sims/devices report false), so a test that must drive the
+    // `!phoneReachable()` "iPhone unreachable"/outOfRange path can't rely on the sim's own default. A test
+    // sets this to a Boolean to force phoneReachable()'s result deterministically; null — the shipping
+    // default, NEVER assigned outside the unit suite — defers to the real device setting, so shipping
+    // reachability is UNCHANGED. Only the SOURCE of the reachability bit is overridable (and only in tests);
+    // every caller's gate/return/branch semantics are untouched.
+    var testPhoneReachable as Lang.Boolean? = null;
+
     // True when the companion phone is reachable.
     function phoneReachable() as Lang.Boolean {
+        if (testPhoneReachable != null) { return testPhoneReachable; }
         return System.getDeviceSettings().phoneConnected;
     }
 
