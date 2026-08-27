@@ -95,9 +95,9 @@ module BgComplication {
     }
 
     // Actual complication write. Split out and annotated so it can be compiled OUT for devices
-    // whose Connect IQ level (< 4.1) lacks the Complications module (e.g. Forerunner 245, CIQ 3.3) —
-    // referencing an absent module is a compile error, so those builds get the no-op stub below via
-    // `<device>.excludeAnnotations = complications` in the jungle.
+    // whose Connect IQ level lacks the Complications module (module @since 4.2.0; e.g. Forerunner 245,
+    // CIQ 3.3) — referencing an absent module is a compile error, so those builds get the no-op stub
+    // below via `<device>.excludeAnnotations = complications` in the jungle.
     (:complications)
     function pushComplication(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean) as Void {
         // The complication resource declares a numeric <range>, so :value MUST be a Number (a String

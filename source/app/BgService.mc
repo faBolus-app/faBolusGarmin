@@ -78,9 +78,11 @@ class BgServiceDelegate extends System.ServiceDelegate {
     // convention, e.g. FaBolusApp.scheduleCount()/EatingRelay.isRunning()) so BgCriticalSurfaceTest.mc
     // could drive it directly if a future change makes that useful; today the pure dedup logic it wraps
     // (AppState.newBackgroundAlertsToNotify()) is what's actually unit-tested, since
-    // Toybox.Notifications.showNotification() itself has no test-harness double. Gated on
-    // `Notifications has :showNotification` for older-firmware/device safety, mirroring this codebase's
-    // existing `Attention has :vibrate` idiom (FaBolusApp.notifyNewAlerts).
+    // Toybox.Notifications.showNotification() itself has no test-harness double. The manifest's
+    // minSdkVersion is 5.1.0 (Notifications.showNotification's own @since level), so the
+    // `Notifications has :showNotification` check below is always true at runtime on any firmware
+    // this build can install on — kept as harmless defense-in-depth, mirroring this codebase's existing
+    // `Attention has :vibrate` idiom (FaBolusApp.notifyNewAlerts), NOT as a signal of sub-5.1 support.
     function surfaceNewAlertsInBackground() as Void {
         var newOnes = AppState.newBackgroundAlertsToNotify();
         if (newOnes.size() == 0) { return; }
