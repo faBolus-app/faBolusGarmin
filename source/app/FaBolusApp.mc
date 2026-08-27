@@ -55,6 +55,11 @@ class FaBolusApp extends App.AppBase {
     // observability, no change to the message-handling flow. Test-only-seam style (mirrors
     // _scheduleCount/scheduleCount() above).
     private var _phoneMsgErrorCount as Lang.Number = 0;
+    // 13-LW-01 (LOW): observable count of pollTick's own empty-catch guards firing — the dismiss-retry
+    // resend loop and the HR piggyback (_hr.emitIfDue()) each transmit through a call that could throw,
+    // and both catches used to swallow that throw with zero observability into a persistent transmit
+    // failure. Test-only-seam style (mirrors _scheduleCount/scheduleCount() above).
+    private var _pollGuardFailureCount as Lang.Number = 0;
 
     // G-H2 (19-02, Task 2): EatingRelay/HeartRateRelay are NO LONGER constructed here. Both relays are
     // phone-gated (only ever start doing anything once the phone sends an "eating_sense"/"hr_ctl" toggle
@@ -168,6 +173,10 @@ class FaBolusApp extends App.AppBase {
                 RemoteComm.send(RemoteComm.dismissAlert(due["requestId"], due["id"], due["kind"]));
             }
         } catch (e) {
+            // 13-LW-01: was silently swallowed with zero observability — now counted (see
+            // _pollGuardFailureCount above), still deliberately non-fatal (scheduleNextPoll() below must
+            // still run).
+            _pollGuardFailureCount += 1;
         }
         // Piggyback ambient HR on the existing status cadence (D-08) — no new timer/radio wake. No-op
         // unless the phone's hr_ctl toggle enabled it (D-09).
@@ -178,12 +187,19 @@ class FaBolusApp extends App.AppBase {
         try {
             if (_hr != null) { _hr.emitIfDue(); }
         } catch (e) {
+            // 13-LW-01: was silently swallowed with zero observability — now counted (see
+            // _pollGuardFailureCount above), still deliberately non-fatal (scheduleNextPoll() below must
+            // still run — see C5-01/CX-G-05 above).
+            _pollGuardFailureCount += 1;
         }
         scheduleNextPoll();
     }
 
     // Test-observable proof that scheduleNextPoll() ran (see tests/RelayResilienceTest.mc, C5-01/CX-G-05).
     function scheduleCount() as Lang.Number { return _scheduleCount; }
+
+    // Test-observable pollTick guard-failure count (13-LW-01; see tests/RelayResilienceTest.mc).
+    function pollGuardFailureCount() as Lang.Number { return _pollGuardFailureCount; }
 
     // Test-only seam (CX-G-03, mirrors scheduleCount()): whether a foreground poll's reply is still
     // outstanding — lets tests/StatusReplyTest.mc assert a mismatched-reqId reply does NOT clear the

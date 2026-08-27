@@ -45,9 +45,13 @@ module RelayResilienceTest {
         var app = new FaBolusApp();
         app.setHrRelay(new ThrowingHeartRateRelay());
         Test.assertEqualMessage(app.scheduleCount(), 0, "no poll scheduled yet");
+        Test.assertEqualMessage(app.pollGuardFailureCount(), 0, "no guard failure recorded yet");
         app.pollTick();   // would throw uncaught (failing this test) if the guard were missing
         Test.assertEqualMessage(app.scheduleCount(), 1,
             "scheduleNextPoll() ran exactly once despite emitIfDue() throwing");
+        // 13-LW-01: the guard that used to silently swallow this throw now counts it.
+        Test.assertEqualMessage(app.pollGuardFailureCount(), 1,
+            "emitIfDue()'s throw is now observable, not silently swallowed");
         return true;
     }
 
@@ -58,9 +62,13 @@ module RelayResilienceTest {
         var relay = new ThrowingEatingRelay();
         relay.start();
         Test.assertMessage(relay.isRunning(), "relay is running after start()");
+        Test.assertEqualMessage(relay.onWindowGuardFailureCount(), 0, "no guard failure recorded yet");
         relay.onWindow([]);   // would throw uncaught (failing this test) if the guard were missing
         Test.assertMessage(relay.isRunning(),
             "relay still running after a transmit throw — its own timer was not stranded");
+        // 13-LW-01: the guard that used to silently swallow this throw now counts it.
+        Test.assertEqualMessage(relay.onWindowGuardFailureCount(), 1,
+            "onWindow()'s transmit throw is now observable, not silently swallowed");
         relay.stop();
         return true;
     }

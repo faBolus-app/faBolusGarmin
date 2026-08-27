@@ -94,6 +94,12 @@ class EatingRelay {
     // no-op, making a silently-dropped send invisible. Test-only-seam style (mirrors
     // FaBolusApp.scheduleCount()/isRunning() above).
     hidden var _dropCount as Lang.Number = 0;
+    // 13-LW-01 (LOW): observable count of onWindow's own empty-catch guard firing (a
+    // buildEnvelope/transmitWindow throw) — previously silent, giving zero observability into a
+    // persistent transmit failure. A DIFFERENT failure mode from _dropCount above (that one counts an
+    // ASYNC EatingCommListener.onError after a send was actually dispatched; this counts a SYNCHRONOUS
+    // throw during envelope-build/dispatch itself) — mirrors the same simple counter pattern.
+    hidden var _onWindowGuardFailureCount as Lang.Number = 0;
 
     function initialize() {}
 
@@ -118,6 +124,9 @@ class EatingRelay {
     // Test-observable drop count (see tests/EatingImuQuantizeTest.mc, G-M3).
     function dropCount() as Lang.Number { return _dropCount; }
     function recordDrop() as Void { _dropCount += 1; }
+
+    // Test-observable onWindow guard-failure count (13-LW-01; see tests/RelayResilienceTest.mc).
+    function onWindowGuardFailureCount() as Lang.Number { return _onWindowGuardFailureCount; }
 
     function beginBurst() as Void {
         if (!_running || _sensor == null) { return; }
@@ -152,6 +161,10 @@ class EatingRelay {
             var msg = EatingImuEnvelope.buildEnvelope(window, RATE, WINDOW, Time.now().value());
             transmitWindow(msg);
         } catch (e) {
+            // 13-LW-01: was silently swallowed with zero observability — now counted (see
+            // _onWindowGuardFailureCount above), still deliberately non-fatal (the duty-cycle timer must
+            // not be stranded by a transmit failure).
+            _onWindowGuardFailureCount += 1;
         }
     }
 
