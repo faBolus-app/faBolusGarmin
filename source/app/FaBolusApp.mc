@@ -13,8 +13,25 @@ using Toybox.Lang;
 // for status/bolus updates, and republishes the BG complication so it shows on the watch face.
 // A background temporal event refreshes the complication roughly every 5 minutes while the app
 // isn't open. Thin remote — the iPhone owns the pump connection.
+//
+// G-H2 (19-02): getGlanceView()/getServiceDelegate() below carry (:glance)/(:background) directly, on
+// the METHOD (not the class) — empirically, annotating the whole FaBolusApp class propagates the tag to
+// every member (per Monkey C's annotation-inheritance rule for conditional compilation), which would
+// pull EVERY foreground-only method here (onStart/onStop/pollTick/notifyNewAlerts/handlePhoneData/
+// pushAlertConfirm/getInitialView, and everything THEY reach — Nav, Attention, the full screen carousel)
+// into the bg/glance reachable-graph check, defeating the whole memory-reduction point. Per-method
+// annotation is the minimal, correct scope: only the two override methods that actually RUN in the
+// restricted contexts carry the tag; everything else here stays unannotated and reachable only from the
+// normal foreground entry points. (typecheck -l2/-l3 still flags this class's OTHER methods as
+// "implicitly added to the background process" — a known, harmless SDK-compiler quirk that pre-dates
+// this plan: the App class already had (:background) declarations elsewhere (BgServiceDelegate/
+// BgCommListener) before 19-02, so the compiler conservatively scans the whole class; none of the
+// flagged symbols there are part of the REAL bg/glance call graph — see 19-02-SUMMARY.md.)
 class FaBolusApp extends App.AppBase {
     private var _timer as Timer.Timer?;
+    // Both null until the phone sends the corresponding toggle (handlePhoneData) — see initialize()
+    // below (19-02, Task 2): NOT built eagerly, so a glance/background launch never pulls in EatingRelay/
+    // HeartRateRelay (and EatingRelay's EatingSense barrel) at all.
     private var _eating as EatingRelay?;   // wrist eating-sensing relay (phone-gated)
     private var _hr as HeartRateRelay?;    // ambient HR relay (phone-gated; rides the status tick)
     // R2-19: self-rescheduling poll state. `_pollOutstanding` is true between sending a statusRead and its
@@ -34,6 +51,15 @@ class FaBolusApp extends App.AppBase {
     // is true; otherwise the alert stays "unseen" and the next foreground statusRead surfaces it.
     private var _foreground as Lang.Boolean = false;
 
+    // G-H2 (19-02, Task 2): EatingRelay/HeartRateRelay are NO LONGER constructed here. Both relays are
+    // phone-gated (only ever start doing anything once the phone sends an "eating_sense"/"hr_ctl" toggle
+    // — see handlePhoneData below), so building them eagerly at cold launch pulled the EatingSense barrel
+    // into EVERY launch context, including a glance/background launch that never receives a phone toggle
+    // at all. Deferred to first actual use in handlePhoneData's eating_sense/hr_ctl branches (NOT
+    // onStart(): onStart() itself runs during a glance-mode "Background UI Update" launch per the SDK's
+    // own Glances lifecycle doc, so constructing there would just relocate the same problem). Every other
+    // use site (onStop, pollTick's emitIfDue()) already null-guards, so a never-toggled relay simply
+    // stays null and inert — no behavior change for a phone that DOES send the toggle.
     function initialize() { AppBase.initialize(); _eating = new EatingRelay(); _hr = new HeartRateRelay(); }
 
     function onStart(state as Lang.Dictionary?) as Void {
@@ -67,6 +93,7 @@ class FaBolusApp extends App.AppBase {
     }
 
     // The background service that refreshes the complication when the app is closed.
+    (:background)
     function getServiceDelegate() as [System.ServiceDelegate] {
         return [ new BgServiceDelegate() ];
     }
@@ -144,7 +171,8 @@ class FaBolusApp extends App.AppBase {
 
     // Test-only seam: swap the HR relay for a double (e.g. one whose emitIfDue() throws) so
     // RelayResilienceTest.mc can exercise pollTick's guard above without real BLE/HR hardware. Harmless in
-    // shipping use — it's the same assignment initialize() already makes.
+    // shipping use — it's the same lazily-constructed assignment handlePhoneData's hr_ctl branch makes
+    // (19-02, Task 2), just injectable BEFORE the first real toggle arrives.
     function setHrRelay(hr as HeartRateRelay?) as Void { _hr = hr; }
 
     // R2-19: arm the next one-shot poll. Backoff is SUPPRESSED (level 0, fast cadence) while an outcome is
@@ -176,15 +204,20 @@ class FaBolusApp extends App.AppBase {
         // BgService.mc's already-guarded pattern.
         var type = data["type"];
         if (type instanceof Lang.String && (type as Lang.String).equals("eating_sense")) {
-            if (_eating != null) {
-                if (data["on"] == true) { _eating.start(); } else { _eating.stop(); }
-            }
+            // G-H2 (19-02, Task 2): lazily construct on the FIRST real toggle from the phone — a
+            // glance/background launch never reaches this line (it never receives a phone message), so
+            // the EatingSense barrel this pulls in stays out of those constrained images. The `as
+            // EatingRelay` cast (never null immediately after the assignment above) keeps typecheck -l3
+            // strict happy — a bare `_eating.stop()` on the nullable field type errors there even though
+            // it's unreachable-when-null at runtime.
+            if (data["on"] == true) { _eating.start(); } else { _eating.stop(); }
             return;
         }
         // Phone toggles ambient HR chart context (out-of-band, not a RemoteCommand). D-08/D-09:
         // enables/disables the phone-gated relay; when off the watch skips reading + sending HR.
         if (type instanceof Lang.String && (type as Lang.String).equals("hr_ctl")) {
-            if (_hr != null) { _hr.setEnabled(data["on"] == true); }
+            // G-H2 (19-02, Task 2): same lazy-construct-on-first-toggle deferral as EatingRelay above.
+            _hr.setEnabled(data["on"] == true);
             return;
         }
         var kind = data["kind"];

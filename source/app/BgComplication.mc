@@ -21,14 +21,19 @@ using Toybox.Lang;
 // all while the phone/BLE is unreachable — so it can lag the CGM. The in-app screens remain the
 // fully staleness-aware surfaces (grayed value + called-out age).
 module BgComplication {
+    (:background)
     const COMP_ID = 0;
+    (:background)
     const KEY_BG = "bg";
+    (:background)
     const KEY_TREND = "trend";   // direction token: flat/up/down/upup/downdown/up45/down45
+    (:background)
     const KEY_EPOCH = "bgEpoch"; // unix sec the BG was taken (for 6-min staleness)
 
     // Latin/ASCII trend arrow published inside the VALUE string. Face It / published complication
     // strings must use Latin characters (A-Z, a-z, 0-9, punctuation) — Unicode arrow glyphs (↑ → …)
     // fail to render on many faces, which (together with the numeric-<range> bug) is why BG showed 0.
+    (:background)
     function arrowFor(token as Lang.String?) as Lang.String {
         if (token == null) { return ""; }
         if (token.equals("up")) { return "^"; }
@@ -59,6 +64,7 @@ module BgComplication {
     // float: a `String` :value regresses the complication to its range floor — see the "MUST be a
     // Number" comment in pushComplication below — so unit conversion is fixable ONLY on this text half,
     // per C5-03's own finding.)
+    (:background)
     function shortLabelFor(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean,
                            stringMode as Lang.Boolean) as Lang.String {
         var display = AppState.formatMgdl(value);
@@ -68,6 +74,7 @@ module BgComplication {
         return stale ? (display + " old") : (display + arrow);
     }
 
+    (:background)
     function remember(bg as Lang.Number?, token as Lang.String, epoch as Lang.Number) as Void {
         if (bg != null) { Storage.setValue(KEY_BG, bg); }
         Storage.setValue(KEY_TREND, token);
@@ -77,6 +84,7 @@ module BgComplication {
     // Publish the reading. Falls back to the persisted value/token/epoch when bg is null. When the
     // reading is stale (older than the phone-synced staleSec, default 6 min) the trend arrow is dropped;
     // the numeric value itself still shows (see the LIMITATION above — numeric complications can't do "--").
+    (:background)
     function publish(bg as Lang.Number?, token as Lang.String?, epoch as Lang.Number) as Void {
         if (!(Toybox has :Complications)) { return; }
         var value = bg;
@@ -98,7 +106,7 @@ module BgComplication {
     // whose Connect IQ level lacks the Complications module (module @since 4.2.0; e.g. Forerunner 245,
     // CIQ 3.3) — referencing an absent module is a compile error, so those builds get the no-op stub
     // below via `<device>.excludeAnnotations = complications` in the jungle.
-    (:complications)
+    (:background, :complications)
     function pushComplication(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean) as Void {
         // The complication resource declares a numeric <range>, so :value MUST be a Number (a String
         // value made faces fall back to the range floor 0 — the original "reads 0" bug).
@@ -150,10 +158,11 @@ module BgComplication {
     }
 
     // No-op stub for devices without the Complications module (excludeAnnotations = complications).
-    (:nocomplications)
+    (:background, :nocomplications)
     function pushComplication(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean) as Void {
     }
 
+    (:background)
     function publishFromState() as Void {
         remember(AppState.glucose, AppState.trend, AppState.readingEpoch);
         publish(AppState.glucose, AppState.trend, AppState.readingEpoch);

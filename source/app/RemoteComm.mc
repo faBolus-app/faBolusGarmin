@@ -14,6 +14,7 @@ using Toybox.WatchUi as Ui;
 // (A direct-to-pump transport was prototyped behind a router here; it's paused and lives under
 // direct-pump/. This is the shipping phone-relay version.)
 module RemoteComm {
+    (:background)
     const SCHEMA_VERSION = 1;
 
     // Builds a units-only bolus request dictionary matching the schema.
@@ -70,6 +71,7 @@ module RemoteComm {
         return { "version" => SCHEMA_VERSION, "kind" => "cancelBolus", "requestId" => requestId };
     }
 
+    (:background)
     function statusRead(requestId as Lang.String) as Lang.Dictionary {
         return { "version" => SCHEMA_VERSION, "kind" => "statusRead", "requestId" => requestId };
     }
@@ -180,8 +182,11 @@ module RemoteComm {
     // each starting _counter at 0) globally monotonic. Folding in the wall clock (Time.now().value()) and
     // the boot timer (System.getTimer()) is defense-in-depth. Schema: requestId is a string, minLength 1,
     // with NO maxLength/pattern (../../schema) — the longer composite is contract-safe.
+    (:background)
     const KEY_REQ_SEQ = "reqSeq";
+    (:background)
     var _counter = 0;
+    (:background)
     function newRequestId() as Lang.String {
         var seq = Storage.getValue(KEY_REQ_SEQ);
         _counter = (seq instanceof Lang.Number) ? (seq as Lang.Number) + 1 : 1;

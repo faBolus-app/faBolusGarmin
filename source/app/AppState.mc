@@ -13,14 +13,18 @@ module AppState {
     // 2019 international Time-in-Range consensus (70…180 in-range, 181…250 high, > 250 very-high).
     // Kept numerically identical across every surface; the closed-convention edges (180 in-range, 250
     // high) match the phone's coloring and its TIR stat. RangeColorTest pins those edges.
+    (:background)
     const GLUCOSE_LOW = 70;
+    (:background)
     const GLUCOSE_HIGH = 180;
+    (:background)
     const GLUCOSE_VERY_HIGH = 250;
 
     // P-mmol (Phase 4, D-01/D-02/D-05): the Garmin hand-port of faBolusCore.GlucoseUnit — the ONLY
     // place this factor may appear on the Garmin side, mirroring the Swift canonical
     // (Packages/faBolusCore/Sources/faBolusCore/GlucoseUnit.swift, mgdlPerMmol = 18.0182). Pinned by
     // GlucoseUnitTest.mc against the same expected strings the Swift GlucoseUnitTests assert.
+    (:background, :glance)
     const MGDL_PER_MMOL = 18.0182;
     // Display-unit wire token ("mgdl"|"mmol"), mirrored from the phone's statusRead reply
     // (RemoteCommand.glucoseDisplayUnit). D-06: this NEVER changes GLUCOSE_*/rangeColor()/the
@@ -28,24 +32,35 @@ module AppState {
     // formatMgdl()/glucoseUnitLabel()/isfUnitLabel() render. Default "mgdl" is the fail-closed value
     // (T-04-02): an absent field (legacy host) or an unrecognized token is never adopted (see handle()
     // below), so a fresh install / older phone build always renders mg/dL.
+    (:background)
     var glucoseUnit as Lang.String = "mgdl";
 
     // HUD data (from phone)
+    (:background)
     var glucose as Lang.Number? = null;   // mg/dL
+    (:background)
     var trend as Lang.String = "";
+    (:background)
     var iob as Lang.Float = 0.0;          // units
+    (:background)
     var carbRatio as Lang.Float = 0.0;    // g/u
+    (:background)
     var isf as Lang.Number = 0;           // mg/dL per unit
+    (:background)
     var targetBg as Lang.Number = 0;      // mg/dL
+    (:background)
     var maxUnits as Lang.Float = 25.0;
     // Phase 09.15 T1-8 (D-03, D-08): current basal delivery rate (units/hr), mirrored from the phone's
     // `basalRate` — NOT persisted (mirrors `iob`'s own not-persisted, refreshed-every-sync pattern), so
     // a cold launch shows 0.0 until the first statusRead lands rather than a stale rate. Paired with
     // `maxBasalUnitsPerHour` below to compute the T1-8 "% of your configured max basal rate" text row
     // LOCALLY — the % itself is never received pre-rendered (D-08).
+    (:background)
     var basalRate as Lang.Float = 0.0;
     // Extra pump status (from phone) for the details screen.
+    (:background)
     var reservoir as Lang.Float = -1.0;   // units remaining (-1 = unknown)
+    (:background)
     var battery as Lang.Number = -1;      // percent (-1 = unknown)
     // Phase 09.27-03 (D-03/D-04/D-05): the pump's charging state, mirrored from the phone's
     // `RemoteCommand.batteryCharging` (op-145 `chargingStatus == 1` — see faBolus's
@@ -53,27 +68,38 @@ module AppState {
     // false and re-evaluated UNCONDITIONALLY on every statusRead (NOT the keep-last-value pattern most
     // other flags here use): absent/invalid/non-true resolves to false so a dropped key or a legacy
     // phone can never leave a stale "charging" claim on screen. Never inferred from a rising percent.
+    (:background)
     var batteryCharging as Lang.Boolean = false;
+    (:background)
     var lastBolus as Lang.Float = -1.0;   // units of the last bolus (-1 = unknown)
+    (:background)
     var connection as Lang.String = "";   // e.g. "Connected"
+    (:background)
     var readingEpoch as Lang.Number = 0;  // unix sec the current BG was taken (0 = unknown)
     // Staleness policy, synced from the phone (statusRead). staleSec: age after which the reading is
     // stale (greyed + not used for carb→unit). hideDelaySec: extra age before hiding ("--"); null =
     // never hide (always greyed), 0 = hide as soon as stale. Defaults mirror the phone (6 min / never).
+    (:background)
     var staleSec as Lang.Number = 360;
+    (:background)
     var hideDelaySec as Lang.Number or Null = null;
+    (:background)
     var history as Lang.Array = [];       // recent mg/dL (Numbers), oldest → newest, for the plot
     // E5: per-point Unix-sec source timestamps, aligned 1:1 with `history` (same size, oldest →
     // newest). Empty ⇒ the phone sent no (or misaligned) epochs and the plot falls back to assumed
     // ~5-min index spacing. INVARIANT after parsing: historyEpochs.size() == history.size() (1:1) OR
     // historyEpochs is empty — never a partial/off-by-one array (see the lockstep parse in handle()).
+    (:background)
     var historyEpochs as Lang.Array = [];
+    (:background)
     var alerts as Lang.Array = [];        // active pump alerts: dicts {id, kind, title}
     // VA-14: transient — set true by AlertConfirmDelegate when a "clear alert" dismiss couldn't be
     // dispatched (phone unreachable) so the alert was NOT removed locally; AlertsListView renders a
     // "Phone not connected — not cleared" notice. Cleared at the top of the next handle() (any phone
     // reply reconciles the alerts list authoritatively). Never persisted — purely a UI hint.
+    (:background)
     var alertDismissFailedOffline as Lang.Boolean = false;
+    (:background)
     var plotHours as Lang.Number = 3;     // history-plot window: 3 → 6 → 12 → 24 → 3
     // Phase 09.13 (glucose plot height customization, D-05/D-06/D-07/D-08/D-10): the Garmin Y-axis
     // plot floor/ceiling, mg/dL. Garmin is in the SMALL-SCREEN group (same as the Apple Watch) — the
@@ -81,24 +107,31 @@ module AppState {
     // phone-scoped bounds when no override is set (never the reverse). Defaults mirror
     // faBolusCore.GlucosePlotScale.defaultFloor/defaultCeiling exactly, preserving today's hardcoded
     // view (D-01) until the first statusRead arrives.
+    (:background)
     var plotFloor as Lang.Number = 40;
+    (:background)
     var plotCeiling as Lang.Number = 300;
 
     // Configurable layout (from phone settings, persisted so it survives restarts / offline launch).
     // The swipe order of the screens and which one opens first. Ids: glance/alerts/history/details.
+    (:background)
     var screenOrder as Lang.Array = ["glance", "alerts", "history", "details"];
+    (:background)
     var defaultScreen as Lang.String = "glance";
     // "glucose" = a current-glucose screen with no bolus button (users can add it to the order instead
     // of, or alongside, the bolus "glance").
+    (:background)
     const ALL_SCREENS = ["glance", "glucose", "clock", "bolusonly", "alerts", "history", "details"];
 
     // Read-only mode pushed from the phone ("remotesReadOnly"): hide the bolus button everywhere.
+    (:background)
     var readOnly as Lang.Boolean = false;
 
     // P13 capability channel ("supportsRemoteAlertDismiss"): whether the pump firmware honors a REMOTE
     // alert dismissal. t:slim X2 silently rejects it (dismiss only snoozes locally); Mobi clears it on
     // the pump. Drives the confirm verb (alertActionWord). Safe default false => "Snooze" (honest — the
     // dismiss won't clear on the pump); the statusRead that carries an alert also carries this flag.
+    (:background)
     var supportsRemoteAlertDismiss as Lang.Boolean = false;
 
     // CX-G-08 (14-09, checkpoint #5/M2, H1) — DYNAMIC pump-tied capability: true only when the phone
@@ -108,6 +141,7 @@ module AppState {
     // so a relaunch resumes in ack-mode instead of defaulting false and letting the FIRST post-relaunch
     // filtered statusRead fall through to the 14-08 fallback with no authenticated ack (H1's exact
     // fail-open). Parsed in handle() BEFORE the alerts-replace (below) for the same reason.
+    (:background)
     var supportsDismissAck as Lang.Boolean = false;
 
     // P12 group D: the host's authoritative "may a remote start a bolus right now?" (schema `canBolus`),
@@ -115,14 +149,18 @@ module AppState {
     // null until the host sends them (older host) → pumpBolusAllowed() falls back to deriving from the
     // connection string. Lets the START gate stop treating a substring match of the localized display
     // string ("Delivering…") as load-bearing safety logic.
+    (:background)
     var hostCanBolus as Lang.Boolean or Null = null;
+    (:background)
     var hostBolusBlockReason as Lang.String or Null = null;
 
     // P15 §2.3: whether the phone has enabled bolusing FROM THIS GARMIN. Default false ⇒ fail-closed: a
     // cold launch / glance with no push keeps the bolus affordance hidden until a push arms it (persisted
     // so a restart doesn't re-hide an already-enabled watch). The host also refuses a Garmin deliver when
     // false (AccessPolicy). `bolusPasscodeRequired` mirrors whether a 4-digit passcode confirms the bolus.
+    (:background)
     var garminBolusEnabled as Lang.Boolean = false;
+    (:background)
     var bolusPasscodeRequired as Lang.Boolean = false;
 
     // B2 (S1 + O3): the pump's automated-controller identity + its Control-IQ runtime on/off, pushed on
@@ -133,7 +171,9 @@ module AppState {
     // (C3 — nothing here feeds a dose). Safe legacy default ("none" / false) ⇒ render nothing controller-
     // specific. Not persisted (matches the nearby display-only capability fields, e.g.
     // supportsRemoteAlertDismiss): a cold launch shows nothing controller-specific until the first push.
+    (:background)
     var controllerVariant as Lang.String = "none";
+    (:background)
     var controlIQEnabled as Lang.Boolean = false;
 
     // Phase 09.15 T1-9 (D-01/D-08) — the pump's live Sleep/Exercise activity mode
@@ -144,6 +184,7 @@ module AppState {
     // capability-like fact that changes rarely enough that a cold launch showing nothing
     // Sleep/Exercise-specific until the first push is acceptable, matching those two fields'
     // documented reasoning). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    (:background)
     var controlIQMode as Lang.Number = 0;
     // The already-decoded exercise countdown (op-179), a RAW remaining-seconds DURATION — NOT an
     // epoch (D-08 T1-9 note): this device counts down LOCALLY against ITS OWN receipt time for
@@ -152,6 +193,7 @@ module AppState {
     // phone syncs (mirrors lockoutUntilEpochSec's own persistence exactly, same reasoning — it
     // changes far more often than the display-only capability fields). `null` ⇒ the timer fact
     // renders ABSENT — never a stale/negative countdown (D-06 guardrail #5, SP-5 fail-closed).
+    (:background)
     var exerciseTimeRemainingSec as Lang.Number? = null;
 
     // Phase 09.15 T1-1 (D-01/D-08): the pump's live Control-IQ action zone, a FROZEN wire token
@@ -162,6 +204,7 @@ module AppState {
     // watch that restarts mid-session should still show the last-known zone rather than nothing.
     // `null` ⇒ render the row ABSENT — never a stale/fabricated word (D-06 guardrail #5/#6).
     // DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    (:background)
     var ciqZone as Lang.String? = null;
 
     // Phase 09.15 T1-2 (D-08, D-09.1 fail-closed cause-attribution): whether the pump's OWN
@@ -170,10 +213,12 @@ module AppState {
     // (mirrors `ciqZone`'s own persistence exactly, same reasoning). `null`/`false` ⇒ this watch has no
     // generic-suspend signal to fall back to either, so the row is simply ABSENT — never a fabricated
     // "Control-IQ paused" claim (D-09.1 BINDING). DISPLAY-ONLY: never gates, changes, or delays a bolus.
+    (:background)
     var ciqSuspendedForLow as Lang.Boolean? = null;
     // The immutable SOURCE epoch (Unix seconds, raw — NOT an age) of the moment `ciqSuspendedForLow`
     // first became true. Elapsed minutes are computed at DRAW time from this (DetailsView's
     // `ciqSuspendElapsedMinutes()`), never transmitted as a pre-computed age.
+    (:background)
     var ciqSuspendStartEpochSec as Lang.Number? = null;
 
     // Phase 09.15 T1-3 (D-01/D-08) — the immutable SOURCE epoch (Unix seconds, raw — NOT an age) of
@@ -183,11 +228,13 @@ module AppState {
     // `ciqZone`'s own persistence). `null` ⇒ the row renders ABSENT (never "--" — no recent
     // auto-correction is the common/expected case, not an error). DISPLAY-ONLY: never gates, changes,
     // or delays a bolus (C3).
+    (:background)
     var lastAutoCorrectionEpochSec as Lang.Number? = null;
     // Phase 09.15 T1-4 (D-01/D-08) — the immutable SOURCE epoch of the most-recent "Control-IQ tried
     // and couldn't deliver an automatic correction" event. Remote MARKER only (no on-watch/Garmin
     // timeline — this device never had the pump history to build one from). `null` ⇒ the marker
     // renders ABSENT. DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    (:background)
     var ciqLastCouldNotDeliverEpochSec as Lang.Number? = null;
 
     // Phase 09.15 T1-5 (D-01/D-08) — the immutable SOURCE epoch (Unix seconds, raw — NOT an age) of
@@ -199,6 +246,7 @@ module AppState {
     // restart between phone syncs, matches `ciqZone`'s own persistence). `null` ⇒ the bar/numeral
     // renders ABSENT (never a frozen 0%/100% bar, never a negative countdown — D-06 guardrail #5).
     // DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    (:background)
     var lockoutUntilEpochSec as Lang.Number? = null;
 
     // Phase 09.15 T1-8 (D-03, D-08) — the pump's configured max-basal delivery limit, mirrored from the
@@ -209,10 +257,12 @@ module AppState {
     // limit. Persisted (survives a restart between phone syncs, matches `lockoutUntilEpochSec`'s own
     // persistence). `null` ⇒ the "% of configured max basal" text row renders ABSENT (D-03(v)
     // fail-closed: hidden, never "0%"/"--"). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    (:background)
     var maxBasalUnitsPerHour as Lang.Float? = null;
 
     // Details rows shown (in order) + which history ranges the plot cycles through on tap — both
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
+    (:background)
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
     // Phase 09.15 T1-1/T1-2/T1-3/T1-4 (D-01/D-08): "ciqZone"/"ciqSuspend"/"autoCorrection"/
     // "couldNotDeliver" registered so any CAN be selected once a phone-side customizer opts them in
@@ -224,13 +274,17 @@ module AppState {
     // untouched); the rows exist and render correctly once selected, just not yet user-reachable.
     // Phase 09.15 T1-9 (D-01/D-08): "sleepExercise" registered the same opt-in way (same KNOWN GAP
     // as the T1-1..T1-4 ids above — not yet reachable from a phone-side customizer this plan).
+    (:background)
     const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend", "autoCorrection", "couldNotDeliver", "maxBasal", "sleepExercise"];
+    (:background)
     var chartRanges as Lang.Array = [3, 6, 12, 24];
     // How the BG complication presents: "numericColor" (numeric value + range color + Latin trend
     // in the unit slot) or "stringTrend" (plain "124 ^" string). Mirrored from the phone.
+    (:background)
     var complicationDisplay as Lang.String = "numericColor";
 
     // Load persisted layout at launch (getInitialView needs defaultScreen before any phone message).
+    (:background)
     function loadPrefs() as Void {
         var so = Storage.getValue("screenOrder");
         if (so instanceof Lang.Array) { screenOrder = sanitizeOrder(so); }
@@ -336,11 +390,13 @@ module AppState {
     }
 
     // Frozen wire-token set for the display-unit field (Pitfall 6 — never a raw enum on the wire).
+    (:background, :glance)
     function isValidUnitToken(t as Lang.String) as Lang.Boolean {
         return t.equals("mgdl") || t.equals("mmol");
     }
 
     // Keep only allowed string ids (de-duped), preserving the phone-chosen subset + order.
+    (:background)
     function sanitizeAgainst(list as Lang.Array, allow as Lang.Array) as Lang.Array {
         var out = [];
         for (var i = 0; i < list.size(); i += 1) {
@@ -351,6 +407,7 @@ module AppState {
     }
 
     // Keep only the allowed history ranges {3,6,12,24}, de-duped, preserving order.
+    (:background)
     function sanitizeRanges(list as Lang.Array) as Lang.Array {
         var allowed = [3, 6, 12, 24];
         var out = [];
@@ -361,18 +418,21 @@ module AppState {
         return out;
     }
 
+    (:background)
     function containsStr(list as Lang.Array, v as Lang.String) as Lang.Boolean {
         for (var i = 0; i < list.size(); i += 1) {
             if (list[i] instanceof Lang.String && (list[i] as Lang.String).equals(v)) { return true; }
         }
         return false;
     }
+    (:background)
     function containsNum(list as Lang.Array, v as Lang.Number) as Lang.Boolean {
         for (var i = 0; i < list.size(); i += 1) {
             if (list[i] instanceof Lang.Number && (list[i] as Lang.Number) == v) { return true; }
         }
         return false;
     }
+    (:background)
     function ensureValidPlotHours() as Void {
         if (chartRanges.size() > 0 && !containsNum(chartRanges, plotHours)) {
             plotHours = chartRanges[0] as Lang.Number;
@@ -411,6 +471,7 @@ module AppState {
     // Keep only known ids (de-duped), preserving the phone-chosen subset + order. Screens the user
     // hid are intentionally omitted. Falls back to all screens only if the result would be empty,
     // so the watch is never left with nothing to show.
+    (:background)
     function sanitizeOrder(list as Lang.Array) as Lang.Array {
         var out = [];
         for (var i = 0; i < list.size(); i += 1) {
@@ -424,12 +485,14 @@ module AppState {
     }
 
     // Ensures the default screen is one that's actually shown; otherwise falls back to the first.
+    (:background)
     function ensureValidDefault() as Void {
         if (!contains(screenOrder, defaultScreen)) {
             defaultScreen = (screenOrder.size() > 0) ? (screenOrder[0] as Lang.String) : "glance";
         }
     }
 
+    (:background)
     function contains(list as Lang.Array, v as Lang.String) as Lang.Boolean {
         for (var i = 0; i < list.size(); i += 1) {
             if (list[i] instanceof Lang.String && (list[i] as Lang.String).equals(v)) { return true; }
@@ -494,11 +557,13 @@ module AppState {
 
     // The pump is reachable when the phone reports it connected or actively delivering.
     // "Connecting…", "Scanning…", "Disconnected", "Error", and unknown ("") mean not reachable.
+    (:background)
     function pumpConnected() as Lang.Boolean {
         return connection.equals("Connected") || bolusing();
     }
 
     // A bolus is currently being delivered ("Delivering…").
+    (:background)
     function bolusing() as Lang.Boolean {
         return connection.find("Deliver") == 0;
     }
@@ -508,6 +573,7 @@ module AppState {
     // the connection string. Excludes phone reachability (the Garmin's own local link), so it is
     // deterministically unit-testable; canBolus() ANDs in reachability. P12 group D: this is what
     // stops the START gate from depending on a substring match of the localized display string.
+    (:background)
     function pumpBolusAllowed() as Lang.Boolean {
         if (hostCanBolus != null) { return hostCanBolus; }
         return pumpConnected() && !bolusing();
@@ -517,6 +583,7 @@ module AppState {
     // Distinct from RemoteComm.phoneReachable() (the raw BLE link, which stays "connected" even when
     // faBolus is killed). 0 (never replied / cold launch) fails closed. Anchored on `lastReplyEpoch`,
     // stamped at the top of handle() on every inbound reply. Pure decision (wall-clock only) → testable.
+    (:background)
     function appLive() as Lang.Boolean {
         return lastReplyEpoch > 0 && (Time.now().value() - lastReplyEpoch) <= CONNECTION_STALE_SEC;
     }
@@ -553,6 +620,7 @@ module AppState {
     // even though nothing else about eligibility changed. (The harder backstop — no intervening
     // statusRead at all — is sendBolusNow()'s own direct armContextExpired()/appLive() re-check at the
     // final send.) Otherwise deterministic (no OTHER wall-clock read) → unit-testable.
+    (:background)
     function eligibilityFingerprint() as Lang.String {
         var ro = readOnly ? "1" : "0";
         var gbe = garminBolusEnabled ? "1" : "0";
@@ -613,8 +681,10 @@ module AppState {
     //   • "rising" = the pump's OWN reported up arrows  (risingTrends [.rising,.up,.upUp] → up45/up/upup);
     //     C8 — the arrow is READ, never a computed/synthesized glucose rate.
     // FROZEN token set (schema `controllerVariant` enum) — never invent others.
+    (:background)
     const CONTROLLER_VARIANTS = ["none", "controlIQ", "controlIQPro"];
     // Phase 09.15 T1-1 (D-01/D-08): FROZEN token set (schema `ciqZone` enum) — never invent a 6th.
+    (:background)
     const CIQ_ZONES = ["increases", "decreases", "maintains", "stops", "delivers"];
     const CONTROLLER_RISING_TRENDS = ["up45", "up", "upup"];
     const CONTROLLER_DISCLOSE_AT_OR_ABOVE = 180;
@@ -824,6 +894,7 @@ module AppState {
     // the pure displayGlucoseForUnit() below), mirroring faBolusCore.GlucoseUnit.format(mgdl:) exactly:
     // mgdl → the plain integer string (unchanged); mmol → 1-decimal (D-05), never a second inline
     // "/ 18.0182" — GlucoseUnitTest.mc pins this against the same expected strings as the Swift funnel.
+    (:background)
     function formatMgdl(v as Lang.Number) as Lang.String {
         return displayGlucoseForUnit(v, glucoseUnit);
     }
@@ -833,6 +904,7 @@ module AppState {
     // rather than depending on AppState.loadPrefs() having run first (see FaBolusGlanceView.mc's own
     // "reads Storage directly" note). Both call sites route through this ONE conversion so the math
     // is never duplicated.
+    (:background, :glance)
     function displayGlucoseForUnit(v as Lang.Number, unitToken as Lang.String) as Lang.String {
         if (unitToken.equals("mmol")) { return (v.toFloat() / MGDL_PER_MMOL).format("%.1f"); }
         return v.toString();
@@ -846,6 +918,7 @@ module AppState {
 
     // Pure variant of glucoseUnitLabel(), for the same Storage-direct (:glance) contexts as
     // displayGlucoseForUnit() above.
+    (:glance)
     function glucoseUnitLabelForToken(unitToken as Lang.String) as Lang.String {
         return unitToken.equals("mmol") ? "mmol/L" : "mg/dL";
     }
@@ -872,6 +945,7 @@ module AppState {
 
     // Bolus entry
     var mode as Lang.String = "carbs";    // "units" | "carbs"; default from phone settings
+    (:background)
     var defaultMode as Lang.String = "carbs";
     var unitsValue as Lang.Float = 0.0;
     var carbsValue as Lang.Number = 0;
@@ -879,18 +953,24 @@ module AppState {
     // default and cleared by reset() before every compose, so it is NEVER sticky and NEVER a default —
     // set true only when the wearer explicitly picks "include" in the three-way stale prompt this attempt.
     var includeStaleBg as Lang.Boolean = false;
+    (:background)
     var stepU as Lang.Float = 0.05;       // bolus increment (from phone settings)
+    (:background)
     var stepC as Lang.Number = 5;         // carb increment (from phone settings)
     const MAX_CARBS = 200;
 
     // Delivery
     var deliverUnits as Lang.Float = 0.0; // captured when entering the hold screen
     var holdProgress as Lang.Float = 0.0; // 0..1 for the hold-to-deliver ring
+    (:background)
     var pendingRequestId as Lang.String? = null;
+    (:background)
     var status as Lang.String? = null;    // delivering/delivered/failed/...
+    (:background)
     var message as Lang.String? = null;
     // Whether the phone has been seen bolusing since this request started, so a lost/late
     // terminal echo can be recovered from the connection state (see handle()).
+    (:background)
     var sawPhoneBolusing as Lang.Boolean = false;
 
     // CX-G-01 (wrist half): a DURABLE unresolved-delivery tombstone {requestId, sentAt, doseKey},
@@ -908,9 +988,13 @@ module AppState {
     // clearInFlight() below wipes pendingRequestId/status locally WITHOUT touching the tombstone, so a
     // back-out before the echo lands must not orphan it). `doseKey` is diagnostic content-identity
     // metadata only — requestId is the sole correlation key used to block a re-send / clear on echo.
+    (:background)
     const KEY_UNRESOLVED_TOMBSTONE = "unresolvedTombstone";
+    (:background)
     var unresolvedTombstoneReqId as Lang.String? = null;
+    (:background)
     var unresolvedTombstoneSentAt as Lang.Number = 0;
+    (:background)
     var unresolvedTombstoneDoseKey as Lang.String? = null;
 
     function hasUnresolvedTombstone() as Lang.Boolean {
@@ -932,6 +1016,7 @@ module AppState {
         Storage.setValue(KEY_UNRESOLVED_TOMBSTONE, { "requestId" => reqId, "sentAt" => sentAt, "doseKey" => doseKey });
     }
 
+    (:background)
     function clearUnresolvedTombstone() as Void {
         unresolvedTombstoneReqId = null;
         unresolvedTombstoneSentAt = 0;
@@ -954,8 +1039,10 @@ module AppState {
     // policy state changed AFTER the wearer armed, so the armed confirm must be torn down and the send
     // refused (re-confirm). `_prevEligibilityFp` is the last-seen fingerprint — null until the first
     // statusRead, so the very first reply never counts as a change.
+    (:background)
     var bolusEligibilityGen as Lang.Number = 0;
     var armedEligibilityGen as Lang.Number = 0;
+    (:background)
     var _prevEligibilityFp as Lang.String? = null;
 
     // CX-G-09: the wall-clock instant the CURRENT arm (armBolus()) was snapshotted — 0 before the first
@@ -965,12 +1052,15 @@ module AppState {
     // they armed it — this tracks THAT gap specifically. `armContextExpired()` is the pure decision;
     // sendBolusNow() re-checks it at the final send (belt), and eligibilityFingerprint() folds it in so
     // an intervening statusRead can also catch it via the existing gen-bump teardown path (suspenders).
+    (:background)
     var armedAtEpoch as Lang.Number = 0;
+    (:background)
     const ARM_CONTEXT_STALE_SEC = 120;
 
     // CX-G-09 (pure): has the CURRENTLY-armed context aged past ARM_CONTEXT_STALE_SEC since armBolus()?
     // Guards on armedAtEpoch > 0 so "never armed" can never spuriously read as expired. Deterministic
     // (wall-clock only, no reachability) → unit-testable.
+    (:background)
     function armContextExpired() as Lang.Boolean {
         return armedAtEpoch > 0 && (Time.now().value() - armedAtEpoch) > ARM_CONTEXT_STALE_SEC;
     }
@@ -985,7 +1075,9 @@ module AppState {
     // R2-03: app-level liveness. `lastReplyEpoch` is the wall-clock (Unix sec) of the last inbound phone
     // reply (stamped at the top of handle()); `appLive()` gates a bolus on a RECENT reply — distinct from
     // the raw BLE link (RemoteComm.phoneReachable()), which stays "connected" even when faBolus is killed.
+    (:background)
     var lastReplyEpoch as Lang.Number = 0;
+    (:background)
     const CONNECTION_STALE_SEC = 60;
 
     // R2-19: foreground poll cadence + the reply-outstanding deadline. Deadline ordering (batch guidance,
@@ -1100,6 +1192,7 @@ module AppState {
     // plus 'unknown' as a degraded-terminal (R2-02's honest timeout). The complement of outcomePending's
     // non-terminal set (delivering/cancelling). Pure/deterministic → unit-testable. Used to stop a late
     // duplicate NON-terminal echo (same requestId) from regressing an authoritative terminal in handle().
+    (:background)
     function isTerminalStatus(s as Lang.String?) as Lang.Boolean {
         return s != null && (s.equals("delivered") || s.equals("cancelled") || s.equals("failed") || s.equals("unknown"));
     }
@@ -1198,6 +1291,7 @@ module AppState {
 
     // Seed glucose/trend from the persisted complication value so the glance shows the last-known
     // reading immediately on open, instead of "--" while the first phone reply is in flight.
+    (:background)
     function loadPersisted() as Void {
         var g = Storage.getValue(BgComplication.KEY_BG);
         if (g != null && isNum(g)) { glucose = g.toNumber(); }
@@ -1413,6 +1507,7 @@ module AppState {
     // empty {}) that lands first must be IGNORED (not mistaken for the reply, which would exit early and
     // drop the fresh read). This is the KIND discriminator, retained as the R2-15 fallback for a legacy
     // phone that does not echo the requestId; `isCorrelatedStatusReply` layers true id correlation on top.
+    (:background)
     function isStatusReply(dict as Lang.Dictionary) as Lang.Boolean {
         var kind = dict["kind"];
         return kind instanceof Lang.String && (kind as Lang.String).equals("statusRead");
@@ -1425,6 +1520,7 @@ module AppState {
     // echo → fall back to the kind discrimination only (backward-compatible). A mismatching requestId is a
     // stale/other reply and is rejected. `mintedReqId == null` (we didn't retain one) also falls back to
     // kind. Deterministic → unit-testable.
+    (:background)
     function isCorrelatedStatusReply(dict as Lang.Dictionary, mintedReqId as Lang.String?) as Lang.Boolean {
         if (!isStatusReply(dict)) { return false; }
         var rid = strCap(dict["requestId"], 64);
@@ -1432,6 +1528,7 @@ module AppState {
         return rid.equals(mintedReqId);
     }
 
+    (:background)
     function handle(data as Lang.Dictionary) as Void {
         // CX-G-11: reuse the existing strCap() guard (instanceof-checked, GA-09) instead of the bare
         // `as Lang.String?` cast — a non-null, non-String `kind` (malformed/hostile wire dict) used to hit
@@ -1803,8 +1900,10 @@ module AppState {
             handleDismissAck(strCap(data["requestId"], 64), data["alertId"], data["alertKind"]);
         }
     }
+    (:background)
     const STATUS_TOKENS = ["delivering", "delivered", "cancelled", "cancelling", "failed", "unknown"];
 
+    (:background)
     function isNum(v) as Lang.Boolean {
         return v instanceof Lang.Number || v instanceof Lang.Float || v instanceof Lang.Double;
     }
@@ -1815,31 +1914,38 @@ module AppState {
     // state — every physiological field is bounds- and finiteness-checked, strings are length-capped,
     // and nested arrays are size-capped with per-element validation. A rejected field returns null so
     // the caller KEEPS the last good value rather than adopting garbage.
+    (:background)
     function isFiniteNum(v) as Lang.Boolean {
         if (!isNum(v)) { return false; }
         return v == v && v < 1.0e12 && v > -1.0e12;   // v==v rejects NaN; the bounds reject ±Inf / absurd
     }
+    (:background)
     function numRange(v, lo as Lang.Number, hi as Lang.Number) as Lang.Number? {
         if (!isFiniteNum(v)) { return null; }
         var n = v.toNumber();
         return (n < lo || n > hi) ? null : n;
     }
+    (:background)
     function fltRange(v, lo as Lang.Float, hi as Lang.Float) as Lang.Float? {
         if (!isFiniteNum(v)) { return null; }
         var f = v.toFloat();
         return (f < lo || f > hi) ? null : f;
     }
+    (:background)
     function strCap(v, max as Lang.Number) as Lang.String? {
         if (!(v instanceof Lang.String)) { return null; }
         var s = v as Lang.String;
         return (s.length() > max) ? s.substring(0, max) : s;
     }
+    (:background)
     const TREND_TOKENS = ["flat", "up", "down", "upup", "downdown", "up45", "down45", ""];
+    (:background)
     function validTrend(v) as Lang.String? {
         if (!(v instanceof Lang.String)) { return null; }
         return containsStr(TREND_TOKENS, v as Lang.String) ? v : null;
     }
     // Keep the newest ≤288 finite readings in [0,600]; drop everything else.
+    (:background)
     function sanitizeHistory(arr as Lang.Array) as Lang.Array {
         var out = [];
         var n = arr.size();
@@ -1855,6 +1961,7 @@ module AppState {
     // an out-of-range reading drops its epoch too, so a surviving reading can never shift onto the
     // wrong timestamp. Callers pass equal-length raw arrays. Returns [historyOut, epochsOut], always
     // of equal size (the aligned-pair invariant). Reuses numRange/isFiniteNum.
+    (:background)
     function sanitizeHistoryPairs(hs as Lang.Array, es as Lang.Array) as Lang.Array {
         var histOut = [];
         var epOut = [];
@@ -1870,6 +1977,7 @@ module AppState {
         return [histOut, epOut];
     }
     // Keep ≤50 well-formed alert dicts (each must have id/kind/title of the right type).
+    (:background)
     function sanitizeAlerts(arr as Lang.Array) as Lang.Array {
         var out = [];
         var lim = (arr.size() > 50) ? 50 : arr.size();
@@ -1886,6 +1994,7 @@ module AppState {
     // Alert identity = kind + "-" + id. This is the (kind, id) pair the dismiss path already keys on
     // (see AlertConfirmDelegate / RemoteComm.dismissAlert) — NOT a new schema field. It's the stable
     // handle the notifier uses to tell a genuinely NEW alert from a re-fetch of one already surfaced.
+    (:background)
     function alertIdentity(a as Lang.Dictionary) as Lang.String {
         return a["kind"].toString() + "-" + a["id"].toString();
     }
@@ -1894,6 +2003,7 @@ module AppState {
     // (and their order) untouched. NO LONGER called on a DISPATCHED dismiss (see CX-G-08 below) — kept
     // for any future authenticated-ack path that would need a real local removal. Extracted verbatim
     // from the old inline loop in AlertConfirmDelegate so it's unit-testable.
+    (:background)
     function removeAlert(id, kind) as Void {
         var kept = [];
         for (var i = 0; i < alerts.size(); i += 1) {
@@ -1912,6 +2022,7 @@ module AppState {
     // replaces the old one) drops it because the phone's own authoritative list no longer contains it.
     // In-memory only (mirrors the existing transient alertDismissFailedOffline flag) — a cold relaunch
     // simply re-derives "not yet proven" from the next statusRead, which is always coming.
+    (:background)
     var dismissSentAlertIdentities as Lang.Array = [];
 
     // Mark (id, kind) as a dispatched-but-unproven dismiss. Idempotent (re-dispatching the same alert
@@ -1934,6 +2045,7 @@ module AppState {
     // in the new active list has been proven absent by the phone — drop it. An identity still present
     // (the phone hasn't cleared it yet, or rejected the dismiss) stays flagged; re-dispatching it is
     // still safe/idempotent via markDismissSent.
+    (:background)
     function reconcileDismissSent() as Void {
         var active = activeAlertIdentities();
         var kept = [];
@@ -1954,18 +2066,25 @@ module AppState {
     // authenticated dismissAck removes it — NEVER TTL-pruned, NEVER evicted on cap overflow (eviction =
     // fail-open). Both persisted (Application.Storage) so they survive a relaunch (HIGH-B); overlaid
     // onto the statusRead alerts replace in handle() when `supportsDismissAck` is true (H1).
+    (:background)
     const KEY_DISMISS_PENDING = "dismissPending";           // identity -> {requestId, generation, createdAt}
+    (:background)
     const KEY_DISMISS_PROVISIONAL = "dismissProvisional";   // identity -> {id, kind, title}
+    (:background)
     const KEY_SUPPORTS_DISMISS_ACK = "supportsDismissAck";
     // 10 minutes — WELL under the pump's 30-min re-nag (snoozeWindow, TandemBackend.swift) and matching
     // the phone's own GarminDismissReceiptStore.ttl, so the two ends stop correlating together.
+    (:background)
     const DISMISS_RETRY_TTL_SEC = 600;
     // Bounded RETRY lane only (oldest pruned on overflow) — the DISPLAY lane is never capped.
     const DISMISS_RETRY_CAP = 8;
 
+    (:background)
     var dismissPending as Lang.Dictionary = {};
+    (:background)
     var dismissProvisional as Lang.Dictionary = {};
 
+    (:background)
     function dismissIdentity(id, kind) as Lang.String {
         return kind.toString() + "-" + id.toString();
     }
@@ -2022,12 +2141,15 @@ module AppState {
         if (oldestKey != null) { dismissPending.remove(oldestKey); }
     }
 
+    (:background)
     function saveDismissPending() as Void { Storage.setValue(KEY_DISMISS_PENDING, dismissPending); }
+    (:background)
     function saveDismissProvisional() as Void { Storage.setValue(KEY_DISMISS_PROVISIONAL, dismissProvisional); }
 
     // Restore both lanes + the persisted capability on loadPrefs/restart. Strict shape validation
     // (never trap): a malformed entry is DROPPED rather than adopted (mirrors the tombstone restore's
     // strCap-guarded discipline just above).
+    (:background)
     function loadDismissState() as Void {
         var pendRaw = Storage.getValue(KEY_DISMISS_PENDING);
         if (pendRaw instanceof Lang.Dictionary) {
@@ -2066,6 +2188,7 @@ module AppState {
     // exactly): a future `createdAt` or a negative elapsed treats the RETRY entry as expired/invalid —
     // it stops accepting acks + retries. The DISPLAY provisional (a SEPARATE map) is never touched by
     // this check either way (M1/HIGH-C: expiry is never a remover).
+    (:background)
     function dismissRetryExpired(entry as Lang.Dictionary, now as Lang.Number) as Lang.Boolean {
         var created = entry["createdAt"];
         if (!(created instanceof Lang.Number)) { return true; }
@@ -2107,6 +2230,7 @@ module AppState {
     // malformed ack (missing/non-Number/non-String fields) all safely no-op — never a false removal
     // (T-14-26). On success calls the PRESERVED `removeAlert` and clears BOTH persisted lanes for that
     // identity (a later re-occurrence mints a fresh entry via beginDismiss).
+    (:background)
     function handleDismissAck(rid, aid, akind) as Void {
         if (!(rid instanceof Lang.String) || !isNum(aid) || !isNum(akind)) { return; }
         var ident = dismissIdentity(aid, akind);
@@ -2129,6 +2253,7 @@ module AppState {
     // instead and must NOT overlay, or a stale provisional would defeat that fallback's filtered-
     // absence removal). Force-marks each overlaid identity 'seen' (KEY_SEEN_ALERTS) so re-overlaying it
     // on every subsequent statusRead never re-triggers a notify/vibrate (L1) — the wearer already knows.
+    (:background)
     function overlayUnackedDismissProvisionals() as Void {
         var active = activeAlertIdentities();
         var keys = dismissProvisional.keys();
@@ -2172,6 +2297,7 @@ module AppState {
     // notify — preserving the list's most-serious-first order (the phone sends `alerts` most-serious
     // first). FaBolusApp.notifyNewAlerts surfaces EACH of these (the old code surfaced only the first but
     // marked ALL seen, so a 2nd simultaneous new alert was suppressed forever). Bounded by sanitizeAlerts.
+    (:background)
     function newAlertsSince(seen as Lang.Array) as Lang.Array {
         var out = [];
         for (var i = 0; i < alerts.size(); i += 1) {
@@ -2184,6 +2310,7 @@ module AppState {
     // VA-13 (pure): every currently-active alert identity (most-serious-first order). notifyNewAlerts
     // rewrites the persisted seen-set to exactly this after surfacing — so a cleared alert drops out and
     // re-notifies if it re-fires, and newAlertsSince(activeAlertIdentities()) is empty (nothing left new).
+    (:background)
     function activeAlertIdentities() as Lang.Array {
         var out = [];
         for (var i = 0; i < alerts.size(); i += 1) {
@@ -2196,11 +2323,14 @@ module AppState {
     // identity strings) so it survives background↔foreground transitions and a cold launch — a NEW
     // alert is one whose identity isn't in this set. GA: a plain count comparison missed an alarm that
     // replaced another at the same count and re-fired on every reshuffle; identity tracking fixes both.
+    (:background)
     const KEY_SEEN_ALERTS = "seenAlerts";
+    (:background)
     function loadSeenAlerts() as Lang.Array {
         var s = Storage.getValue(KEY_SEEN_ALERTS);
         return (s instanceof Lang.Array) ? s : [];
     }
+    (:background)
     function saveSeenAlerts(seen as Lang.Array) as Void {
         Storage.setValue(KEY_SEEN_ALERTS, seen);
     }
@@ -2230,11 +2360,14 @@ module AppState {
     // background notification is a purely ADDITIVE early signal: it never marks an alert "seen" for the
     // foreground path, so the in-app confirm-to-clear flow the wearer sees once they open the app still
     // fires normally, unaffected by whether a background notification already fired for the same alert.
+    (:background)
     const KEY_BG_NOTIFIED_ALERTS = "bgNotifiedAlerts";
+    (:background)
     function loadBgNotifiedAlerts() as Lang.Array {
         var s = Storage.getValue(KEY_BG_NOTIFIED_ALERTS);
         return (s instanceof Lang.Array) ? s : [];
     }
+    (:background)
     function saveBgNotifiedAlerts(seen as Lang.Array) as Void {
         Storage.setValue(KEY_BG_NOTIFIED_ALERTS, seen);
     }
@@ -2246,6 +2379,7 @@ module AppState {
     // the Storage read/write, so it is unit-testable without Toybox.Notifications (not invokable from the
     // simulator's unit-test harness) — BgServiceDelegate.onPhoneMessage is the only caller that actually
     // shows a notification for what this returns.
+    (:background)
     function newBackgroundAlertsToNotify() as Lang.Array {
         var newOnes = newAlertsSince(loadBgNotifiedAlerts());
         saveBgNotifiedAlerts(activeAlertIdentities());
