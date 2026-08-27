@@ -12,6 +12,12 @@
 # The paused direct-to-pump work lives under direct-pump/ and is NOT part of this build
 # (see direct-pump/DIRECT_PUMP_STATUS.md). Its engine is exercised by test.jungle and probe.jungle.
 project.manifest = manifest.xml
+# G-L4 (19-03): pin an explicit type check level rather than relying on the compiler's implicit default
+# (Gradual). Level 2 (Informative) is the highest level this codebase currently compiles clean at without
+# errors — Level 3 (Strict) currently fails with 400+ pre-existing errors across the app + tests + the
+# vendored EatingSense barrel (untyped params/members, PolyType-vs-Object parameter mismatches), all
+# pre-dating this plan and well outside its scope. See 19-03-SUMMARY.md for the full compile matrix.
+project.typecheck = 2
 base.sourcePath = source/app
 base.resourcePath = resources;resources-complications
 # EatingSenseKit barrel (reusable wrist accel/gyro capture) — built from the faBolusNudge SDK

@@ -2,6 +2,9 @@
 # Identical build to monkey.jungle (beta) but with manifest-official.xml.
 # Build:  monkeyc -f official.jungle -o bin/faBolus-official.iq -y <store_key.der> -e -r -w
 project.manifest = manifest-official.xml
+# G-L4 (19-03): pin the same explicit type check level as monkey.jungle — see its comment for why
+# Level 2 (Informative), not Level 3 (Strict).
+project.typecheck = 2
 base.sourcePath = source/app
 base.resourcePath = resources;resources-complications
 # EatingSenseKit barrel (wrist accel/gyro capture → imu_window to the phone). Same as monkey.jungle;

@@ -34,9 +34,13 @@ class ClockView extends Ui.View {
 
     function onTick() as Void { Ui.requestUpdate(); }
 
+    // G-L4 (19-03): coerce the Storage read to a real Boolean via an instanceof-guard — Storage.getValue()
+    // returns an untyped Object?, which the `as Lang.Boolean` declaration below flags under a strict
+    // typeCheckLevel; a corrupt/wrong-typed persisted value now fails to false (digital), matching the
+    // prior null-fallback exactly.
     function analog() as Lang.Boolean {
         var v = Storage.getValue(KEY_ANALOG);
-        return (v == null) ? false : v;
+        return (v instanceof Lang.Boolean) ? v : false;
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {

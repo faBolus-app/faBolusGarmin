@@ -183,8 +183,12 @@ class FaBolusApp extends App.AppBase {
         _scheduleCount += 1;
         var level = AppState.outcomePending() ? 0 : _backoff;
         var delay = AppState.pollBaseDelayMs(level) + (Math.rand() % 4000);
-        if (_timer != null) { _timer.stop(); }
-        _timer = new Timer.Timer();
+        // 19-03 (G-L3): reuse ONE retained Timer.Timer instance across every re-arm instead of allocating
+        // a new one every ~15s tick. Lazily create it once (first call — mirrors onStart's pollTick()
+        // priming this method), then thereafter stop()+start() the SAME object. The one-shot re-arm
+        // semantics (pollTick re-arms itself), the outcome-pending fast-cadence level, and the jitter are
+        // all unchanged — only the Timer object identity is now stable across ticks.
+        if (_timer == null) { _timer = new Timer.Timer(); } else { _timer.stop(); }
         _timer.start(method(:pollTick), delay, false);   // one-shot; pollTick re-arms
     }
 
