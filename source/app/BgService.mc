@@ -164,6 +164,15 @@ class BgServiceDelegate extends System.ServiceDelegate {
         var presented = [];
         for (var i = 0; i < pending.size(); i += 1) {
             var a = pending[i] as Lang.Dictionary;
+            // 20-REVIEW WR-02 (D-01): honor the phone-synced alert-intensity mode in the CLOSED-app path
+            // too — in Silent mode the watch stays quiet (phone is the sole alerting surface), except the
+            // opt-in critical-override wrist fallback. A suppressed alert is left OUT of `presented`, so it
+            // stays pending (never marked notified) and would surface if the user later leaves Silent —
+            // it is not permanently dropped. "vibrate"/"audible" modes surface as before (CX-G-06 net).
+            if (!AppState.shouldSurfaceInBackground(AppState.alertSeverityTier(a),
+                    AppState.alertIntensityMode, AppState.alertCriticalOverridesDnd)) {
+                continue;
+            }
             try {
                 Notifications.showNotification("faBolus", a["title"] as Lang.String, null);
                 presented.add(AppState.alertIdentity(a));

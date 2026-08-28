@@ -338,7 +338,10 @@ class FaBolusApp extends App.AppBase {
             // and nothing pierces DND unless the user opted in on the phone. FULLY-SILENT guarantee: in
             // Silent mode + critical-override-off the gate returns zero output for every tier including
             // critical — there is no code path here that forces vibrate/tone (the phone is authoritative).
-            var tier = AppState.mostSevereTier(toPush);
+            // 20-REVIEW WR-01: compute the escalation tier over the FULL new-alert set, NOT the display-
+            // capped `toPush` — a critical arriving beyond MAX_ALERT_PUSHES must still drive the batch's
+            // (single) haptic/tone escalation, never be downgraded because it fell past the 4-row cap.
+            var tier = AppState.mostSevereTier(newAlerts);
             var ds = System.getDeviceSettings();
             var vibrateOn = (ds has :vibrateOn) ? ds.vibrateOn : true;        // permissive if unreadable
             var dnd = (ds has :doNotDisturb) ? ds.doNotDisturb : false;       // not-in-DND if unreadable

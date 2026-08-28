@@ -168,4 +168,44 @@ module AlertIntensityGateTest {
         Test.assertMessage(out[2]["severity"] == null, "absent severity stays absent");
         return true;
     }
+
+    // 20-REVIEW WR-01: the batch escalation tier must scan the FULL new-alert list, so a critical arriving
+    // BEYOND the 4-row display cap still drives escalation. mostSevereTier takes the max over the whole
+    // list; notifyNewAlerts now passes `newAlerts` (not the capped `toPush`).
+    (:test)
+    function mostSevereTierScansPastDisplayCap(logger as Test.Logger) as Lang.Boolean {
+        var batch = [
+            { "id" => 1, "kind" => 0, "title" => "a", "severity" => "info" },
+            { "id" => 2, "kind" => 0, "title" => "b", "severity" => "info" },
+            { "id" => 3, "kind" => 0, "title" => "c", "severity" => "info" },
+            { "id" => 4, "kind" => 0, "title" => "d", "severity" => "info" },
+            { "id" => 5, "kind" => 0, "title" => "URGENT LOW", "severity" => "critical" }   // beyond the 4-cap
+        ];
+        Test.assertEqualMessage(AppState.mostSevereTier(batch), "critical",
+            "a critical past the 4-row display cap still sets the batch tier to critical");
+        return true;
+    }
+
+    // 20-REVIEW WR-02 (D-01): the CLOSED-app background surface honors Silent — Silent+override-off ⇒ NO
+    // background notification for ANY tier (incl. critical); Silent+override-on ⇒ ONLY critical surfaces;
+    // vibrate/audible ⇒ always surface (CX-G-06 safety net).
+    (:test)
+    function backgroundSurfaceHonorsSilent(logger as Test.Logger) as Lang.Boolean {
+        // Silent + override OFF ⇒ nothing surfaces, even critical.
+        Test.assertMessage(!AppState.shouldSurfaceInBackground("critical", "silent", false),
+            "NEGATIVE: Silent+override-off ⇒ critical does NOT surface in background");
+        Test.assertMessage(!AppState.shouldSurfaceInBackground("high", "silent", false),
+            "NEGATIVE: Silent+override-off ⇒ high does not surface");
+        // Silent + override ON ⇒ only critical surfaces.
+        Test.assertMessage(AppState.shouldSurfaceInBackground("critical", "silent", true),
+            "Silent+override-on ⇒ critical surfaces (opt-in wrist fallback)");
+        Test.assertMessage(!AppState.shouldSurfaceInBackground("high", "silent", true),
+            "Silent+override-on ⇒ only critical, not high");
+        // Non-silent ⇒ always surface (safety net intact).
+        Test.assertMessage(AppState.shouldSurfaceInBackground("info", "vibrate", false),
+            "vibrate mode ⇒ background surface intact");
+        Test.assertMessage(AppState.shouldSurfaceInBackground("critical", "audible", false),
+            "audible mode ⇒ background surface intact");
+        return true;
+    }
 }

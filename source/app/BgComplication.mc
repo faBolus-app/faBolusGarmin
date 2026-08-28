@@ -212,13 +212,14 @@ module BgComplication {
     }
 
     // Publish one field complication with the SAME two-step (value-only then enrichment) try/catch as
-    // pushComplication, each id independent so one unsupported/unowned field can't sink the others. An
-    // unknown field (value == null) writes ONLY the "--" shortLabel — the numeric slot is left untouched
-    // rather than a misleading 0 (the documented BG-complication structural limit). Annotation-split so a
-    // device lacking the Complications module compiles to the no-op stub below.
+    // pushComplication, each id independent so one unsupported/unowned field can't sink the others.
+    // 20-REVIEW WR-03: an unknown/de-selected field (value == null) writes :value => null to CLEAR any
+    // prior numeric — otherwise a value-rendering face keeps a stale IOB/reservoir/battery number behind
+    // the honest "--" shortLabel. (Complications.Data.:value accepts Null.) Annotation-split so a device
+    // lacking the Complications module compiles to the no-op stub below.
     (:background, :complications)
     function pushField(id as Lang.Number, field as Lang.Dictionary) as Void {
-        var v = field["value"];
+        var v = field["value"];   // Numeric when known; null when unknown/unassigned
         var label = field["label"];
         // Step 1 — value-only (only when known): the field every firmware accepts.
         if (v != null) {
@@ -228,11 +229,10 @@ module BgComplication {
                 return;   // id not registered / unsupported — nothing further to try.
             }
         }
-        // Step 2 — enrichment: the honest shortLabel (+ value when known).
+        // Step 2 — enrichment: the honest shortLabel + the value slot. For an unknown field this writes
+        // :value => null to CLEAR any stale number (WR-03); for a known field it writes the number.
         try {
-            var params = { :shortLabel => label };
-            if (v != null) { params[:value] = v; }
-            Toybox.Complications.updateComplication(id, params);
+            Toybox.Complications.updateComplication(id, { :value => v, :shortLabel => label });
         } catch (e) {
             if (v != null) {
                 try { Toybox.Complications.updateComplication(id, { :value => v }); } catch (e2) {}
