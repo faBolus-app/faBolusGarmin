@@ -55,6 +55,18 @@ detailsOrder
 watchChartRanges
 garminComplicationDisplay
 clockAnalog
+# Phase 20 (F1, D-02): which pump-status fields fill the three user-assignable complication slots
+# (ordered, <=3). Parsed + sanitized in AppState.handle (garminComplicationSlots).
+garminComplicationSlots
+# Phase 20 (R1/R4/F3, D-01): the phone-owned alert-intensity setting mirrored to the watch's fail-closed
+# gate (AppState.handle parse + alertActionFor). Absent ⇒ watch defaults to vibration-only.
+alertIntensityMode
+alertAudibleMinSeverity
+alertCriticalOverridesDnd
+# Phase 20 (D-01): each `alerts` entry also carries an optional per-alert `severity` tier
+# (AppState.sanitizeAlerts preserves it; alertSeverityTier fails an absent one closed to "critical").
+# NOT a separate top-level key — it is a nested property of the `alerts` array item above (the
+# schema-drift check tracks only top-level keys, like id/kind/title, which `alerts` already covers).
 remotesReadOnly
 canBolus
 bolusBlockReason
