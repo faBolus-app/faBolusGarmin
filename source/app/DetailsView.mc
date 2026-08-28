@@ -131,15 +131,6 @@ class DetailsView extends Ui.View {
             return "Basal " + AppState.basalRate.format("%.2f") + "/" + maxV.format("%.2f")
                  + " U/hr · " + pct.toString() + "%";
         }
-        // Phase 09.15 T1-9 (D-01/D-08, D-09.5) — the compact single-line fact (mode + effect fact +
-        // exercise timer, NO window text — D-09.5 explicit scope): "Sleep — AutoBolus off" /
-        // "Exercise — ends 4:20", a PRINTED row (Garmin has no VoiceOver). Row omitted entirely
-        // (never a "Normal mode" row) unless the pump's own live controlIQMode is genuinely
-        // Sleep/Exercise AND (Exercise only) the timer is known — mirrors
-        // AppState.ciqActivityCompactLine's own fail-closed guards exactly.
-        if (id.equals("sleepExercise")) {
-            return AppState.ciqActivityCompactLine();
-        }
         return null;
     }
 

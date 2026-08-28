@@ -304,10 +304,8 @@ module AppState {
     // would let a user actually ADD these to their watch/Garmin details screen was not extended this
     // plan (out of this plan's declared `files_modified` — `ios/faBolus/Data/AppSettings.swift` is
     // untouched); the rows exist and render correctly once selected, just not yet user-reachable.
-    // Phase 09.15 T1-9 (D-01/D-08): "sleepExercise" registered the same opt-in way (same KNOWN GAP
-    // as the T1-1..T1-4 ids above — not yet reachable from a phone-side customizer this plan).
     (:background)
-    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend", "autoCorrection", "couldNotDeliver", "maxBasal", "sleepExercise"];
+    const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend", "autoCorrection", "couldNotDeliver", "maxBasal"];
     (:background)
     var chartRanges as Lang.Array = [3, 6, 12, 24];
     // How the BG complication presents: "numericColor" (numeric value + range color + Latin trend
@@ -759,91 +757,6 @@ module AppState {
     // Phase 09.15 T1-1 (D-01/D-08): FROZEN token set (schema `ciqZone` enum) — never invent a 6th.
     (:background)
     const CIQ_ZONES = ["increases", "decreases", "maintains", "stops", "delivers"];
-    const CONTROLLER_RISING_TRENDS = ["up45", "up", "upup"];
-    const CONTROLLER_DISCLOSE_AT_OR_ABOVE = 180;
-    const CONTROLLER_DISCLOSE_RISING_AT_OR_ABOVE = 150;
-
-    // Controller marketing name for a variant token; "" for "none"/unknown (mirror displayName).
-    function controllerDisplayName(variant as Lang.String) as Lang.String {
-        if (variant.equals("controlIQ")) { return "Control-IQ"; }
-        if (variant.equals("controlIQPro")) { return "Control-IQ+"; }
-        return "";
-    }
-
-    // Whether the variant names a real auto-correcting controller (mirror
-    // ControllerDescriptor.automaticCorrection.enabled — true for controlIQ/controlIQPro, false for none).
-    function controllerAutoCorrects(variant as Lang.String) as Lang.Boolean {
-        return variant.equals("controlIQ") || variant.equals("controlIQPro");
-    }
-
-    // The documented auto-correction lockout window (minutes) a manual bolus imposes — 60 for BOTH
-    // Control-IQ and Control-IQ+ (mirror AutomaticCorrection.blockedByRecentBolusMinutes). Kept as a
-    // function (not a bare 60 in the copy) so the disclosure text derives it from the descriptor.
-    function controllerLockoutMinutes(variant as Lang.String) as Lang.Number {
-        return 60;
-    }
-
-    // "rising" trigger test: the pump's OWN reported up arrows (C8 — read, never a computed rate).
-    function controllerTrendRising(trendToken as Lang.String) as Lang.Boolean {
-        return containsStr(CONTROLLER_RISING_TRENDS, trendToken);
-    }
-
-    // O3 (ambient) — the persistent "automatic correction is active." line, or "" when it must not show.
-    // Mirror of AutoCorrectionDisclosure.ambientIndicator: shown only when the variant auto-corrects AND
-    // Control-IQ is ON at runtime. Glucose-independent. DISPLAY-ONLY.
-    function controllerAmbientText(variant as Lang.String, enabled as Lang.Boolean) as Lang.String {
-        if (!enabled || !controllerAutoCorrects(variant)) { return ""; }
-        return controllerDisplayName(variant) + " automatic correction is active.";
-    }
-
-    // S1 (lockout) — the high/rising auto-correction lockout line, or "" when it must not show. Mirror of
-    // AutoCorrectionDisclosure.lockoutMessage: shown only when the variant auto-corrects, Control-IQ is
-    // ON, there IS a reading, and the trigger fires: glucose >= 180, OR (glucose >= 150 AND the pump's
-    // own arrow is rising). DISPLAY-ONLY — a caution to READ; it never blocks/changes/delays the dose.
-    function controllerLockoutText(variant as Lang.String, enabled as Lang.Boolean,
-                                   glucoseMgdl as Lang.Number?, trendToken as Lang.String) as Lang.String {
-        if (!enabled || !controllerAutoCorrects(variant) || glucoseMgdl == null) { return ""; }
-        var g = glucoseMgdl as Lang.Number;
-        var trigger = (g >= CONTROLLER_DISCLOSE_AT_OR_ABOVE)
-                   || (g >= CONTROLLER_DISCLOSE_RISING_AT_OR_ABOVE && controllerTrendRising(trendToken));
-        if (!trigger) { return ""; }
-        return "Bolusing now pauses " + controllerDisplayName(variant)
-             + "'s automatic correction for about " + controllerLockoutMinutes(variant).toString() + " min.";
-    }
-
-    // T1-5 (D-01, D-08) — the 60-min lockout countdown FRACTION [0.0, 1.0], a TIME-FILL that grows
-    // toward 1.0 as availability returns (never a draining battery) — hand-ported mirror of
-    // faBolusCore's AutoCorrectionDisclosure.lockoutRemainingFraction (Garmin has no shared Swift
-    // runtime). `null` when there's no active lockout to show: no controller, controller off, no
-    // known lockout-until instant, or the window has already elapsed. DISPLAY-ONLY: this is a
-    // FRACTION, never a dose/units value (D-06 guardrail #1); it never blocks/changes/delays a bolus
-    // (C3), and an expired lockout is ABSENT, never a frozen 100% bar (D-06 guardrail #5).
-    function controllerLockoutFraction(variant as Lang.String, enabled as Lang.Boolean,
-                                        lockoutUntilEpoch as Lang.Number?) as Lang.Float? {
-        if (!enabled || !controllerAutoCorrects(variant) || lockoutUntilEpoch == null) { return null; }
-        var windowMinutes = controllerLockoutMinutes(variant);
-        var untilEpoch = lockoutUntilEpoch as Lang.Number;
-        var startEpoch = untilEpoch - windowMinutes * 60;
-        var elapsedMinutes = (Time.now().value() - startEpoch) / 60.0;
-        if (elapsedMinutes >= windowMinutes) { return null; }   // expired: no active lockout
-        var fraction = elapsedMinutes / windowMinutes.toFloat();
-        if (fraction < 0.0) { fraction = 0.0; }
-        if (fraction > 1.0) { fraction = 1.0; }
-        return fraction;
-    }
-
-    // Minutes remaining until Control-IQ's automatic correction becomes available again, or -1 when
-    // there's no active lockout (mirrors `controllerLockoutFraction`'s exact same guards — gates on
-    // it rather than re-deriving them). Kept as a separate pure fn (not derived FROM the fraction) so
-    // `CgmView.mc`'s mandatory printed numeral (Garmin has no VoiceOver, D-08) is unit-testable here.
-    function controllerLockoutMinutesRemaining(variant as Lang.String, enabled as Lang.Boolean,
-                                                lockoutUntilEpoch as Lang.Number?) as Lang.Number {
-        if (controllerLockoutFraction(variant, enabled, lockoutUntilEpoch) == null) { return -1; }
-        var untilEpoch = lockoutUntilEpoch as Lang.Number;
-        var mins = Math.ceil((untilEpoch - Time.now().value()) / 60.0).toNumber();
-        return mins < 0 ? 0 : mins;
-    }
-
     // T1-8 (D-03, D-08) — the honest "% of your configured max basal rate" fraction, hand-ported mirror
     // of faBolusCore's `MaxBasalFraction.fraction` (Garmin has no shared Swift runtime): `basalRate ÷
     // maxBasalUnitsPerHour`, clamped to [0.0, 1.0]. `null` (fail-closed, D-03(v)) when
@@ -858,78 +771,6 @@ module AppState {
         if (fraction < 0.0) { fraction = 0.0; }
         if (fraction > 1.0) { fraction = 1.0; }
         return fraction;
-    }
-
-    // Phase 09.15 T1-9 (D-01, D-08, D-06 guardrail #4) — hand-ported mirror of
-    // ControllerDescriptor.controlIQ/.controlIQPlus.activityPresets (faBolusCore's
-    // ControllerDescriptor.swift:209-236) — Garmin has no shared Swift runtime, so these Tandem
-    // facts are duplicated here exactly, same §13 clinical-disclosure-value convention already
-    // established by controllerLockoutMinutes()/CONTROLLER_DISCLOSE_AT_OR_ABOVE above (subject to
-    // the clinical-review distribution gate). Sleep target 112.5-120 mg/dL; Exercise target
-    // 140-160 mg/dL with a raised suspend threshold of 79 mg/dL. AutoBolus (automatic correction)
-    // stays OFF during Exercise for BOTH controller variants; during Sleep it is OFF for classic
-    // Control-IQ but ON for Control-IQ+ (the CIQ/CIQ+ discriminator, O7).
-    const CIQ_SLEEP_TARGET_LOW = 112.5;
-    const CIQ_SLEEP_TARGET_HIGH = 120.0;
-    const CIQ_EXERCISE_TARGET_LOW = 140.0;
-    const CIQ_EXERCISE_TARGET_HIGH = 160.0;
-    const CIQ_EXERCISE_SUSPEND_THRESHOLD = 79.0;
-
-    // "AutoBolus off" / "AutoBolus continues" for the given mode ("sleep"/"exercise") — mirrors
-    // faBolusCore's SleepExerciseAwareness.autoBolusWords exactly.
-    function ciqAutoBolusWords(mode as Lang.String, variant as Lang.String) as Lang.String {
-        if (mode.equals("sleep") && variant.equals("controlIQPro")) { return "AutoBolus continues"; }
-        return "AutoBolus off";
-    }
-
-    // T1-9 (D-01/D-08, D-09.5): the compact single-line fact this Garmin renders as a PRINTED row
-    // (no icon — Garmin has no VoiceOver, D-08 Garmin rule): "Sleep — AutoBolus off" / "Exercise —
-    // ends 4:20". `null` when normal mode (controlIQMode == 0) or — for Exercise only — the timer
-    // is unknown (SP-5 fail-closed; Sleep's compact fact never depends on the timer). Mirrors
-    // faBolusCore's SleepExerciseAwareness.compactLine.
-    function ciqActivityCompactLine() as Lang.String? {
-        if (controlIQMode == 1) { return "Sleep — " + ciqAutoBolusWords("sleep", controllerVariant); }
-        if (controlIQMode == 2) {
-            var ends = ciqExerciseEndsAtLabel();
-            if (ends == null) { return null; }
-            return "Exercise — " + (ends as Lang.String);
-        }
-        return null;
-    }
-
-    // "ends {h}:{mm}" (12-hour, no AM/PM — matches the UI-SPEC's own compact example "ends 4:20"),
-    // computed by adding the raw remaining-seconds DURATION to the device's current clock time —
-    // recomputed fresh at DRAW time, never a transmitted absolute instant (mirrors faBolusCore's
-    // SleepExerciseAwareness.endsAtLabel exactly). Uses System.getClockTime() (same source
-    // ClockView.mc already reads) rather than Time.Gregorian, avoiding a new time-zone-aware API
-    // this project doesn't otherwise use. `null` when the timer is absent/non-positive.
-    function ciqExerciseEndsAtLabel() as Lang.String? {
-        if (exerciseTimeRemainingSec == null) { return null; }
-        var secs = exerciseTimeRemainingSec as Lang.Number;
-        if (secs <= 0) { return null; }
-        var now = System.getClockTime();
-        var totalMinutesNow = now.hour * 60 + now.min;
-        var endMinuteOfDay = (totalMinutesNow + (secs / 60)) % 1440;
-        var hour24 = endMinuteOfDay / 60;
-        var minute = endMinuteOfDay % 60;
-        var hour12 = (hour24 % 12 == 0) ? 12 : hour24 % 12;
-        var minuteStr = minute < 10 ? "0" + minute.toString() : minute.toString();
-        return "ends " + hour12.toString() + ":" + minuteStr;
-    }
-
-    // The single disclosure line for the small bolus screen: the S1 caution when it fires, otherwise the
-    // O3 ambient line, otherwise "". Reads live state (controllerVariant/controlIQEnabled + the glucose /
-    // trend already parsed from the SAME statusRead). When both would apply S1 wins — it is the caution.
-    // Pairs with controllerDisclosureIsCaution() so the view can color it. DISPLAY-ONLY.
-    function controllerDisclosureLine() as Lang.String {
-        var s1 = controllerLockoutText(controllerVariant, controlIQEnabled, glucose, trend);
-        if (!s1.equals("")) { return s1; }
-        return controllerAmbientText(controllerVariant, controlIQEnabled);
-    }
-    // True when the line controllerDisclosureLine() would return is the S1 lockout caution (color it as a
-    // caution), false for the ambient O3 line or none.
-    function controllerDisclosureIsCaution() as Lang.Boolean {
-        return !controllerLockoutText(controllerVariant, controlIQEnabled, glucose, trend).equals("");
     }
 
     // A short user-facing reason the bolus button is disabled, so the bolus screen can say WHY (P12
@@ -1438,12 +1279,11 @@ module AppState {
     }
 
     // The carb+correction math ONLY (unrounded, unclamped) — factored out of computeUnits()'s former
-    // "carbs" branch so `recommendedUnits()` (SG task #93, below) can read the SAME calculator total
-    // regardless of the CURRENT mode, without a second, independently-drifting copy of this logic.
-    // computeUnits() and recommendedUnits() each apply their own identical final rounding/clamp step.
+    // "carbs" branch so callers can read the SAME calculator total regardless of the CURRENT mode,
+    // without a second, independently-drifting copy of this logic.
     // 0.0 when the carb ratio hasn't arrived from the phone (FB-01 — do NOT silently assume 10 g/U;
-    // that is an unverified guess that could misdose. `carbCalcAvailable()`/`sgDisplaysNumericDose()`
-    // tell "genuinely zero" apart from "not available yet").
+    // that is an unverified guess that could misdose. `carbCalcAvailable()` tells "genuinely zero"
+    // apart from "not available yet").
     function carbCorrectionTotal() as Lang.Float {
         if (carbRatio <= 0.0) { return 0.0; }
         // GA-04: round EACH component to two decimals (half-up) before combining — exactly as the
@@ -1469,108 +1309,6 @@ module AppState {
             else { total = 0.0; }                   // would go negative → floor the total at 0
         }
         return dp2(total);                           // oracle dp() on the combined total too
-    }
-
-    // ---- Insulin Stacking Guard (SG1 + SG3a, task #93) ----
-    // Hand-port of faBolusCore.StackingGuard (Packages/faBolusCore/Sources/faBolusCore/StackingGuard.swift).
-    // Mirrors controllerDisclosureLine()'s/-IsCaution()'s exact shape and doc contract immediately above:
-    // these are DISCLOSURE facts, never therapy — NEVER affect delivery. `computeUnits()`/`deliverUnits`
-    // are only ever READ here, never written or changed by anything below.
-    //
-    // The comparison baseline is `recommendedUnits()`: the SAME carbs+correction math computeUnits()
-    // already runs (both are wrist-side PREVIEWS the phone re-derives with the oracle-backed calculator
-    // and divergence-guards before delivery — see computeUnits()'s doc comment above), read via the
-    // shared `carbCorrectionTotal()` helper so this is not a second, drifting recompute.
-    //
-    // On THIS watch the override signal is only ever live in "units" mode: Carbs mode has no separate
-    // manual-units step (deliverUnits == computeUnits() == recommendedUnits() there by construction, so
-    // SG never fires in Carbs mode); Units mode lets the wearer pick ANY amount, via the same +/- stepper,
-    // independent of the carb-based suggestion — exactly the override SG discloses.
-    //
-    // §13 owner-confirmable, lock-backed cut-points below default IDENTICALLY to StackingGuard.swift's
-    // OSAllocatedUnfairLock-backed statics (1.5 / 2.0). Monkey C's single-threaded VM needs no lock — a
-    // bare module var is the platform-appropriate mirror of that same idiom. NOT clinical constants.
-    var sgConfirmExtraOverrideRatio as Lang.Float = 1.5;
-    var sgReenterOverrideRatio as Lang.Float = 2.0;
-
-    // The pump-calculator's carb+correction suggestion, computed regardless of the CURRENT mode (see
-    // the SG block above) — SG's comparison baseline. Same final rounding/clamp as computeUnits() so
-    // entered vs. recommended compare at the same precision. 0.0 when the carb ratio hasn't synced yet
-    // (mirrors carbCorrectionTotal()'s own FB-01 guard) — pair with sgDisplaysNumericDose() to tell
-    // "genuinely zero" apart from "not available yet".
-    function recommendedUnits() as Lang.Float {
-        var total = carbCorrectionTotal();
-        total = Math.round(total * 20.0) / 20.0;
-        if (total < 0.0) { total = 0.0; }
-        if (total > maxUnits) { total = maxUnits; }
-        return total;
-    }
-
-    // §13 Rule-1 mirror: a numeric dose may only be CITED once the pump's real calculator settings (its
-    // carb ratio) have synced — never sized off a placeholder guess.
-    function sgDisplaysNumericDose() as Lang.Boolean {
-        return carbRatio > 0.0;
-    }
-
-    // SG1 — hand-port of StackingGuard.calcOverride, keyed on the value that will actually be delivered
-    // right now (computeUnits()). "" when it must not fire. DISPLAY-ONLY — never gates, changes, or
-    // delays the Deliver button.
-    function sgCalcOverrideLine() as Lang.String {
-        if (!sgDisplaysNumericDose()) { return ""; }
-        var entered = computeUnits();
-        if (entered <= 0.0) { return ""; }
-        if (glucose == null) { return ""; }
-        var g = glucose as Lang.Number;
-        if (g <= targetBg) { return ""; }
-        var recommended = recommendedUnits();
-        // Full-override branch — BEFORE any ratio, mirroring StackingGuard.swift: a nonzero entered
-        // dose against a zero recommendation discloses without ever computing entered/recommended.
-        if (recommended == 0.0) {
-            return "You're entering " + entered.format("%.2f") + " U — the pump's calculator did not suggest a dose.";
-        }
-        if (entered <= recommended) { return ""; }
-        return "You're entering more than the pump's calculator suggested.";
-    }
-
-    // SG3a — hand-port of StackingGuard.escalation: composes SG1 + the max-bolus proximity signal (SG2)
-    // into ONE message ("" when SG1 wouldn't fire). DISPLAY-ONLY. NO new confirm step exists on this
-    // watch for ANY tier — the SG3a friction ceiling here IS the existing single HoldView tap/hold
-    // (never a second dialog, never a re-type); see BolusView.mc's render call site.
-    //
-    // CX-G-02 (14-08, owner decision — correct-copy, OWNER-DECISIONS.md Plan 14-08): the stacking guard
-    // is an EXPERIMENTAL feature for now. The higher-caution tiers' copy used to say "please re-enter to
-    // confirm" / "please confirm before delivering", which read as if a DISTINCT extra-confirm or
-    // re-entry step exists — it does not (see the comment immediately above: every tier resolves to the
-    // SAME single HoldView hold). The copy below says "hold to confirm" throughout, at increasing levels
-    // of caution language, so it never promises a mechanism this watch doesn't have.
-    function sgDisclosureLine() as Lang.String {
-        var sg1 = sgCalcOverrideLine();
-        if (sg1.equals("")) { return ""; }
-        var entered = computeUnits();
-        var recommended = recommendedUnits();
-        if (recommended == 0.0) {
-            return "You're entering " + entered.format("%.2f")
-                 + " U with no calculator suggestion to compare against — hold to confirm carefully.";
-        }
-        var atOrAboveMax = (maxUnits > 0.0) && (entered >= maxUnits);
-        var ratio = entered / recommended;
-        if (ratio >= sgReenterOverrideRatio) {
-            return "This dose is far above what the pump's calculator suggested — hold to confirm very carefully.";
-        }
-        if (ratio >= sgConfirmExtraOverrideRatio || atOrAboveMax) {
-            return "This dose is well above what the pump's calculator suggested — hold to confirm carefully.";
-        }
-        return sg1;
-    }
-
-    // True when sgDisclosureLine() is at the higher-caution tier (color it as a caution, like S1's
-    // lockout line); false for the disclose tier or "". Pairs with sgDisclosureLine() the way
-    // controllerDisclosureIsCaution() pairs with controllerDisclosureLine(). Still the SAME single
-    // hold-to-confirm mechanism at every tier (CX-G-02) — this only changes the COLOR/emphasis.
-    function sgDisclosureIsCaution() as Lang.Boolean {
-        var line = sgDisclosureLine();
-        if (line.equals("")) { return false; }
-        return !line.equals(sgCalcOverrideLine());
     }
 
     function valueLabel() as Lang.String {
