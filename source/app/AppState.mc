@@ -20,17 +20,17 @@ module AppState {
     (:background)
     const GLUCOSE_VERY_HIGH = 250;
 
-    // P-mmol (Phase 4, D-01/D-02/D-05): the Garmin hand-port of faBolusCore.GlucoseUnit — the ONLY
-    // place this factor may appear on the Garmin side, mirroring the Swift canonical
-    // (Packages/faBolusCore/Sources/faBolusCore/GlucoseUnit.swift, mgdlPerMmol = 18.0182). Pinned by
-    // GlucoseUnitTest.mc against the same expected strings the Swift GlucoseUnitTests assert.
+    // The Garmin hand-port of faBolusCore.GlucoseUnit — the ONLY place this factor may appear on the
+    // Garmin side, mirroring the Swift canonical (Packages/faBolusCore/Sources/faBolusCore/GlucoseUnit.swift,
+    // mgdlPerMmol = 18.0182). Pinned by GlucoseUnitTest.mc against the same expected strings the Swift
+    // GlucoseUnitTests assert.
     (:background, :glance)
     const MGDL_PER_MMOL = 18.0182;
     // Display-unit wire token ("mgdl"|"mmol"), mirrored from the phone's statusRead reply
-    // (RemoteCommand.glucoseDisplayUnit). D-06: this NEVER changes GLUCOSE_*/rangeColor()/the
+    // (RemoteCommand.glucoseDisplayUnit). This NEVER changes GLUCOSE_*/rangeColor()/the
     // canonical glucose/isf/targetBg Numbers themselves — it only selects which label
-    // formatMgdl()/glucoseUnitLabel()/isfUnitLabel() render. Default "mgdl" is the fail-closed value
-    // (T-04-02): an absent field (legacy host) or an unrecognized token is never adopted (see handle()
+    // formatMgdl()/glucoseUnitLabel()/isfUnitLabel() render. Default "mgdl" is the fail-closed value:
+    // an absent field (legacy host) or an unrecognized token is never adopted (see handle()
     // below), so a fresh install / older phone build always renders mg/dL.
     (:background)
     var glucoseUnit as Lang.String = "mgdl";
@@ -50,11 +50,11 @@ module AppState {
     var targetBg as Lang.Number = 0;      // mg/dL
     (:background)
     var maxUnits as Lang.Float = 25.0;
-    // Phase 09.15 T1-8 (D-03, D-08): current basal delivery rate (units/hr), mirrored from the phone's
-    // `basalRate` — NOT persisted (mirrors `iob`'s own not-persisted, refreshed-every-sync pattern), so
-    // a cold launch shows 0.0 until the first statusRead lands rather than a stale rate. Paired with
-    // `maxBasalUnitsPerHour` below to compute the T1-8 "% of your configured max basal rate" text row
-    // LOCALLY — the % itself is never received pre-rendered (D-08).
+    // Current basal delivery rate (units/hr), mirrored from the phone's `basalRate` — NOT persisted
+    // (mirrors `iob`'s own not-persisted, refreshed-every-sync pattern), so a cold launch shows 0.0
+    // until the first statusRead lands rather than a stale rate. Paired with `maxBasalUnitsPerHour`
+    // below to compute the "% of your configured max basal rate" text row LOCALLY — the % itself is
+    // never received pre-rendered.
     (:background)
     var basalRate as Lang.Float = 0.0;
     // Extra pump status (from phone) for the details screen.
@@ -62,12 +62,12 @@ module AppState {
     var reservoir as Lang.Float = -1.0;   // units remaining (-1 = unknown)
     (:background)
     var battery as Lang.Number = -1;      // percent (-1 = unknown)
-    // Phase 09.27-03 (D-03/D-04/D-05): the pump's charging state, mirrored from the phone's
-    // `RemoteCommand.batteryCharging` (op-145 `chargingStatus == 1` — see faBolus's
-    // docs/UNVERIFIED-GUESSES.md, the live on-wire semantics are UNCONFIRMED). Fail-closed default
-    // false and re-evaluated UNCONDITIONALLY on every statusRead (NOT the keep-last-value pattern most
-    // other flags here use): absent/invalid/non-true resolves to false so a dropped key or a legacy
-    // phone can never leave a stale "charging" claim on screen. Never inferred from a rising percent.
+    // The pump's charging state, mirrored from the phone's `RemoteCommand.batteryCharging` (op-145
+    // `chargingStatus == 1` — see faBolus's docs/UNVERIFIED-GUESSES.md, the live on-wire semantics are
+    // UNCONFIRMED). Fail-closed default false and re-evaluated UNCONDITIONALLY on every statusRead
+    // (NOT the keep-last-value pattern most other flags here use): absent/invalid/non-true resolves to
+    // false so a dropped key or a legacy phone can never leave a stale "charging" claim on screen.
+    // Never inferred from a rising percent.
     (:background)
     var batteryCharging as Lang.Boolean = false;
     (:background)
@@ -101,12 +101,11 @@ module AppState {
     var alertDismissFailedOffline as Lang.Boolean = false;
     (:background)
     var plotHours as Lang.Number = 3;     // history-plot window: 3 → 6 → 12 → 24 → 3
-    // Phase 09.13 (glucose plot height customization, D-05/D-06/D-07/D-08/D-10): the Garmin Y-axis
-    // plot floor/ceiling, mg/dL. Garmin is in the SMALL-SCREEN group (same as the Apple Watch) — the
+    // The Garmin Y-axis plot floor/ceiling, mg/dL. Garmin is in the SMALL-SCREEN group — the
     // statusRead parse below resolves the small-screen override first, falling back to the shared/
     // phone-scoped bounds when no override is set (never the reverse). Defaults mirror
     // faBolusCore.GlucosePlotScale.defaultFloor/defaultCeiling exactly, preserving today's hardcoded
-    // view (D-01) until the first statusRead arrives.
+    // view until the first statusRead arrives.
     (:background)
     var plotFloor as Lang.Number = 40;
     (:background)
@@ -174,13 +173,13 @@ module AppState {
     (:background)
     var bolusPasscodeRequired as Lang.Boolean = false;
 
-    // Phase 20 (R1/R4/F3, D-01): the PHONE-OWNED, watch-synced alert-intensity setting. The watch reads
-    // these off the statusRead reply (handle) + restores them on a cold launch (loadPrefs) and gates ALL
-    // watch alert output (vibrate/tone/backlight/DND-override) through the pure alertActionFor() gate. The
-    // config lives on the phone (SettingsView, plan 20-02); there is NO watch-side properties.xml/settings
-    // UI (D-05). DEFAULT = vibration-only for EVERY severity, nothing audible and nothing DND-piercing
-    // unless the user opts in. `alertIntensityMode` is a frozen 3-token enum ("silent"|"vibrate"|"audible");
-    // an absent/unrecognized value fails closed to "vibrate". `alertAudibleMinSeverity` is the severity
+    // The PHONE-OWNED, watch-synced alert-intensity setting. The watch reads these off the statusRead
+    // reply (handle) + restores them on a cold launch (loadPrefs) and gates ALL watch alert output
+    // (vibrate/tone/backlight/DND-override) through the pure alertActionFor() gate. The config lives
+    // on the phone; there is NO watch-side properties.xml/settings UI. DEFAULT = vibration-only for
+    // EVERY severity, nothing audible and nothing DND-piercing unless the user opts in.
+    // `alertIntensityMode` is a frozen 3-token enum ("silent"|"vibrate"|"audible"); an
+    // absent/unrecognized value fails closed to "vibrate". `alertAudibleMinSeverity` is the severity
     // floor (tier token) at/above which "audible" mode plays a tone (default "critical"). Persisted +
     // change-detected exactly like garminBolusEnabled so a relaunch / background service honors the last
     // phone-synced value. SETTINGS-ONLY: this NEVER feeds/gates/delays a dose (C3/C5) — alert-surface only.
@@ -189,7 +188,7 @@ module AppState {
     (:background)
     var alertAudibleMinSeverity as Lang.String = "critical";
     // The "let critical alerts override Do Not Disturb / vibrateOn=off" opt-in. USER setting, turn-off-able,
-    // DEFAULT OFF (D-01): nothing pierces DND unless the user turns this on. In Silent mode + OFF the watch
+    // DEFAULT OFF: nothing pierces DND unless the user turns this on. In Silent mode + OFF the watch
     // is FULLY silent for every alert including critical; + ON adds an opt-in critical-only vibration wrist
     // fallback (never a tone).
     (:background)
@@ -208,43 +207,40 @@ module AppState {
     (:background)
     var controlIQEnabled as Lang.Boolean = false;
 
-    // Phase 09.15 T1-9 (D-01/D-08) — the pump's live Sleep/Exercise activity mode
-    // (0 normal / 1 sleep / 2 exercise), previously only reaching this device via the (unused-here)
-    // widget/Live-Activity channel — now ALSO on the shared statusRead reply
-    // (RemoteCommand.controlIQMode) so this Garmin can gate its own T1-9 row locally. Same
-    // display-only, not-persisted treatment as controllerVariant/controlIQEnabled just above (a
-    // capability-like fact that changes rarely enough that a cold launch showing nothing
+    // The pump's live Sleep/Exercise activity mode (0 normal / 1 sleep / 2 exercise), on the shared
+    // statusRead reply (RemoteCommand.controlIQMode) so this Garmin can gate its own activity-mode
+    // row locally. Same display-only, not-persisted treatment as controllerVariant/controlIQEnabled
+    // just above (a capability-like fact that changes rarely enough that a cold launch showing nothing
     // Sleep/Exercise-specific until the first push is acceptable, matching those two fields'
     // documented reasoning). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
     (:background)
     var controlIQMode as Lang.Number = 0;
     // The already-decoded exercise countdown (op-179), a RAW remaining-seconds DURATION — NOT an
-    // epoch (D-08 T1-9 note): this device counts down LOCALLY against ITS OWN receipt time for
-    // animation only, re-anchored on every statusRead, never trusted as absolute past that point.
-    // UNLIKE controllerVariant/controlIQEnabled above, this DOES need to survive a restart between
-    // phone syncs (mirrors lockoutUntilEpochSec's own persistence exactly, same reasoning — it
-    // changes far more often than the display-only capability fields). `null` ⇒ the timer fact
-    // renders ABSENT — never a stale/negative countdown (D-06 guardrail #5, SP-5 fail-closed).
+    // epoch: this device counts down LOCALLY against ITS OWN receipt time for animation only,
+    // re-anchored on every statusRead, never trusted as absolute past that point. UNLIKE
+    // controllerVariant/controlIQEnabled above, this DOES need to survive a restart between phone
+    // syncs (mirrors lockoutUntilEpochSec's own persistence exactly, same reasoning — it changes far
+    // more often than the display-only capability fields). `null` ⇒ the timer fact renders ABSENT —
+    // never a stale/negative countdown (fail-closed).
     (:background)
     var exerciseTimeRemainingSec as Lang.Number? = null;
 
-    // Phase 09.15 T1-1 (D-01/D-08): the pump's live Control-IQ action zone, a FROZEN wire token
-    // (schema `ciqZone`: "increases"/"decreases"/"maintains"/"stops"/"delivers" — Tandem's own zone
-    // words, (c) Tandem, never invent others). UNLIKE `controllerVariant`/`controlIQEnabled` above,
-    // this one DOES need to survive a restart between phone syncs (matches `garminBolusEnabled`'s
-    // persistence, not the display-only capability fields) because it changes far more often and a
-    // watch that restarts mid-session should still show the last-known zone rather than nothing.
-    // `null` ⇒ render the row ABSENT — never a stale/fabricated word (D-06 guardrail #5/#6).
-    // DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    // The pump's live Control-IQ action zone, a FROZEN wire token (schema `ciqZone`:
+    // "increases"/"decreases"/"maintains"/"stops"/"delivers" — Tandem's own zone words, (c) Tandem,
+    // never invent others). UNLIKE `controllerVariant`/`controlIQEnabled` above, this one DOES need
+    // to survive a restart between phone syncs (matches `garminBolusEnabled`'s persistence, not the
+    // display-only capability fields) because it changes far more often and a watch that restarts
+    // mid-session should still show the last-known zone rather than nothing. `null` ⇒ render the row
+    // ABSENT — never a stale/fabricated word. DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
     (:background)
     var ciqZone as Lang.String? = null;
 
-    // Phase 09.15 T1-2 (D-08, D-09.1 fail-closed cause-attribution): whether the pump's OWN
-    // control-state currently attributes an active basal suspend to Control-IQ. UNLIKE
-    // `controllerVariant`/`controlIQEnabled`, this DOES need to survive a restart between phone syncs
-    // (mirrors `ciqZone`'s own persistence exactly, same reasoning). `null`/`false` ⇒ this watch has no
-    // generic-suspend signal to fall back to either, so the row is simply ABSENT — never a fabricated
-    // "Control-IQ paused" claim (D-09.1 BINDING). DISPLAY-ONLY: never gates, changes, or delays a bolus.
+    // Whether the pump's OWN control-state currently attributes an active basal suspend to Control-IQ
+    // (fail-closed cause-attribution). UNLIKE `controllerVariant`/`controlIQEnabled`, this DOES need
+    // to survive a restart between phone syncs (mirrors `ciqZone`'s own persistence exactly, same
+    // reasoning). `null`/`false` ⇒ this watch has no generic-suspend signal to fall back to either, so
+    // the row is simply ABSENT — never a fabricated "Control-IQ paused" claim. DISPLAY-ONLY: never
+    // gates, changes, or delays a bolus.
     (:background)
     var ciqSuspendedForLow as Lang.Boolean? = null;
     // The immutable SOURCE epoch (Unix seconds, raw — NOT an age) of the moment `ciqSuspendedForLow`
@@ -253,42 +249,41 @@ module AppState {
     (:background)
     var ciqSuspendStartEpochSec as Lang.Number? = null;
 
-    // Phase 09.15 T1-3 (D-01/D-08) — the immutable SOURCE epoch (Unix seconds, raw — NOT an age) of
-    // the most-recent Control-IQ auto-correction. A real historical fact never un-happens, so — UNLIKE
-    // `ciqZone`/`ciqSuspendedForLow` above — this is never cleared on an absent key, only ever
-    // overwritten by a newer instant. Persisted (survives a restart between phone syncs, matches
-    // `ciqZone`'s own persistence). `null` ⇒ the row renders ABSENT (never "--" — no recent
-    // auto-correction is the common/expected case, not an error). DISPLAY-ONLY: never gates, changes,
-    // or delays a bolus (C3).
+    // The immutable SOURCE epoch (Unix seconds, raw — NOT an age) of the most-recent Control-IQ
+    // auto-correction. A real historical fact never un-happens, so — UNLIKE `ciqZone`/
+    // `ciqSuspendedForLow` above — this is never cleared on an absent key, only ever overwritten by a
+    // newer instant. Persisted (survives a restart between phone syncs, matches `ciqZone`'s own
+    // persistence). `null` ⇒ the row renders ABSENT (never "--" — no recent auto-correction is the
+    // common/expected case, not an error). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
     (:background)
     var lastAutoCorrectionEpochSec as Lang.Number? = null;
-    // Phase 09.15 T1-4 (D-01/D-08) — the immutable SOURCE epoch of the most-recent "Control-IQ tried
-    // and couldn't deliver an automatic correction" event. Remote MARKER only (no on-watch/Garmin
-    // timeline — this device never had the pump history to build one from). `null` ⇒ the marker
-    // renders ABSENT. DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    // The immutable SOURCE epoch of the most-recent "Control-IQ tried and couldn't deliver an
+    // automatic correction" event. Remote MARKER only (no on-watch/Garmin timeline — this device
+    // never had the pump history to build one from). `null` ⇒ the marker renders ABSENT.
+    // DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
     (:background)
     var ciqLastCouldNotDeliverEpochSec as Lang.Number? = null;
 
-    // Phase 09.15 T1-5 (D-01/D-08) — the immutable SOURCE epoch (Unix seconds, raw — NOT an age) of
-    // the instant Control-IQ's automatic correction becomes available again. UNLIKE
-    // `lastAutoCorrectionEpochSec` above (a monotonic historical marker that never un-happens), this
-    // is a DERIVED instant the phone recomputes fresh on every statusRead — so it is always fully
-    // authoritative (assign/clear, never "ignore if invalid, keep last"), mirroring `ciqZone`'s
-    // unconditional guard, NOT `lastAutoCorrectionEpochSec`'s monotonic one. Persisted (survives a
-    // restart between phone syncs, matches `ciqZone`'s own persistence). `null` ⇒ the bar/numeral
-    // renders ABSENT (never a frozen 0%/100% bar, never a negative countdown — D-06 guardrail #5).
-    // DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    // The immutable SOURCE epoch (Unix seconds, raw — NOT an age) of the instant Control-IQ's
+    // automatic correction becomes available again. UNLIKE `lastAutoCorrectionEpochSec` above (a
+    // monotonic historical marker that never un-happens), this is a DERIVED instant the phone
+    // recomputes fresh on every statusRead — so it is always fully authoritative (assign/clear, never
+    // "ignore if invalid, keep last"), mirroring `ciqZone`'s unconditional guard, NOT
+    // `lastAutoCorrectionEpochSec`'s monotonic one. Persisted (survives a restart between phone
+    // syncs, matches `ciqZone`'s own persistence). `null` ⇒ the bar/numeral renders ABSENT (never a
+    // frozen 0%/100% bar, never a negative countdown). DISPLAY-ONLY: never gates, changes, or delays
+    // a bolus (C3).
     (:background)
     var lockoutUntilEpochSec as Lang.Number? = null;
 
-    // Phase 09.15 T1-8 (D-03, D-08) — the pump's configured max-basal delivery limit, mirrored from the
-    // phone's `maxBasalUnitsPerHour`. Like `lockoutUntilEpochSec` above, the phone relays its CURRENT
-    // knowledge every statusRead (never "unread ⇒ omit the key", `<= 0` means unread on the wire), so
-    // this is always fully authoritative (assign/clear, never "ignore if invalid, keep last") — a stale
-    // max surviving past the moment it actually cleared would misrepresent the pump's real configured
-    // limit. Persisted (survives a restart between phone syncs, matches `lockoutUntilEpochSec`'s own
-    // persistence). `null` ⇒ the "% of configured max basal" text row renders ABSENT (D-03(v)
-    // fail-closed: hidden, never "0%"/"--"). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    // The pump's configured max-basal delivery limit, mirrored from the phone's `maxBasalUnitsPerHour`.
+    // Like `lockoutUntilEpochSec` above, the phone relays its CURRENT knowledge every statusRead
+    // (never "unread ⇒ omit the key", `<= 0` means unread on the wire), so this is always fully
+    // authoritative (assign/clear, never "ignore if invalid, keep last") — a stale max surviving past
+    // the moment it actually cleared would misrepresent the pump's real configured limit. Persisted
+    // (survives a restart between phone syncs, matches `lockoutUntilEpochSec`'s own persistence).
+    // `null` ⇒ the "% of configured max basal" text row renders ABSENT (fail-closed: hidden, never
+    // "0%"/"--"). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
     (:background)
     var maxBasalUnitsPerHour as Lang.Float? = null;
 
@@ -296,14 +291,9 @@ module AppState {
     // mirrored from the phone ("detailsOrder" / "watchChartRanges" in the statusRead reply).
     (:background)
     var detailsOrder as Lang.Array = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"];
-    // Phase 09.15 T1-1/T1-2/T1-3/T1-4 (D-01/D-08): "ciqZone"/"ciqSuspend"/"autoCorrection"/
-    // "couldNotDeliver" registered so any CAN be selected once a phone-side customizer opts them in
-    // (mirrors "ciqZone"'s iOS `pillItems` registration) — deliberately NOT added to the default
-    // `detailsOrder` above (opt-in, matches `defaultPills` not including "basal"/"ciqZone" either).
-    // KNOWN GAP (mirrors 09.15-01's own documented gap): the phone-side `detailsOrder` customizer that
-    // would let a user actually ADD these to their watch/Garmin details screen was not extended this
-    // plan (out of this plan's declared `files_modified` — `ios/faBolus/Data/AppSettings.swift` is
-    // untouched); the rows exist and render correctly once selected, just not yet user-reachable.
+    // "ciqZone"/"ciqSuspend"/"autoCorrection"/"couldNotDeliver" registered so any CAN be selected
+    // once a phone-side customizer opts them in — deliberately NOT added to the default
+    // `detailsOrder` above (opt-in). The rows exist and render correctly once selected.
     (:background)
     const ALL_DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus", "ciqZone", "ciqSuspend", "autoCorrection", "couldNotDeliver", "maxBasal"];
     (:background)
@@ -313,7 +303,7 @@ module AppState {
     (:background)
     var complicationDisplay as Lang.String = "numericColor";
 
-    // Phase 20 (F1, D-02): which pump-status fields fill the THREE user-assignable complication slots
+    // Which pump-status fields fill the THREE user-assignable complication slots
     // (ids 1..3, published alongside the fixed glucose id 0). Connect IQ caps an app at FOUR complications
     // total, so only three slots exist; this phone-owned, watch-synced ORDERED list chooses which up-to-3
     // of the four available fields (COMPLICATION_FIELDS) occupy them and in what order. DEFAULT = glucose
@@ -345,7 +335,7 @@ module AppState {
         }
         var cdp = Storage.getValue("complicationDisplay");
         if (cdp instanceof Lang.String) { complicationDisplay = cdp; }
-        // Phase 20 (F1, D-02): restore the persisted complication-slot selection so a cold launch /
+        // Restore the persisted complication-slot selection so a cold launch /
         // background service publishes the last phone-synced set instead of reverting to the default until
         // the next statusRead. Sanitized (allowed tokens, de-duped, cap 3); an empty result keeps the default.
         var gcs = Storage.getValue("garminComplicationSlots");
@@ -363,36 +353,36 @@ module AppState {
         // (fail-closed to false when never armed) instead of re-hiding an already-enabled watch.
         var gbe = Storage.getValue("garminBolusEnabled");
         if (gbe instanceof Lang.Boolean) { garminBolusEnabled = gbe; }
-        // Phase 09.15 T1-1 (D-01/D-08): restore the persisted zone the same guarded way, so a cold
+        // Restore the persisted zone the same guarded way, so a cold
         // launch before the first statusRead shows the last-known zone rather than nothing. A
         // corrupt/absent/non-member value keeps the safe default (null ⇒ row absent).
         var cz0 = Storage.getValue("ciqZone");
         if (cz0 instanceof Lang.String && containsStr(CIQ_ZONES, cz0 as Lang.String)) { ciqZone = cz0; }
-        // Phase 09.15 T1-2 (D-08, D-09.1): restore the persisted suspend attribution the same guarded
+        // Restore the persisted suspend attribution the same guarded
         // way as ciqZone, so a cold launch before the first statusRead shows the last-known attribution
         // rather than nothing. A corrupt/absent value keeps the safe default (null ⇒ row absent).
         var csfl0 = Storage.getValue("ciqSuspendedForLow");
         if (csfl0 instanceof Lang.Boolean) { ciqSuspendedForLow = csfl0; }
         var csse0 = Storage.getValue("ciqSuspendStartEpochSec");
         if (csse0 instanceof Lang.Number && csse0 > 0) { ciqSuspendStartEpochSec = csse0; }
-        // Phase 09.15 T1-3/T1-4 (D-08): restore the persisted markers the same guarded way, so a cold
+        // Restore the persisted markers the same guarded way, so a cold
         // launch before the first statusRead shows the last-known instant rather than nothing. A
         // corrupt/absent value keeps the safe default (null ⇒ row/marker absent).
         var lac0 = Storage.getValue("lastAutoCorrectionEpochSec");
         if (lac0 instanceof Lang.Number && lac0 > 0) { lastAutoCorrectionEpochSec = lac0; }
         var cncd0 = Storage.getValue("ciqLastCouldNotDeliverEpochSec");
         if (cncd0 instanceof Lang.Number && cncd0 > 0) { ciqLastCouldNotDeliverEpochSec = cncd0; }
-        // Phase 09.15 T1-5 (D-08): restore the persisted lockout-until epoch the same guarded way, so
+        // Restore the persisted lockout-until epoch the same guarded way, so
         // a cold launch before the first statusRead shows the last-known instant rather than nothing.
         // A corrupt/absent value keeps the safe default (null ⇒ bar/numeral absent).
         var lue0 = Storage.getValue("lockoutUntilEpochSec");
         if (lue0 instanceof Lang.Number && lue0 > 0) { lockoutUntilEpochSec = lue0; }
-        // Phase 09.15 T1-9 (D-08): restore the persisted exercise countdown the same guarded way, so
+        // Restore the persisted exercise countdown the same guarded way, so
         // a cold launch before the first statusRead shows the last-known duration rather than
         // nothing. A corrupt/absent/non-positive value keeps the safe default (null ⇒ timer absent).
         var etrs0 = Storage.getValue("exerciseTimeRemainingSec");
         if (etrs0 instanceof Lang.Number && etrs0 > 0) { exerciseTimeRemainingSec = etrs0; }
-        // Phase 09.15 T1-8 (D-08): restore the persisted configured max-basal limit the same guarded
+        // Restore the persisted configured max-basal limit the same guarded
         // way, so a cold launch before the first statusRead shows the last-known value rather than
         // nothing. A corrupt/absent/non-positive value keeps the safe default (null ⇒ row absent).
         var mbu0 = fltRange(Storage.getValue("maxBasalUnitsPerHour"), 0.01, 25.0);
@@ -404,7 +394,7 @@ module AppState {
         // persisting matches garminBolusEnabled and avoids that transient.
         var bpr0 = Storage.getValue("bolusPasscodeRequired");
         if (bpr0 instanceof Lang.Boolean) { bolusPasscodeRequired = bpr0; }
-        // Phase 20 (R1/R4/F3, D-01): restore the persisted alert-intensity setting the same guarded way,
+        // Restore the persisted alert-intensity setting the same guarded way,
         // so a cold launch / background service honors the last phone-synced value instead of silently
         // reverting to the vibration-only default until the next statusRead. Fail-closed guards mirror the
         // handle() parse (mode must be a frozen token; floor must be a valid tier).
@@ -414,20 +404,20 @@ module AppState {
         if (aams0 instanceof Lang.String && isValidSeverityTier(aams0 as Lang.String)) { alertAudibleMinSeverity = aams0; }
         var acod0 = Storage.getValue("alertCriticalOverridesDnd");
         if (acod0 instanceof Lang.Boolean) { alertCriticalOverridesDnd = acod0; }
-        // P-mmol / D-04: restore the persisted display-unit token the same guarded way, so a cold
+        // P-mmol: restore the persisted display-unit token the same guarded way, so a cold
         // launch before the first statusRead already renders in the last unit the phone pushed
         // (fail-closed to the "mgdl" default when never set / not yet a recognized token).
         var gu0 = Storage.getValue("glucoseDisplayUnit");
         if (gu0 instanceof Lang.String && isValidUnitToken(gu0 as Lang.String)) { glucoseUnit = gu0; }
-        // Phase 09.13: restore the persisted plot bounds so a cold launch (before the first statusRead)
+        // Restore the persisted plot bounds so a cold launch (before the first statusRead)
         // already renders the last phone-pushed range instead of silently reverting to the 40/300
         // defaults. Strict guard (mirrors staleSec): only a sane in-range Number is adopted; a corrupt/
-        // absent value keeps the compile-time default (T-09.13-08).
+        // absent value keeps the compile-time default.
         var pf0 = Storage.getValue("plotFloor");
         var pc0 = Storage.getValue("plotCeiling");
         if (pf0 instanceof Lang.Number && pf0 > 0 && pf0 < 1000) { plotFloor = pf0; }
         if (pc0 instanceof Lang.Number && pc0 > 0 && pc0 < 1000) { plotCeiling = pc0; }
-        if (plotFloor >= plotCeiling) { plotFloor = 40; plotCeiling = 300; }   // D-01 min-gap invariant
+        if (plotFloor >= plotCeiling) { plotFloor = 40; plotCeiling = 300; }   // min-gap invariant
         // CX-G-01 (wrist half): restore the durable unresolved-delivery tombstone (if any) so a cold
         // relaunch still knows a prior dispatch is unresolved — reattemptBlocked() consults this in
         // sendBolusNow, independent of pendingRequestId (deliberately NOT restored here — the tombstone
@@ -466,7 +456,7 @@ module AppState {
         return out;
     }
 
-    // Phase 20 (F1, D-02): sanitize the complication-slot field list — allowed tokens only, de-duped,
+    // Sanitize the complication-slot field list — allowed tokens only, de-duped,
     // preserving the phone-chosen order, then capped at the three available slots (ids 1..3).
     (:background)
     function sanitizeComplicationSlots(list as Lang.Array) as Lang.Array {
@@ -510,7 +500,7 @@ module AppState {
         }
     }
 
-    // Phase 09.13 (D-10): gridlines for CgmView's dynamic plot, computed to fall STRICTLY inside
+    // Gridlines for CgmView's dynamic plot, computed to fall STRICTLY inside
     // [floor, ceiling] — never exactly at either edge, so a gridline is never visually confused with
     // the top/bottom of the plotted domain. Prefers a 100 mg/dL step (matches today's 100/200/300
     // default view exactly for the 40..300 default combo, since the domain floor/ceiling never land
@@ -754,14 +744,14 @@ module AppState {
     // FROZEN token set (schema `controllerVariant` enum) — never invent others.
     (:background)
     const CONTROLLER_VARIANTS = ["none", "controlIQ", "controlIQPro"];
-    // Phase 09.15 T1-1 (D-01/D-08): FROZEN token set (schema `ciqZone` enum) — never invent a 6th.
+    // FROZEN token set (schema `ciqZone` enum) — never invent a 6th.
     (:background)
     const CIQ_ZONES = ["increases", "decreases", "maintains", "stops", "delivers"];
-    // T1-8 (D-03, D-08) — the honest "% of your configured max basal rate" fraction, hand-ported mirror
+    // The honest "% of your configured max basal rate" fraction, hand-ported mirror
     // of faBolusCore's `MaxBasalFraction.fraction` (Garmin has no shared Swift runtime): `basalRate ÷
-    // maxBasalUnitsPerHour`, clamped to [0.0, 1.0]. `null` (fail-closed, D-03(v)) when
+    // maxBasalUnitsPerHour`, clamped to [0.0, 1.0]. `null` (fail-closed) when
     // `maxBasalUnitsPerHour` is unknown/absent — this is faBolus's OWN construct, never a Control-IQ
-    // figure. DISPLAY-ONLY: a fraction, never a dose/units value (D-06 guardrail #1); never gates,
+    // figure. DISPLAY-ONLY: a fraction, never a dose/units value; never gates,
     // changes, or delays a bolus (C3).
     function maxBasalFraction() as Lang.Float? {
         if (maxBasalUnitsPerHour == null) { return null; }
@@ -797,16 +787,16 @@ module AppState {
         return bolusing() && pendingRequestId != null;
     }
     // Show the number whenever we have one — a stale reading is shown but marked (grayed + age
-    // called out), never hidden. "--" only when there's no reading at all. Unit-aware (P-mmol):
+    // called out), never hidden. "--" only when there's no reading at all. Unit-aware:
     // renders in the active glucoseUnit via the pure displayGlucoseForUnit() funnel below.
     function displayGlucose() as Lang.String {
         return glucose == null ? "--" : formatMgdl(glucose as Lang.Number);
     }
 
-    // P-mmol: format an arbitrary mg/dL value (glucose, isf, targetBg — anything canonical mg/dL) in
+    // Format an arbitrary mg/dL value (glucose, isf, targetBg — anything canonical mg/dL) in
     // the CURRENT instance unit. Every Garmin glucose/ISF/target display site routes through this (or
     // the pure displayGlucoseForUnit() below), mirroring faBolusCore.GlucoseUnit.format(mgdl:) exactly:
-    // mgdl → the plain integer string (unchanged); mmol → 1-decimal (D-05), never a second inline
+    // mgdl → the plain integer string (unchanged); mmol → 1-decimal, never a second inline
     // "/ 18.0182" — GlucoseUnitTest.mc pins this against the same expected strings as the Swift funnel.
     (:background)
     function formatMgdl(v as Lang.Number) as Lang.String {
@@ -1351,7 +1341,7 @@ module AppState {
         return rid.equals(mintedReqId);
     }
 
-    // Phase 20 (R2, D-04, pure): should the background push-wake path (BgServiceDelegate.onPhoneAppMessage)
+    // Should the background push-wake path (BgServiceDelegate.onPhoneAppMessage)
     // consume this inbound message? A push-wake creates a FRESH service instance that sent no request, so
     // it has no minted requestId (mintedReqId == null) — isCorrelatedStatusReply then falls back to the
     // kind discriminator, accepting a `kind=="statusRead"` push. A non-Dictionary payload, or a
@@ -1390,12 +1380,12 @@ module AppState {
             var isfv = numRange(data["isf"], 1, 1000); if (isfv != null) { isf = isfv; }
             var tb = numRange(data["targetBg"], 40, 400); if (tb != null) { targetBg = tb; }
             var mx = fltRange(data["maxBolusUnits"], 0.0, 100.0); if (mx != null) { maxUnits = mx; }
-            // Phase 09.15 T1-8 (D-08): current basal delivery rate — NOT persisted (mirrors `iob`), kept
+            // Current basal delivery rate — NOT persisted (mirrors `iob`), kept
             // at its last-known value on an absent/invalid key exactly like every other live field here.
             var br = fltRange(data["basalRate"], 0.0, 25.0); if (br != null) { basalRate = br; }
             var rv = fltRange(data["reservoirUnits"], 0.0, 1000.0); if (rv != null) { reservoir = rv; }
             var bt = numRange(data["batteryPercent"], 0, 100); if (bt != null) { battery = bt; }
-            // Phase 09.27-03 (D-03/D-05): fail-closed, unconditional — true ONLY on an explicit
+            // Fail-closed, unconditional — true ONLY on an explicit
             // boolean-true wire value; absent/invalid/false all resolve to false every statusRead
             // (never "keep last known true"), so a stale claim can't survive a dropped key.
             var bc = data["batteryCharging"];
@@ -1480,7 +1470,7 @@ module AppState {
                 }
             }
             // CX-G-08 (14-09, H1): parse the DYNAMIC pump-tied capability BEFORE the alerts replace
-            // below — moving/gating this above :1531-era code is the H1 fix: a relaunch's first
+            // below: a relaunch's first
             // post-restart filtered statusRead (capability restored+re-parsed from THIS message) must
             // not fall through to the 14-08 fallback with no authenticated ack. Persisted (mirrors
             // garminBolusEnabled), NOT supportsRemoteAlertDismiss (declared false, never restored).
@@ -1516,8 +1506,7 @@ module AppState {
             // dismissSentAlertIdentities mechanism; markDismissSent/reconcileDismissSent above). NEVER
             // more than one branch: overlaying in the fallback branch would defeat its filtered-absence
             // removal with a stale, never-to-be-acked provisional; falling through from the raw tier to
-            // the 14-08 fallback on an absent rawAlerts would reintroduce the local-snooze fail-open this
-            // plan exists to close.
+            // the 14-08 fallback on an absent rawAlerts would reintroduce the local-snooze fail-open.
             var al = data["alerts"];
             if (al instanceof Lang.Array) {
                 alerts = sanitizeAlerts(al);
@@ -1556,7 +1545,7 @@ module AppState {
                 if (bolusPasscodeRequired != bpr) { Storage.setValue("bolusPasscodeRequired", bpr); }
                 bolusPasscodeRequired = bpr;
             }
-            // Phase 20 (R1/R4/F3, D-01): the phone-owned alert-intensity setting (mode / audible floor /
+            // The phone-owned alert-intensity setting (mode / audible floor /
             // critical-DND-override). Persisted + change-detected exactly like garminBolusEnabled so a
             // relaunch / background service honors the last phone-synced value. FAIL-CLOSED: `mode` adopts
             // only one of the frozen tokens ("silent"|"vibrate"|"audible") — an absent/garbage value keeps
@@ -1586,15 +1575,15 @@ module AppState {
             if (cvr instanceof Lang.String && containsStr(CONTROLLER_VARIANTS, cvr as Lang.String)) { controllerVariant = cvr; }
             var ciqe = data["controlIQEnabled"];
             if (ciqe instanceof Lang.Boolean) { controlIQEnabled = ciqe; }
-            // Phase 09.15 T1-9 (D-01/D-08): the pump's live Sleep/Exercise activity mode, now ALSO on
+            // The pump's live Sleep/Exercise activity mode, now ALSO on
             // the shared statusRead reply. Strict-guarded to the pump's own 3-state range; an
             // out-of-range/non-Number value is ignored (keeps the last / safe "0" default), matching
             // controllerVariant's guard style just above. Not persisted (mirrors
             // controllerVariant/controlIQEnabled's own not-persisted reasoning).
             var ciqm = numRange(data["controlIQMode"], 0, 2);
             if (ciqm != null) { controlIQMode = ciqm; }
-            // The already-decoded exercise countdown, raw remaining-seconds (NOT an epoch, D-08
-            // T1-9 note) — the phone relays its CURRENT knowledge every statusRead (nil unless
+            // The already-decoded exercise countdown, raw remaining-seconds (NOT an epoch) — the phone
+            // relays its CURRENT knowledge every statusRead (nil unless
             // genuinely in Exercise right now), so this is always fully authoritative (assign/clear,
             // mirrors lockoutUntilEpochSec's unconditional guard), never "ignore if invalid, keep
             // last" — a stale timer must never survive past the moment the pump's own mode changed.
@@ -1608,7 +1597,7 @@ module AppState {
                 exerciseTimeRemainingSec = null;
                 Storage.deleteValue("exerciseTimeRemainingSec");
             }
-            // Phase 09.15 T1-1 (D-01/D-08, SP-5 fail-closed): UNLIKE controllerVariant/controlIQEnabled
+            // Fail-closed: UNLIKE controllerVariant/controlIQEnabled
             // above (where absent only ever means "legacy host" and the last-known value stays safe to
             // keep), `ciqZone` can legitimately clear on a MODERN host too — CIQ turns off, or the raw
             // zone becomes unmapped — and a Monkey C dictionary can't distinguish "key never sent" from
@@ -1624,7 +1613,7 @@ module AppState {
                 ciqZone = null;
                 Storage.deleteValue("ciqZone");
             }
-            // Phase 09.15 T1-2 (D-08, D-09.1, SP-5 fail-closed): mirrors ciqZone's unconditional
+            // Fail-closed: mirrors ciqZone's unconditional
             // assign-or-clear exactly — `ciqSuspendedForLow` can legitimately clear on a MODERN host too
             // (the suspend ends, or its cause is no longer CIQ-attributed), so a stale `true` must never
             // survive past the moment it actually cleared. Persisted (mirrors ciqZone/garminBolusEnabled)
@@ -1645,7 +1634,7 @@ module AppState {
                 ciqSuspendStartEpochSec = null;
                 Storage.deleteValue("ciqSuspendStartEpochSec");
             }
-            // Phase 09.15 T1-3/T1-4 (D-08, SP-3 standard guard): UNLIKE ciqZone/ciqSuspendedForLow
+            // UNLIKE ciqZone/ciqSuspendedForLow
             // above, these are monotonic historical markers — a real occurrence never un-happens, so
             // a missing/invalid key means only "this reply didn't repeat it", never "it un-happened".
             // Keep the last-known value (no else-clear branch) — never overwritten with null.
@@ -1659,7 +1648,7 @@ module AppState {
                 ciqLastCouldNotDeliverEpochSec = cncd;
                 Storage.setValue("ciqLastCouldNotDeliverEpochSec", ciqLastCouldNotDeliverEpochSec);
             }
-            // Phase 09.15 T1-5 (D-08, SP-5 fail-closed): UNLIKE lastAutoCorrectionEpochSec/
+            // Fail-closed: UNLIKE lastAutoCorrectionEpochSec/
             // ciqLastCouldNotDeliverEpochSec just above, this is a DERIVED instant the phone
             // recomputes fresh every statusRead — so it is always fully authoritative (assign/clear,
             // mirrors ciqZone's unconditional guard), never "ignore if invalid, keep last".
@@ -1671,7 +1660,7 @@ module AppState {
                 lockoutUntilEpochSec = null;
                 Storage.deleteValue("lockoutUntilEpochSec");
             }
-            // Phase 09.15 T1-8 (D-08, SP-5 fail-closed): mirrors lockoutUntilEpochSec's unconditional
+            // Fail-closed: mirrors lockoutUntilEpochSec's unconditional
             // assign-or-clear exactly — the phone relays its CURRENT knowledge every statusRead (`<= 0`
             // means unread on the wire, same convention as PumpSnapshot.maxBasalUnitsPerHour==0), so a
             // stale max must never survive past the moment it actually cleared.
@@ -1712,7 +1701,7 @@ module AppState {
                     detailsOrder = detOrderSan;
                 }
             }
-            // Phase 20 (F1, D-02): which pump-status fields fill the three complication slots, mirroring the
+            // Which pump-status fields fill the three complication slots, mirroring the
             // detailsOrder array-setting idiom (sanitize against the allowed tokens, de-dupe, cap 3;
             // change-detected persist). An empty result (all-garbage) is ignored so the safe default stands.
             var slotsRaw = data["garminComplicationSlots"];
@@ -1732,14 +1721,13 @@ module AppState {
                     ensureValidPlotHours();
                 }
             }
-            // Phase 09.13 (D-05/D-06/D-07/D-08/D-10, threat T-09.13-08): Garmin is in the SMALL-SCREEN
-            // group (same as the Apple Watch) — resolve the small-screen OVERRIDE first
+            // Garmin is in the SMALL-SCREEN group — resolve the small-screen OVERRIDE first
             // (glucosePlotFloorSmall/CeilingSmall), falling back to the shared/phone-scoped bounds
             // (glucosePlotFloor/Ceiling) when no override is on the wire. A field absent on BOTH keeps
-            // the last-persisted/default value (legacy-safe, D-06) — this is a SEPARATE channel from
+            // the last-persisted/default value (legacy-safe) — this is a SEPARATE channel from
             // watchChartRanges/chartRanges above, never derived from it. A resolved pair failing the
             // floor<ceiling invariant is dropped to the compile-time defaults rather than applied
-            // (never a corrupt/inverted domain, T-09.13-08).
+            // (never a corrupt/inverted domain).
             var pf = numRange(data["glucosePlotFloorSmall"], 1, 1000);
             if (pf == null) { pf = numRange(data["glucosePlotFloor"], 1, 1000); }
             var pc = numRange(data["glucosePlotCeilingSmall"], 1, 1000);
@@ -1780,12 +1768,12 @@ module AppState {
                     Storage.setValue("clockAnalog", ca);
                 }
             }
-            // P-mmol / D-04: display-unit token mirrored from the phone (RemoteCommand.
+            // Display-unit token mirrored from the phone (RemoteCommand.
             // glucoseDisplayUnit, additive-optional). Strict guard (mirrors clockAnalog/
             // garminComplicationDisplay above): only a recognized "mgdl"|"mmol" token is adopted +
             // persisted; an absent/unrecognized token is ignored, keeping the last persisted value —
-            // which fails closed to "mgdl" on a fresh install / older phone build that never sends it
-            // (T-04-02). The canonical glucose/isf/targetBg Numbers are never touched here — only the
+            // which fails closed to "mgdl" on a fresh install / older phone build that never sends it.
+            // The canonical glucose/isf/targetBg Numbers are never touched here — only the
             // label this token selects. 19-03 (G-M1/T-19-10): change-detected, same reasoning as above.
             var gu = data["glucoseDisplayUnit"];
             if (gu instanceof Lang.String && isValidUnitToken(gu as Lang.String)) {
@@ -1931,8 +1919,8 @@ module AppState {
         return [histOut, epOut];
     }
     // Keep ≤50 well-formed alert dicts (each must have id/kind/title of the right type).
-    // Phase 20 (D-01): ADDITIVELY preserve an optional per-alert `severity` tier string (a valid tier token
-    // only; absent/malformed stays absent) so the F3/R4 gate (alertSeverityTier/alertActionFor) has a
+    // ADDITIVELY preserve an optional per-alert `severity` tier string (a valid tier token
+    // only; absent/malformed stays absent) so the gate (alertSeverityTier/alertActionFor) has a
     // reliable per-alert salience signal. Backward-compatible — a legacy phone omits it and the gate then
     // fails closed to highest salience (unknown ⇒ critical). Never a dose input.
     (:background)
@@ -1998,8 +1986,8 @@ module AppState {
         return a["kind"].toString() + "-" + a["id"].toString();
     }
 
-    // ===== Phase 20 (R1/R4/F3, D-01) — the pure, phone-synced watch alert gate =====
-    // Frozen severity-tier token set (least→most salient). The phone (plan 20-02) classifies each alert's
+    // The pure, phone-synced watch alert gate.
+    // Frozen severity-tier token set (least→most salient). The phone classifies each alert's
     // typed kind into one of these and puts it on the wire as the per-alert `severity`; the watch never
     // invents its own severity. Kept small + frozen (never a raw enum on the wire — Pitfall 6).
     (:background)
@@ -2013,7 +2001,7 @@ module AppState {
     }
 
     // Rank a tier: info=0, high=1, critical=2. Unknown ⇒ critical's rank (highest salience, never
-    // suppressed) — a fail-closed CLASSIFICATION only (see the D-01 note on alertActionFor: this rule
+    // suppressed) — a fail-closed CLASSIFICATION only (see the note on alertActionFor: this rule
     // NEVER resurrects output against an explicit Silent+override-off user choice).
     (:background)
     function severityRank(t as Lang.String) as Lang.Number {
@@ -2047,7 +2035,7 @@ module AppState {
         return best;
     }
 
-    // F3: the per-tier haptic signature as PURE data ([[dutyCyclePct, durationMs], ...]) — distinct per
+    // The per-tier haptic signature as PURE data ([[dutyCyclePct, durationMs], ...]) — distinct per
     // tier so the wearer can tell a critical from an info by feel: critical ⇒ triple-long, high ⇒ double,
     // info ⇒ single-short. The caller (FaBolusApp) turns these into Attention.VibeProfile objects (the
     // only Attention touch), so this stays unit-testable. Unknown key ⇒ the critical (most-salient) pattern.
@@ -2062,7 +2050,7 @@ module AppState {
     // backlight} decision from the already-classified severity tier, the phone-synced intensity mode +
     // audible floor + critical-override opt-in, and the device's vibrateOn / doNotDisturb state.
     //
-    // D-01 SAFETY INVARIANTS encoded here:
+    // SAFETY INVARIANTS encoded here:
     //  • DEFAULT (mode "vibrate", override off) ⇒ vibration-only for EVERY tier; nothing audible, nothing
     //    pierces DND unless opted in.
     //  • FULLY-SILENT GUARANTEE: mode "silent" + criticalOverridesDnd=false ⇒ ZERO output (no vibrate, no
@@ -2107,11 +2095,11 @@ module AppState {
         return { "vibrate" => vibrate, "vibeProfileKey" => tier, "tone" => audible, "backlight" => audible };
     }
 
-    // Phase 20 (D-01, 20-REVIEW WR-02, pure): may a CLOSED-app background alert surface a system
+    // May a CLOSED-app background alert surface a system
     // notification (BgServiceDelegate.surfaceNewAlertsInBackground)? The foreground gate (alertActionFor)
     // only governs the app's own vibrate/tone; the background Toybox.Notifications path is separate and
     // used to fire regardless of the setting — so a closed-app critical could still post (and buzz per the
-    // OS) in Silent mode, contradicting the D-01 "phone is the sole authoritative alerting surface" choice.
+    // OS) in Silent mode, contradicting the "phone is the sole authoritative alerting surface" choice.
     // This extends the Silent guarantee to the background: Silent + override-off ⇒ surface NOTHING (the
     // phone alerts); Silent + override-on ⇒ surface ONLY the critical tier (the opt-in wrist fallback);
     // "vibrate"/"audible" ⇒ always surface (the CX-G-06 closed-app safety net is intact). Unknown severity

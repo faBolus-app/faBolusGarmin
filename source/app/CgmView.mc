@@ -5,17 +5,16 @@ using Toybox.Time;
 
 // CGM history screen (swipe up from the glance): "Nm ago", the current reading + trend,
 // and a 3-hour glucose plot whose Y-axis domain + gridlines follow the phone-configured plot
-// floor/ceiling (Phase 09.13, D-05/D-06/D-07 — AppState.plotFloor/plotCeiling). Data comes from the
+// floor/ceiling (AppState.plotFloor/plotCeiling). Data comes from the
 // phone (AppState.history, ~5-min spacing). A stale reading is shown grayed with its age called out.
 // CGM-agnostic: works with whatever sensor the phone is sourcing.
 class CgmView extends Ui.View {
     function initialize() { View.initialize(); }
 
     function onUpdate(dc as Gfx.Dc) as Void {
-        // Phase 09.13 (D-05/D-06/D-07/D-08): Garmin's Y-axis domain, read fresh every draw from the
-        // small-screen-resolved AppState bounds (override when set, else the shared/phone bounds) —
-        // no more hardcoded 40.0/300.0. The clamps below already pin both edges symmetrically, so this
-        // becomes a symmetric clamp over the NEW bounds automatically (D-08).
+        // Garmin's Y-axis domain, read fresh every draw from the small-screen-resolved AppState
+        // bounds (override when set, else the shared/phone bounds) — not a hardcoded 40.0/300.0.
+        // The clamps below pin both edges symmetrically over those bounds.
         var VMIN = AppState.plotFloor.toFloat();
         var VMAX = AppState.plotCeiling.toFloat();
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);

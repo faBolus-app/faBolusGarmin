@@ -10,11 +10,8 @@ using Toybox.Lang;
 // opening the app. Runs in the limited glance-memory context, so state (bg/bgEpoch/staleSec/the
 // display-unit token) is read directly from Storage rather than depending on AppState's loaded
 // instance fields (which may not be populated yet in this context — mirrors the existing staleSec
-// pattern). P-mmol (Phase 4): the display-unit CONVERSION MATH itself still routes through
-// AppState's pure displayGlucoseForUnit()/glucoseUnitLabelForToken() funnel (the token-parameterized
-// siblings of displayGlucose()/glucoseUnitLabel()) rather than a second inline "/ 18.0182" — the one
-// glucose-text site this phase's Anti-Pattern section calls out by name as having bypassed the
-// funnel; fixed here without adding a fourth independent implementation.
+// pattern). Display-unit conversion still routes through AppState's
+// displayGlucoseForUnit()/glucoseUnitLabelForToken() funnel rather than a second inline "/ 18.0182".
 // A reading older than 6 minutes shows "--".
 (:glance)
 class FaBolusGlanceView extends Ui.GlanceView {
@@ -22,7 +19,7 @@ class FaBolusGlanceView extends Ui.GlanceView {
 
     function initialize() { GlanceView.initialize(); }
 
-    // R3 (Phase 20): self-refresh while the glance is on screen, using the unused venu3s
+    // Self-refresh while the glance is on screen, using the unused venu3s
     // glance.liveUpdates capability, mirroring ClockView.onShow/onHide/onTick. onUpdate re-reads Storage
     // (bg/bgEpoch/staleSec), so a periodic requestUpdate re-evaluates the value's STALENESS against the
     // clock — a visible glance no longer freezes between the ~5-min background temporal polls. Display
@@ -30,7 +27,7 @@ class FaBolusGlanceView extends Ui.GlanceView {
     function onShow() as Void {
         if (_timer == null) { _timer = new Timer.Timer(); }
         _timer.start(method(:onTick), 30000, true);   // 30 s, matching ClockView
-        // R3: additionally kick ONE best-effort statusRead on appearance so the glance pulls a fresh value
+        // Additionally kick ONE best-effort statusRead on appearance so the glance pulls a fresh value
         // (matching ClockView.onShow). Fully guarded — RemoteComm.send's existing phoneReachable()+try/catch
         // makes it a no-op when offline or if the glance runtime restricts Comm.transmit (degrade to
         // timer-only self-refresh, never a crash). NOT a new repeating radio wake — a single kick on show.

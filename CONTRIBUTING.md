@@ -55,8 +55,8 @@ rewrite:
    hardware-tested.
 
 Only the Venu 3S is hardware-validated today; the button-device and Edge paths are build-verified and
-sit behind the phone's confirm + max-bolus interlock (the remote never delivers on its own), but they
-need on-device shakeout before a device is called "supported."
+sit behind the watch confirm gesture plus the phone's recompute + max-bolus clamp (the remote never
+delivers on its own), but they need on-device shakeout before a device is called "supported."
 
 ### The two input models
 `DeviceProfile.isTouch()` picks between them; the views/delegates branch on it, so both live in the
@@ -75,12 +75,10 @@ sustained actions), and keep the touch and button flows in sync in `HoldView`/`H
 
 ## Add a watch face or another Connect IQ app type
 Each Connect IQ app type is a separate app (its own manifest + jungle), so the repo keeps them side
-by side (like `probe.jungle` / `test.jungle`):
-- **Watch face** — removed from `main` (Phase-2 narrowing); it lives only on the `experimental`
-  branch as its own Connect IQ app: a `watchface/` source tree plus its own dedicated manifest/jungle
-  pair, built the same way as any other app type here. It draws the time and a BG slot and subscribes
-  to the faBolus **public BG complication** (`watchface/FaBolusFaceView.mc:28-40`, `:55-75`) — the
-  complication behavior still needs on-device validation. Watches only — Edge has no watch face.
+by side (like `datafield.jungle` / `test.jungle`):
+- **Watch face** — removed from `main`; it lives only on the `experimental` branch as its own
+  Connect IQ app (`watchface/` plus a dedicated manifest/jungle pair). Watches only — Edge has no
+  watch face.
 - **Data field** — `datafield/` + `manifest-datafield.xml` + `datafield.jungle`
   (`monkeyc -f datafield.jungle -o bin/faBolusField.iq -y <dev_key.der> -e -r -w`). A `SimpleDataField`
   that shows BG on any run/ride activity screen — watches **and** Edge. Same public-complication feed
@@ -92,20 +90,19 @@ by side (like `probe.jungle` / `test.jungle`):
 
 ## The contract mirror (don't let it drift)
 The source of truth is `faBolus/schema/command.schema.json`, mirrored in Swift (`RemoteCommand`) and
-here in Monkey C (`RemoteCommand.mc`). If you change the contract:
+here in Monkey C (`RemoteComm.mc` / `AppState.mc`). If you change the contract:
 1. Update the schema and bump its `version`, plus the Swift mirror (in faBolus).
 2. Update the Monkey C mirror to match.
 3. Prefer additive, optional fields so older remotes keep working.
 
 ## Safety
-- Never weaken the interlocks: the 1-2-3 / hold confirmation on the watch is a **second** factor; the
-  host still enforces its own confirmation + max-bolus clamp. Dosing changes get extra review.
-- The direct-to-pump engine (`direct-pump/`) is the most safety-critical code — it signs and sends
-  real pump commands — and must stay **byte-exact vs the pumpX2 `cliparser` oracle**.
+- Never weaken the interlocks: the bolus is confirmed by **one explicit gesture on the watch**
+  (1-2-3 / hold). The host independently **recomputes the dose from the carbs, rejects it if it
+  diverges from the estimate the watch showed, and clamps to the max-bolus limit** (defense in
+  depth, not a second human confirmation). Dosing changes get extra review.
 
 ## Before a PR
 - Build the app:
   `monkeyc -f monkey.jungle -o bin/faBolusGarmin.prg -y developer_key.der -d venu3s -w`.
-- Run the unit tests in the CIQ simulator (README → "Build & test"); the oracle golden vectors must
-  pass.
+- Run the unit tests in the CIQ simulator (README → "Build & test").
 - Note anything only compiled vs. tested on hardware.

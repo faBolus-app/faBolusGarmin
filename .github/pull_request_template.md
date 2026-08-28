@@ -17,8 +17,8 @@ Fill in what applies; delete what doesn't. See CONTRIBUTING.md, AGENTS.md, and B
 
 ## Safety
 
-- [ ] Does **not** weaken the bolus-confirm interlock (touch 1-2-3 / two-button hold) — it stays a
-      deliberate second factor on top of the host's confirm + max-bolus clamp
+- [ ] Does **not** weaken the bolus-confirm gesture (touch 1-2-3 / two-button hold). The watch
+      gesture is one explicit confirmation; the phone recomputes/clamps (not a second human confirm)
 - [ ] Delivery disposition unchanged (**NO-GO for real insulin delivery**) — or this PR's explicit
       subject is changing it, and says so
 - [ ] Preserves the honest-staleness signal: an unknown-age or stale reading stays `--` / flagged
@@ -37,7 +37,7 @@ Fill in what applies; delete what doesn't. See CONTRIBUTING.md, AGENTS.md, and B
 ## Verification
 
 <!-- CI's Garmin coverage is only the schema-drift contract check + the SBOM check (the SDK/simulator
-     can't run in cloud CI — see .github/workflows/ci.yml). The build + 29-case unit suite is a LOCAL
+     can't run in cloud CI — see .github/workflows/ci.yml). The build + unit suite is a LOCAL
      gate; paste what you ran. -->
 
 - [ ] `./scripts/build-and-test.sh` (compiles every jungle + runs the Monkey C unit suite in the sim)

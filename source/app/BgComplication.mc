@@ -30,7 +30,7 @@ module BgComplication {
     (:background)
     const KEY_EPOCH = "bgEpoch"; // unix sec the BG was taken (for 6-min staleness)
 
-    // Phase 20 (F1, D-02): the THREE user-assignable pump-status complication slots (ids 1..3), published
+    // The THREE user-assignable pump-status complication slots (ids 1..3), published
     // alongside the fixed glucose complication (id 0). Connect IQ caps an app at FOUR complications total,
     // so only three slots exist; a phone-owned, watch-synced setting (AppState.garminComplicationSlots)
     // chooses WHICH of the four available fields (IOB/reservoir/battery/basal) fill them and in what order.
@@ -171,7 +171,7 @@ module BgComplication {
     function pushComplication(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean) as Void {
     }
 
-    // ===== Phase 20 (F1, D-02) — the four pump-status complications, display only =====
+    // The four pump-status complications, display only.
     // Pure per-field formatters: each returns { "value" => Numeric or null, "label" => String }. The
     // `value` is the numeric slot (Numeric when known; null when the field is unknown, so no misleading
     // number is written); `label` is the honest text slot ("--" for an unknown -1 sentinel, mirroring the
@@ -267,7 +267,7 @@ module BgComplication {
     function publishFromState() as Void {
         remember(AppState.glucose, AppState.trend, AppState.readingEpoch);
         publish(AppState.glucose, AppState.trend, AppState.readingEpoch);
-        // F1 (D-02): refresh the four pump-status complications alongside glucose on every publish
+        // Refresh the four pump-status complications alongside glucose on every publish
         // (statusRead reply + background temporal event), mirroring the glucose publish.
         publishFieldsFromState();
     }
