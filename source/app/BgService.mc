@@ -75,21 +75,7 @@ class BgServiceDelegate extends System.ServiceDelegate {
             // return WITHOUT exiting so the service stays alive for the real reply (the system still bounds
             // our total runtime). Exiting on it would drop the fresh read we're waiting for and republish stale.
             if (!AppState.isCorrelatedStatusReply(data as Lang.Dictionary, mintedReqId)) { return; }
-            AppState.handle(data as Lang.Dictionary);
-            BgComplication.publishFromState();
-            // A background service process CANNOT vibrate or pushView (Toybox.Attention isn't a
-            // documented background runtime context, and WatchUi.pushView() explicitly throws
-            // Lang.OperationNotAllowedException when called from background — see
-            // 13-CXG06-FEASIBILITY.md), so the FULL in-app confirm-to-clear surface still can't happen
-            // here. But CX-G-06: it CAN show a system notification (Toybox.Notifications.showNotification,
-            // documented by the SDK itself as the mechanism for "notify the user of an event from the
-            // background") — so a critical pump alert is not left completely silent on the wrist while
-            // the app is suspended/closed. This is an ADDITIVE early signal only, tracked via its own
-            // dedup set (AppState.pendingBgNotifyAlerts() / reconciledBgNotifiedAlerts()); it does not mark anything "seen" for the
-            // main app's own notifyNewAlerts(), which still runs its full vibrate+confirm flow the next
-            // time a view exists. Forward ONLY the compact alerts list — NOT the full status (its history
-            // array can be large) — to stay within the background-data payload limit.
-            surfaceNewAlertsInBackground();
+            applyBackgroundStatus(data as Lang.Dictionary);
             // G-L1: Background.exit's own doc documents an ExitDataSizeLimitException at ~8 KB ("the
             // process will not exit and should attempt to call Background.exit() again with less
             // data") — alertsForBackgroundExit() already budgets defensively under that limit, but the
@@ -104,6 +90,46 @@ class BgServiceDelegate extends System.ServiceDelegate {
             return;
         }
         Background.exit(null);
+    }
+
+    // Phase 20 (R2, D-04): event-driven push-wake. When the app is CLOSED and the phone pushes a fresh
+    // status (GarminRemoteBridge on a new CGM value / critical alert), the system wakes THIS background
+    // service via Background.registerForPhoneAppMessageEvent (registered in FaBolusApp.registerBackground)
+    // and delivers the pushed message here — refreshing the wrist immediately instead of waiting for the
+    // next ~5-min temporal poll. SUBSUMES Phase-19 finding G-M2. This is a FRESH service process, so its
+    // AppState starts at compile-time defaults: restore the persisted prefs FIRST (mirrors
+    // onTemporalEvent), then route the push through the SAME correlate→handle→publish→surface→exit path as
+    // onPhoneMessage. A push-wake sent no request (mintedReqId == null) so isHandleablePush accepts a
+    // `kind=="statusRead"` push via the kind fallback. A malformed / non-statusRead push changes nothing
+    // and does NOT exit early (stays alive; the system bounds the wake), exactly like onPhoneMessage. The
+    // background service CANNOT vibrate/pushView — a critical alert surfaces only via the
+    // Toybox.Notifications dedup path in surfaceNewAlertsInBackground (never a dose).
+    function onPhoneAppMessage(msg as Comm.PhoneAppMessage) as Void {
+        AppState.loadPrefs();
+        var data = msg.data;
+        if (!AppState.isHandleablePush(data, mintedReqId)) { return; }   // no state change, no early exit
+        applyBackgroundStatus(data as Lang.Dictionary);
+        try {
+            Background.exit(AppState.alertsForBackgroundExit(AppState.alerts));
+        } catch (e) {
+            Background.exit(null);
+        }
+    }
+
+    // Shared parse→publish→surface body for a correlated background status message (onPhoneMessage +
+    // onPhoneAppMessage). A background service process CANNOT vibrate or pushView (Toybox.Attention isn't a
+    // documented background runtime context, and WatchUi.pushView() explicitly throws
+    // Lang.OperationNotAllowedException when called from background — see 13-CXG06-FEASIBILITY.md), so the
+    // FULL in-app confirm-to-clear surface still can't happen here. But CX-G-06: it CAN show a system
+    // notification (Toybox.Notifications.showNotification) — so a critical pump alert is not left completely
+    // silent on the wrist while the app is suspended/closed. This is an ADDITIVE early signal only, tracked
+    // via its own dedup set (AppState.pendingBgNotifyAlerts() / reconciledBgNotifiedAlerts()); it does not
+    // mark anything "seen" for the main app's own notifyNewAlerts(), which still runs its full
+    // vibrate+confirm flow the next time a view exists.
+    function applyBackgroundStatus(data as Lang.Dictionary) as Void {
+        AppState.handle(data);
+        BgComplication.publishFromState();
+        surfaceNewAlertsInBackground();
     }
 
     // G-L2: records an inbound phoneAppMessage delivery error for observability. Never throws, never

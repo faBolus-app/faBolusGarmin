@@ -1613,6 +1613,19 @@ module AppState {
         return rid.equals(mintedReqId);
     }
 
+    // Phase 20 (R2, D-04, pure): should the background push-wake path (BgServiceDelegate.onPhoneAppMessage)
+    // consume this inbound message? A push-wake creates a FRESH service instance that sent no request, so
+    // it has no minted requestId (mintedReqId == null) — isCorrelatedStatusReply then falls back to the
+    // kind discriminator, accepting a `kind=="statusRead"` push. A non-Dictionary payload, or a
+    // non-statusRead dict (a stray toggle/echo), is NOT handleable — the caller changes nothing and does
+    // not exit early (mirrors onPhoneMessage's guard; the system bounds the wake's runtime). Deterministic
+    // → unit-testable, so BgPushWakeTest can drive it without a system-delivered PhoneAppMessage instance.
+    (:background)
+    function isHandleablePush(data, mintedReqId as Lang.String?) as Lang.Boolean {
+        return (data instanceof Lang.Dictionary)
+            && isCorrelatedStatusReply(data as Lang.Dictionary, mintedReqId);
+    }
+
     (:background)
     function handle(data as Lang.Dictionary) as Void {
         // CX-G-11: reuse the existing strCap() guard (instanceof-checked, GA-09) instead of the bare

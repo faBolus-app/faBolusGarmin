@@ -134,6 +134,18 @@ class FaBolusApp extends App.AppBase {
         } catch (e) {
             // Background not permitted on this device/config — foreground updates still work.
         }
+        // Phase 20 (R2, D-04): ALSO register for event-driven phone-app-message push-wake (API 3.2.0), so
+        // the phone can wake the closed-app background service immediately on a new CGM value / critical
+        // alert (BgServiceDelegate.onPhoneAppMessage) instead of waiting for the next ~5-min temporal poll.
+        // Additive to the temporal event above (both stay registered). Capability + try/catch guarded so a
+        // device/firmware without it degrades to the temporal poll alone, never a crash. Subsumes G-M2.
+        if (Background has :registerForPhoneAppMessageEvent) {
+            try {
+                Background.registerForPhoneAppMessageEvent();
+            } catch (e) {
+                // Push-wake not permitted here — the 5-min temporal refresh still works.
+            }
+        }
     }
 
     // R2-19: one poll tick. Runs the R2-02 outcome-watchdog backstop, applies the outstanding-gate +
