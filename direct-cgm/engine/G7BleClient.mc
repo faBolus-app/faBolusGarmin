@@ -1,5 +1,6 @@
 using Toybox.BluetoothLowEnergy as Btle;
 using Toybox.Lang;
+using Toybox.Timer;
 
 // Passive Dexcom G7 / ONE+ BLE client for the watch (Connect IQ), modeled on the paused
 // direct-pump/engine/ble/PumpBleClient.mc. Lifecycle: registerProfile -> scan (name "DXCM") ->
@@ -23,8 +24,17 @@ module DirectCgm {
         const CHAR_CTRL = "F8083534-849E-531C-C594-30F1F86A4EA5"; // Write/Indicate — glucoseTx here
         const CHAR_BACK = "F8083536-849E-531C-C594-30F1F86A4EA5"; // Read/Write/Notify — backfill
 
+        // Watchdog windows (BLE-M2, WR-01): mirror PumpBleClient's conservative deadlines so a scan
+        // that never matches DXCM or a CCCD write that never acks transitions to the terminal
+        // fail-closed path instead of hanging indefinitely (draining battery, no failover).
+        const SCAN_WATCHDOG_MS = 30000; // no DXCM match within 30s -> terminal + scan OFF
+        const OP_WATCHDOG_MS   = 10000; // an in-flight CCCD write not acked within 10s -> terminal
+
         // callback invoked with the parsed glucose dict from G7Message.parseGlucose.
         public var onGlucose as Lang.Method or Null = null;
+        // WR-02: surfaced fail-closed error (the client previously exposed no error callback, so a
+        // wedged sequencer was invisible beyond the status string).
+        public var onError as Lang.Method or Null = null;
         public var status as Lang.String = "idle";
 
         private var _svcUuid as Btle.Uuid or Null;
@@ -33,6 +43,10 @@ module DirectCgm {
         private var _comm as Btle.Uuid or Null;
         private var _device as Btle.Device or Null = null;
         private var _seq as CccdSequencer or Null = null; // BLE-H1 one-op-in-flight CCCD sequencer
+
+        // Watchdog timers (BLE-M2, WR-01): one for the scan phase, one armed per in-flight CCCD write.
+        private var _scanTimer as Timer.Timer or Null = null;
+        private var _opTimer as Timer.Timer or Null = null;
 
         function initialize() { BleDelegate.initialize(); }
 
@@ -73,6 +87,7 @@ module DirectCgm {
                 status = "register-status-" + s.format("%d");
                 return;
             }
+            _armScanWatchdog();
             Btle.setScanState(Btle.SCAN_STATE_SCANNING);
             status = "scanning";
         }
@@ -82,8 +97,17 @@ module DirectCgm {
             while (r != null) {
                 var sr = r as Btle.ScanResult;
                 if (matches(sr)) {
+                    _clearScanWatchdog();
                     Btle.setScanState(Btle.SCAN_STATE_OFF);
-                    _device = Btle.pairDevice(sr);
+                    // WR-05: wrap pairDevice (mirror PumpBleClient) — an exception from pairDevice
+                    // (bonding state, already-connected, revoked) thrown out of this BLE delegate
+                    // callback can crash the probe. Fail closed on throw instead.
+                    try {
+                        _device = Btle.pairDevice(sr);
+                    } catch (e) {
+                        _failClosed("pairDevice failed");
+                        return;
+                    }
                     status = "connecting";
                     return;
                 }
@@ -146,28 +170,91 @@ module DirectCgm {
             if (_seq == null) { return; }
             var op = _seq.next();
             if (op == null) {
-                if (_seq.isReady()) { status = "ready"; }
+                if (_seq.isReady()) {
+                    _clearOpWatchdog();
+                    status = "ready";
+                }
                 return;
             }
             var cccd = (op as Lang.Dictionary)[:cccd] as Btle.Descriptor;
+            // WR-01: arm the per-op watchdog before issuing the write; cleared on its ack.
+            _armOpWatchdog();
             cccd.requestWrite((op as Lang.Dictionary)[:value] as Lang.ByteArray);
         }
 
         // BLE-H1: the ack that chains the serialized CCCD writes. Advance to the next op on success;
-        // on a non-success status surface it and stop (no further writes).
+        // on a non-success status (WR-02) fail closed — the old code left the sequencer _inFlight
+        // forever with no teardown and no surfaced error.
         function onDescriptorWrite(descriptor as Btle.Descriptor, s as Btle.Status) as Void {
             if (_seq == null) { return; }
+            _clearOpWatchdog();
             if (s != Btle.STATUS_SUCCESS) {
-                status = "cccd-status-" + s.format("%d");
+                _failClosed("cccd-status-" + s.format("%d"));
                 return;
             }
             _seq.ack();
             drive();
         }
 
+        // ---- watchdogs + fail-closed terminal path (BLE-M2 / WR-01 / WR-02) ----
+
+        private function _armScanWatchdog() as Void {
+            _clearScanWatchdog();
+            _scanTimer = new Timer.Timer();
+            _scanTimer.start(method(:onScanTimeout), SCAN_WATCHDOG_MS, false);
+        }
+
+        private function _clearScanWatchdog() as Void {
+            if (_scanTimer != null) {
+                _scanTimer.stop();
+                _scanTimer = null;
+            }
+        }
+
+        private function _armOpWatchdog() as Void {
+            _clearOpWatchdog();
+            _opTimer = new Timer.Timer();
+            _opTimer.start(method(:onOpTimeout), OP_WATCHDOG_MS, false);
+        }
+
+        private function _clearOpWatchdog() as Void {
+            if (_opTimer != null) {
+                _opTimer.stop();
+                _opTimer = null;
+            }
+        }
+
+        // Scan deadline elapsed with no DXCM match -> fire the terminal path (scan OFF, fail closed).
+        function onScanTimeout() as Void {
+            _failClosed("scan timeout");
+        }
+
+        // In-flight CCCD write not acked within its window -> fire the terminal path.
+        function onOpTimeout() as Void {
+            _failClosed("cccd timeout");
+        }
+
+        // The single terminal path shared by a pairDevice throw, a CCCD-write failure, and both
+        // watchdogs (mirror PumpBleClient._failClosed): stop timers, drop the sequencer so no further
+        // writes issue, stop scanning, and surface the error. No indefinite scanning/in-flight state
+        // survives this. Passive invariant preserved — only a local setScanState(OFF), no VALUE write.
+        private function _failClosed(text as Lang.String) as Void {
+            _clearScanWatchdog();
+            _clearOpWatchdog();
+            _seq = null;
+            try {
+                Btle.setScanState(Btle.SCAN_STATE_OFF);
+            } catch (e) {
+            }
+            status = text;
+            if (onError != null) { onError.invoke(text); }
+        }
+
         // BLE-L1 teardown (CGM twin of BLE-L3): stop scanning + release the BLE delegate on stop so
         // the client leaves no BLE resources held. Best-effort; guards nulls.
         function close() as Void {
+            _clearScanWatchdog();
+            _clearOpWatchdog();
             _seq = null;
             try {
                 Btle.setScanState(Btle.SCAN_STATE_OFF);
