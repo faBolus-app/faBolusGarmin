@@ -33,7 +33,6 @@ class FaBolusApp extends App.AppBase {
     // below (19-02, Task 2): NOT built eagerly, so a glance/background launch never pulls in EatingRelay/
     // HeartRateRelay (and EatingRelay's EatingSense barrel) at all.
     private var _eating as EatingRelay?;   // wrist eating-sensing relay (phone-gated)
-    private var _hr as HeartRateRelay?;    // ambient HR relay (phone-gated; rides the status tick)
     // R2-19: self-rescheduling poll state. `_pollOutstanding` is true between sending a statusRead and its
     // reply arriving (statusRead replies aren't reqId-correlated, so "outstanding" is tracked by arrival —
     // cleared in onPhoneMessage); `_pollSentEpoch` is when the outstanding poll was sent (Unix sec);
@@ -42,8 +41,8 @@ class FaBolusApp extends App.AppBase {
     private var _pollOutstanding as Lang.Boolean = false;
     private var _pollSentEpoch as Lang.Number = 0;
     // C5-01/CX-G-05 (13-04): counts scheduleNextPoll() invocations. This is the most direct externally-
-    // observable proof that the one-shot poll loop keeps re-arming itself — including when _hr.emitIfDue()
-    // throws — without needing to inspect a live Timer.Timer instance. See tests/RelayResilienceTest.mc.
+    // observable proof that the one-shot poll loop keeps re-arming itself without needing to inspect a
+    // live Timer.Timer instance. See tests/RelayResilienceTest.mc.
     private var _scheduleCount as Lang.Number = 0;
     // True once a real view is on the stack (set in getInitialView). Gates surfacing a background-
     // arrived alert: a CIQ app must not pushView before its first view exists (cold-launch order is
@@ -56,20 +55,20 @@ class FaBolusApp extends App.AppBase {
     // _scheduleCount/scheduleCount() above).
     private var _phoneMsgErrorCount as Lang.Number = 0;
     // 13-LW-01 (LOW): observable count of pollTick's own empty-catch guards firing — the dismiss-retry
-    // resend loop and the HR piggyback (_hr.emitIfDue()) each transmit through a call that could throw,
-    // and both catches used to swallow that throw with zero observability into a persistent transmit
-    // failure. Test-only-seam style (mirrors _scheduleCount/scheduleCount() above).
+    // resend loop transmits through a call that could throw, and its catch used to swallow that throw
+    // with zero observability into a persistent transmit failure. Test-only-seam style (mirrors
+    // _scheduleCount/scheduleCount() above).
     private var _pollGuardFailureCount as Lang.Number = 0;
 
-    // G-H2 (19-02, Task 2): EatingRelay/HeartRateRelay are NO LONGER constructed here. Both relays are
-    // phone-gated (only ever start doing anything once the phone sends an "eating_sense"/"hr_ctl" toggle
-    // — see handlePhoneData below), so building them eagerly at cold launch pulled the EatingSense barrel
-    // into EVERY launch context, including a glance/background launch that never receives a phone toggle
-    // at all. Deferred to first actual use in handlePhoneData's eating_sense/hr_ctl branches (NOT
-    // onStart(): onStart() itself runs during a glance-mode "Background UI Update" launch per the SDK's
-    // own Glances lifecycle doc, so constructing there would just relocate the same problem). Every other
-    // use site (onStop, pollTick's emitIfDue()) already null-guards, so a never-toggled relay simply
-    // stays null and inert — no behavior change for a phone that DOES send the toggle.
+    // G-H2 (19-02, Task 2): EatingRelay is NO LONGER constructed here. It is phone-gated (only ever
+    // starts doing anything once the phone sends an "eating_sense" toggle — see handlePhoneData below),
+    // so building it eagerly at cold launch pulled the EatingSense barrel into EVERY launch context,
+    // including a glance/background launch that never receives a phone toggle at all. Deferred to first
+    // actual use in handlePhoneData's eating_sense branch (NOT onStart(): onStart() itself runs during a
+    // glance-mode "Background UI Update" launch per the SDK's own Glances lifecycle doc, so constructing
+    // there would just relocate the same problem). Every other use site (onStop) already null-guards, so
+    // a never-toggled relay simply stays null and inert — no behavior change for a phone that DOES send
+    // the toggle.
     function initialize() { AppBase.initialize(); }
 
     function onStart(state as Lang.Dictionary?) as Void {
@@ -102,7 +101,6 @@ class FaBolusApp extends App.AppBase {
     function onStop(state as Lang.Dictionary?) as Void {
         if (_timer != null) { _timer.stop(); }
         if (_eating != null) { _eating.stop(); }
-        if (_hr != null) { _hr.stop(); }
         _foreground = false;
     }
 
@@ -174,10 +172,9 @@ class FaBolusApp extends App.AppBase {
         _pollOutstanding = true;
         _pollSentEpoch = now;
         // CX-G-08 (14-09): bounded retry, piggybacked on this SAME existing tick (no new timer/radio
-        // wake, mirrors the HR piggyback immediately below) — re-dispatch any unacked, UNEXPIRED dismiss
-        // REUSING the SAME requestId+generation the wearer's original confirm minted (a lost-ack retry
-        // never mints a new one). Guarded like emitIfDue() so a throw here can never skip
-        // scheduleNextPoll() (C5-01/CX-G-05 — the loop's only re-arm path).
+        // wake) — re-dispatch any unacked, UNEXPIRED dismiss REUSING the SAME requestId+generation the
+        // wearer's original confirm minted (a lost-ack retry never mints a new one). Guarded so a throw
+        // here can never skip scheduleNextPoll() (C5-01/CX-G-05 — the loop's only re-arm path).
         try {
             var dueRetries = AppState.dueDismissRetries(now);
             for (var r = 0; r < dueRetries.size(); r += 1) {
@@ -188,20 +185,6 @@ class FaBolusApp extends App.AppBase {
             // 13-LW-01: was silently swallowed with zero observability — now counted (see
             // _pollGuardFailureCount above), still deliberately non-fatal (scheduleNextPoll() below must
             // still run).
-            _pollGuardFailureCount += 1;
-        }
-        // Piggyback ambient HR on the existing status cadence (D-08) — no new timer/radio wake. No-op
-        // unless the phone's hr_ctl toggle enabled it (D-09).
-        // C5-01/CX-G-05: emitIfDue() (its Comm.transmit) must NEVER be allowed to skip scheduleNextPoll()
-        // below — an unguarded throw here used to permanently halt the one-shot poll loop, since
-        // scheduleNextPoll() is the loop's ONLY re-arm path and lives here on FaBolusApp (NOT on
-        // HeartRateRelay). Guarded at the owner of scheduleNextPoll, not inside the relay.
-        try {
-            if (_hr != null) { _hr.emitIfDue(); }
-        } catch (e) {
-            // 13-LW-01: was silently swallowed with zero observability — now counted (see
-            // _pollGuardFailureCount above), still deliberately non-fatal (scheduleNextPoll() below must
-            // still run — see C5-01/CX-G-05 above).
             _pollGuardFailureCount += 1;
         }
         scheduleNextPoll();
@@ -217,12 +200,6 @@ class FaBolusApp extends App.AppBase {
     // outstanding — lets tests/StatusReplyTest.mc assert a mismatched-reqId reply does NOT clear the
     // gate while a matched/legacy one does. Harmless in shipping use (read-only).
     function pollOutstanding() as Lang.Boolean { return _pollOutstanding; }
-
-    // Test-only seam: swap the HR relay for a double (e.g. one whose emitIfDue() throws) so
-    // RelayResilienceTest.mc can exercise pollTick's guard above without real BLE/HR hardware. Harmless in
-    // shipping use — it's the same lazily-constructed assignment handlePhoneData's hr_ctl branch makes
-    // (19-02, Task 2), just injectable BEFORE the first real toggle arrives.
-    function setHrRelay(hr as HeartRateRelay?) as Void { _hr = hr; }
 
     // R2-19: arm the next one-shot poll. Backoff is SUPPRESSED (level 0, fast cadence) while an outcome is
     // pending so a terminal-echo recovery is quick; otherwise it follows `_backoff`. A random jitter (0..
@@ -266,14 +243,6 @@ class FaBolusApp extends App.AppBase {
             if (_eating == null) { _eating = new EatingRelay(); }
             var eating = _eating as EatingRelay;
             if (data["on"] == true) { eating.start(); } else { eating.stop(); }
-            return;
-        }
-        // Phone toggles ambient HR chart context (out-of-band, not a RemoteCommand). D-08/D-09:
-        // enables/disables the phone-gated relay; when off the watch skips reading + sending HR.
-        if (type instanceof Lang.String && (type as Lang.String).equals("hr_ctl")) {
-            // G-H2 (19-02, Task 2): same lazy-construct-on-first-toggle deferral as EatingRelay above.
-            if (_hr == null) { _hr = new HeartRateRelay(); }
-            (_hr as HeartRateRelay).setEnabled(data["on"] == true);
             return;
         }
         var kind = data["kind"];

@@ -82,8 +82,17 @@ module RemoteComm {
         return { "version" => SCHEMA_VERSION, "kind" => "statusRead", "requestId" => requestId, "forceGlucose" => true };
     }
 
+    // Unit-test seam (mirrors testSuppressTransmit/testPhoneReachable above). Forces dismissAlert() to
+    // throw before it builds its dict — used by tests/RelayResilienceTest.mc's Test 1 (Phase 22 retarget)
+    // to prove pollTick's dismiss-retry try/catch (FaBolusApp.mc) never lets a throw skip
+    // scheduleNextPoll(), the loop's only re-arm path (C5-01/CX-G-05). Never assigned outside the unit
+    // suite; false is the shipping default, so dismissAlert()'s returned dict shape is UNCHANGED in
+    // shipping use.
+    var testDismissAlertThrows = false;
+
     // Clears a pump alert on the phone (which sends the signed dismiss to the pump).
     function dismissAlert(requestId as Lang.String, alertId as Lang.Number, alertKind as Lang.Number) as Lang.Dictionary {
+        if (testDismissAlertThrows) { throw new Lang.Exception(); }
         return {
             "version" => SCHEMA_VERSION,
             "kind" => "dismissAlert",
