@@ -2369,6 +2369,24 @@ module AppState {
         return { "vibrate" => vibrate, "vibeProfileKey" => tier, "tone" => audible, "backlight" => audible };
     }
 
+    // Phase 20 (D-01, 20-REVIEW WR-02, pure): may a CLOSED-app background alert surface a system
+    // notification (BgServiceDelegate.surfaceNewAlertsInBackground)? The foreground gate (alertActionFor)
+    // only governs the app's own vibrate/tone; the background Toybox.Notifications path is separate and
+    // used to fire regardless of the setting — so a closed-app critical could still post (and buzz per the
+    // OS) in Silent mode, contradicting the D-01 "phone is the sole authoritative alerting surface" choice.
+    // This extends the Silent guarantee to the background: Silent + override-off ⇒ surface NOTHING (the
+    // phone alerts); Silent + override-on ⇒ surface ONLY the critical tier (the opt-in wrist fallback);
+    // "vibrate"/"audible" ⇒ always surface (the CX-G-06 closed-app safety net is intact). Unknown severity
+    // is already classified to "critical" by alertSeverityTier, so it surfaces exactly where critical does.
+    (:background)
+    function shouldSurfaceInBackground(tier as Lang.String, mode as Lang.String,
+                                       criticalOverridesDnd as Lang.Boolean) as Lang.Boolean {
+        if (mode.equals("silent")) {
+            return criticalOverridesDnd && tier.equals("critical");
+        }
+        return true;
+    }
+
     // 14-10 (D1) — the raw-snapshot proof-of-absence oracle's OWN identity parser. Deliberately NOT
     // sanitizeAlerts (which DROPS any item whose `title` is not a Lang.String) — a raw item with a valid
     // (id,kind) but a malformed/absent title must still count as PRESENT (title-agnostic), or a bad
