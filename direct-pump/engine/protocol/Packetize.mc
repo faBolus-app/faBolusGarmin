@@ -21,12 +21,16 @@ class InsulinDeliveryNotEnabledException extends Lang.Exception {
 // verified against the cliparser oracle.
 module Packetize {
     const DEFAULT_MAX_CHUNK_SIZE = 18; // observed for currentStatus
-    const CONTROL_MAX_CHUNK_SIZE = 40; // works for control requests
+    // Connect IQ's Characteristic.requestWrite() rejects any value > 20 bytes with
+    // InvalidRequestException — CIQ exposes no long-write and no MTU negotiation (see Ble.mc's
+    // PREFERRED_MTU note). Packet.build() prepends a 2-byte [packetsRemaining,transactionId]
+    // header, so the chunk itself must be <= 18 (2 + 18 = 20) for EVERY characteristic. The old
+    // CONTROL_MAX_CHUNK_SIZE=40 was an upstream-port artifact that produced a 42-byte write on the
+    // signed bolus path (a latent, revive-only showstopper) — retired here (BLE-C1).
+    const MAX_CIQ_CHUNK_SIZE = 18;
 
     function determineMaxChunkSize(message as Message) as Lang.Number {
-        if (message.characteristic == Ble.CHAR_CONTROL && message.msgType == MsgType.REQUEST) {
-            return CONTROL_MAX_CHUNK_SIZE;
-        }
+        // No characteristic may exceed the CIQ single-write cap; all paths use the safe chunk size.
         return DEFAULT_MAX_CHUNK_SIZE;
     }
 
@@ -85,6 +89,12 @@ module Packetize {
         var chunkSize = maxChunkSize;
         if (chunkSize == null) {
             chunkSize = determineMaxChunkSize(message);
+        }
+        // Unconditional CIQ cap: even an explicit caller override cannot exceed MAX_CIQ_CHUNK_SIZE,
+        // so no path can produce a > 20-byte characteristic write (BLE-C1). This changes only the
+        // packet segmentation — the reassembled framed message + CRC is byte-identical.
+        if (chunkSize > MAX_CIQ_CHUNK_SIZE) {
+            chunkSize = MAX_CIQ_CHUNK_SIZE;
         }
         var chunked = partition(packetWithCRC, chunkSize);
 
