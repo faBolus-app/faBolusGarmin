@@ -86,6 +86,31 @@ module ChunkCapTest {
         return true;
     }
 
+    // WR-03: the cap is TWO-SIDED. A non-positive maxChunkSize override (0 or negative) must NOT
+    // slip past the clamp and produce a single > 20-byte write (the old one-sided clamp let a 0/neg
+    // override fall through to partition()'s "one giant chunk" branch). Assert every packet stays
+    // <= 20 bytes for both a 0 and a negative override.
+    (:test)
+    function nonPositiveOverrideIsClamped(logger as Test.Logger) as Lang.Boolean {
+        var overrides = [0, -1, -18];
+        var cs = signedCases();
+        for (var o = 0; o < overrides.size(); o++) {
+            var ov = overrides[o] as Lang.Number;
+            for (var i = 0; i < cs.size(); i++) {
+                var msg = cs[i][0] as Message;
+                var txId = cs[i][1] as Lang.Number;
+                var packets = Packetize.packetize(msg, key(), txId, PUMP_TIME, true, ov);
+                for (var p = 0; p < packets.size(); p++) {
+                    var sz = packets[p].build().size();
+                    Test.assertMessage(
+                        sz <= MAX_WRITE,
+                        "override " + ov + " case " + i + " packet " + p + " = " + sz + " bytes (> " + MAX_WRITE + ")");
+                }
+            }
+        }
+        return true;
+    }
+
     // Reassembly invariance: the reassembled frame is chunk-size-INDEPENDENT. For each message the
     // capped (default) reassembly must equal (a) the reassembly of the clamped 40-override path and
     // (b) the reassembly of a genuinely different, finer segmentation (chunkSize=6). Since the cap
