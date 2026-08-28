@@ -41,6 +41,10 @@ class MainDelegate extends Ui.BehaviorDelegate {
             } else {
                 AppState.message = "Cancel failed — try again.";
             }
+            // Phase 20 (F2): ADD a transient toast for this NON-ack status feedback (additive — the
+            // persistent AppState.message error above is untouched, so BolusSendFailedTest still holds).
+            // The cancel Confirmation and any dose/alert-clear acknowledgment surface stay full Ui views.
+            Toast.show(Toast.cancelFeedback(dispatched));
             Ui.requestUpdate();
             return true;
         }
