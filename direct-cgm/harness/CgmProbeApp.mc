@@ -17,7 +17,9 @@ class CgmProbeApp extends Application.AppBase {
         _client.start();
     }
 
-    function onStop(state as Lang.Dictionary or Null) as Void {}
+    function onStop(state as Lang.Dictionary or Null) as Void {
+        if (_client != null) { _client.close(); }
+    }
 
     function onGlucose(m as Lang.Dictionary) as Void {
         lastGlucose = m[:glucose];
