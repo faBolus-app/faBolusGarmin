@@ -90,10 +90,13 @@ module Packetize {
         if (chunkSize == null) {
             chunkSize = determineMaxChunkSize(message);
         }
-        // Unconditional CIQ cap: even an explicit caller override cannot exceed MAX_CIQ_CHUNK_SIZE,
-        // so no path can produce a > 20-byte characteristic write (BLE-C1). This changes only the
-        // packet segmentation — the reassembled framed message + CRC is byte-identical.
-        if (chunkSize > MAX_CIQ_CHUNK_SIZE) {
+        // Unconditional CIQ cap (BLE-C1, WR-03): coerce ANY out-of-range override to the safe chunk
+        // size. The clamp is now two-sided — a null / zero / negative override (which partition()
+        // would otherwise treat as "one giant chunk" = the whole framed message + CRC in a single
+        // > 20-byte write) is clamped up to MAX_CIQ_CHUNK_SIZE, and an oversized override is clamped
+        // down. No path can produce a size <= 0 or > 18, so no > 20-byte characteristic write. This
+        // changes only the packet segmentation — the reassembled framed message + CRC is byte-identical.
+        if (chunkSize == null || chunkSize <= 0 || chunkSize > MAX_CIQ_CHUNK_SIZE) {
             chunkSize = MAX_CIQ_CHUNK_SIZE;
         }
         var chunked = partition(packetWithCRC, chunkSize);
@@ -109,8 +112,11 @@ module Packetize {
 
     // Splits `bytes` into consecutive slices of at most `size` bytes.
     function partition(bytes as Lang.ByteArray, size as Lang.Number) as Lang.Array<Lang.ByteArray> {
+        // WR-03 defense in depth: a non-positive size must NOT return the whole frame as one
+        // > 20-byte chunk. Fall back to the safe cap so every slice is bounded even if a caller
+        // reaches partition() directly with size <= 0.
         if (size <= 0) {
-            return [bytes] as Lang.Array<Lang.ByteArray>;
+            size = MAX_CIQ_CHUNK_SIZE;
         }
         var out = [] as Lang.Array<Lang.ByteArray>;
         var n = bytes.size();
