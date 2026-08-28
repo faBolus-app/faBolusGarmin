@@ -28,9 +28,30 @@ module ParityTest {
         return packetsHex(Packetize.packetize(msg, []b, txId, 0, false, null));
     }
 
-    function signedHex(msg as Message, txId as Lang.Number) as Lang.String {
-        var key = Bytes.fromAscii(PAIRING_CODE);
-        return packetsHex(Packetize.packetize(msg, key, txId, PUMP_TIME, true, null));
+    // BLE-C1 (Phase 21): Connect IQ hard-caps a characteristic write at 20 bytes, so the direct-pump
+    // engine now chunks CONTROL requests at <=18 bytes/packet — DIFFERENT packet segmentation from the
+    // upstream oracle (which chunks at 40). Packet-level byte-parity is therefore no longer achievable for
+    // the signed CONTROL requests under CIQ; the correct oracle-parity assertion is at the MESSAGE level:
+    // the packets REASSEMBLE to the byte-identical framed message + CRC the oracle produces (only the
+    // BLE segmentation differs). ChunkCapTest separately proves every packet is <=20 bytes. These two
+    // helpers reassemble MY (CIQ-capped) packets and the ORACLE's golden packets to compare frames.
+    function reassembleAll(packets as Lang.Array<Packet>) as Lang.ByteArray or Null {
+        var ra = new PacketReassembler();
+        var frame = null;
+        for (var i = 0; i < packets.size(); i++) { frame = ra.ingest(packets[i].build()); }
+        return frame;
+    }
+    function signedReassembled(msg as Message, txId as Lang.Number) as Lang.ByteArray or Null {
+        return reassembleAll(Packetize.packetize(msg, Bytes.fromAscii(PAIRING_CODE), txId, PUMP_TIME, true, null));
+    }
+    // Reassemble the oracle golden packets (each element = one packet's hex, the pre-CIQ 40-byte chunking)
+    // into the framed message. The oracle packets share MY packet framing ([packetsRemaining,txId]+chunk),
+    // so PacketReassembler ingests them identically.
+    function oracleReassembled(packetHexes as Lang.Array<Lang.String>) as Lang.ByteArray or Null {
+        var ra = new PacketReassembler();
+        var frame = null;
+        for (var i = 0; i < packetHexes.size(); i++) { frame = ra.ingest(Hex.decode(packetHexes[i])); }
+        return frame;
     }
 
     // ---- CRC-16 ----
@@ -124,34 +145,48 @@ module ParityTest {
 
     // ---- signed bolus flow ----
 
+    // BLE-C1 (Phase 21): the 5 signed CONTROL requests now assert MESSAGE-level oracle parity — MY
+    // CIQ-capped (<=18-byte-chunk) packets reassemble to the byte-identical framed message + CRC the
+    // oracle produces from its 40-byte-chunk packets. The oracle golden packet hex (unchanged — the
+    // pre-CIQ segmentation) is the reference; only the on-wire BLE segmentation differs (ChunkCapTest
+    // proves every packet is <=20 bytes). This preserves oracle-parity at the level the pump reassembles.
     (:test)
     function bolusPermissionRequestMatchesOracle(logger as Test.Logger) as Lang.Boolean {
-        Test.assertEqualMessage(signedHex(new BolusPermissionRequest(), 0),
-            "0000a20018bc4a831be223d1eae35cb8592e99e44467cbc8b836de2f2b1618", "BolusPermissionRequest");
+        Test.assertEqualMessage(
+            Hex.encode(signedReassembled(new BolusPermissionRequest(), 0)),
+            Hex.encode(oracleReassembled(["0000a20018bc4a831be223d1eae35cb8592e99e44467cbc8b836de2f2b1618"])),
+            "BolusPermissionRequest reassembled frame == oracle");
         return true;
     }
 
     (:test)
     function cancelBolusRequestMatchesOracle(logger as Test.Logger) as Lang.Boolean {
-        Test.assertEqualMessage(signedHex(new CancelBolusRequest(10650), 3),
-            "0003a0031c9a290000bc4a831b4d6002a7da3b65cb852610656f19aa5343a80fcbcd6c", "CancelBolusRequest");
+        Test.assertEqualMessage(
+            Hex.encode(signedReassembled(new CancelBolusRequest(10650), 3)),
+            Hex.encode(oracleReassembled(["0003a0031c9a290000bc4a831b4d6002a7da3b65cb852610656f19aa5343a80fcbcd6c"])),
+            "CancelBolusRequest reassembled frame == oracle");
         return true;
     }
 
     (:test)
     function bolusPermissionReleaseRequestMatchesOracle(logger as Test.Logger) as Lang.Boolean {
-        Test.assertEqualMessage(signedHex(new BolusPermissionReleaseRequest(10650), 4),
-            "0004f0041c9a290000bc4a831b413c8c34275a8da78ef2ac757a419a28762d7715ed84", "BolusPermissionReleaseRequest");
+        Test.assertEqualMessage(
+            Hex.encode(signedReassembled(new BolusPermissionReleaseRequest(10650), 4)),
+            Hex.encode(oracleReassembled(["0004f0041c9a290000bc4a831b413c8c34275a8da78ef2ac757a419a28762d7715ed84"])),
+            "BolusPermissionReleaseRequest reassembled frame == oracle");
         return true;
     }
 
-    // The crown jewel: a 1.0u standard bolus initiate, signed, byte-exact vs the oracle.
+    // The crown jewel: a 1.0u standard bolus initiate, signed, message-level byte-exact vs the oracle.
     (:test)
     function initiateBolusRequestMatchesOracle(logger as Test.Logger) as Lang.Boolean {
         var msg = new InitiateBolusRequest(1000, 42, 1, 0, 0, 0, 0, 0);
-        Test.assertEqualMessage(signedHex(msg, 9),
-            "01099e093de80300002a0000000100000000000000000000000000000000000000000000000000000000,0009bc4a831bd14b869bef2b177bbf71e52b32723bda389e5227539c",
-            "InitiateBolusRequest");
+        Test.assertEqualMessage(
+            Hex.encode(signedReassembled(msg, 9)),
+            Hex.encode(oracleReassembled([
+                "01099e093de80300002a0000000100000000000000000000000000000000000000000000000000000000",
+                "0009bc4a831bd14b869bef2b177bbf71e52b32723bda389e5227539c"])),
+            "InitiateBolusRequest reassembled frame == oracle");
         return true;
     }
 
@@ -159,9 +194,10 @@ module ParityTest {
     (:test)
     function dismissNotificationRequestMatchesOracle(logger as Test.Logger) as Lang.Boolean {
         var msg = new DismissNotificationRequest(10, 1, false);
-        Test.assertEqualMessage(signedHex(msg, 5),
-            "0005b8051e0a0000000100bc4a831b4785875052f8dccd01aecb2795d753a10ab76099d245",
-            "DismissNotificationRequest");
+        Test.assertEqualMessage(
+            Hex.encode(signedReassembled(msg, 5)),
+            Hex.encode(oracleReassembled(["0005b8051e0a0000000100bc4a831b4785875052f8dccd01aecb2795d753a10ab76099d245"])),
+            "DismissNotificationRequest reassembled frame == oracle");
         return true;
     }
 
