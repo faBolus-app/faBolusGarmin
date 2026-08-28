@@ -315,6 +315,18 @@ module AppState {
     (:background)
     var complicationDisplay as Lang.String = "numericColor";
 
+    // Phase 20 (F1, D-02): which pump-status fields fill the THREE user-assignable complication slots
+    // (ids 1..3, published alongside the fixed glucose id 0). Connect IQ caps an app at FOUR complications
+    // total, so only three slots exist; this phone-owned, watch-synced ORDERED list chooses which up-to-3
+    // of the four available fields (COMPLICATION_FIELDS) occupy them and in what order. DEFAULT = glucose
+    // (fixed) + IOB + reservoir + pump battery (all three slots filled) until the user re-assigns them on
+    // the phone. Sanitized on parse/restore (allowed tokens only, de-duped, capped at 3). Display only —
+    // never a dose input (C3).
+    (:background)
+    const COMPLICATION_FIELDS = ["iob", "reservoir", "battery", "basal"];
+    (:background)
+    var garminComplicationSlots as Lang.Array = ["iob", "reservoir", "battery"];
+
     // Load persisted layout at launch (getInitialView needs defaultScreen before any phone message).
     (:background)
     function loadPrefs() as Void {
@@ -335,6 +347,14 @@ module AppState {
         }
         var cdp = Storage.getValue("complicationDisplay");
         if (cdp instanceof Lang.String) { complicationDisplay = cdp; }
+        // Phase 20 (F1, D-02): restore the persisted complication-slot selection so a cold launch /
+        // background service publishes the last phone-synced set instead of reverting to the default until
+        // the next statusRead. Sanitized (allowed tokens, de-duped, cap 3); an empty result keeps the default.
+        var gcs = Storage.getValue("garminComplicationSlots");
+        if (gcs instanceof Lang.Array) {
+            var gcsSan = sanitizeComplicationSlots(gcs);
+            if (gcsSan.size() > 0) { garminComplicationSlots = gcsSan; }
+        }
         // GA-08: restore the staleness policy so a restart / background launch honors the phone-synced
         // value instead of silently reverting to the 6-min default until the next statusRead.
         var ss = Storage.getValue("staleSec");
@@ -445,6 +465,17 @@ module AppState {
             var v = list[i];
             if (v instanceof Lang.String && contains(allow, v) && !containsStr(out, v)) { out.add(v); }
         }
+        return out;
+    }
+
+    // Phase 20 (F1, D-02): sanitize the complication-slot field list — allowed tokens only, de-duped,
+    // preserving the phone-chosen order, then capped at the three available slots (ids 1..3).
+    (:background)
+    function sanitizeComplicationSlots(list as Lang.Array) as Lang.Array {
+        var s = sanitizeAgainst(list, COMPLICATION_FIELDS);
+        if (s.size() <= 3) { return s; }
+        var out = [];
+        for (var i = 0; i < 3; i += 1) { out.add(s[i]); }
         return out;
     }
 
@@ -1928,6 +1959,17 @@ module AppState {
                 if (detOrderSan.size() > 0) {
                     if (!sameArray(detailsOrder, detOrderSan)) { Storage.setValue("detailsOrder", detOrderSan); }
                     detailsOrder = detOrderSan;
+                }
+            }
+            // Phase 20 (F1, D-02): which pump-status fields fill the three complication slots, mirroring the
+            // detailsOrder array-setting idiom (sanitize against the allowed tokens, de-dupe, cap 3;
+            // change-detected persist). An empty result (all-garbage) is ignored so the safe default stands.
+            var slotsRaw = data["garminComplicationSlots"];
+            if (slotsRaw instanceof Lang.Array) {
+                var slotsSan = sanitizeComplicationSlots(slotsRaw);
+                if (slotsSan.size() > 0) {
+                    if (!sameArray(garminComplicationSlots, slotsSan)) { Storage.setValue("garminComplicationSlots", slotsSan); }
+                    garminComplicationSlots = slotsSan;
                 }
             }
             var chartRaw = data["watchChartRanges"];

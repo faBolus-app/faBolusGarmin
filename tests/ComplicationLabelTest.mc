@@ -51,4 +51,86 @@ module ComplicationLabelTest {
         AppState.glucoseUnit = prior;
         return true;
     }
+
+    // Phase 20 (F1, D-02): the four pump-status complication formatters. Each returns
+    // { "value" => Numeric or null, "label" => String }, precision matching DetailsView (f2 = %.2f, n0 =
+    // toString). Unknown reservoir/battery (-1 sentinel) render an honest "--" with a null numeric slot so
+    // no misleading number is published; iob/basal are always real values (0.0 = none, NOT unknown).
+    (:test)
+    function pumpStatusFieldFormatters(logger as Test.Logger) as Lang.Boolean {
+        var iob = BgComplication.iobField(2.35);
+        Test.assertEqualMessage(iob["label"], "2.35 U", "IOB label");
+        Test.assertMessage(iob["value"] != null, "IOB value present");
+
+        var resv = BgComplication.reservoirField(120.0);
+        Test.assertEqualMessage(resv["label"], "120.00 U", "reservoir label");
+        Test.assertMessage(resv["value"] != null, "reservoir value present");
+        var resvUnknown = BgComplication.reservoirField(-1.0);
+        Test.assertEqualMessage(resvUnknown["label"], "--", "reservoir unknown -> --");
+        Test.assertMessage(resvUnknown["value"] == null, "reservoir unknown -> null value (no misleading 0)");
+
+        var batt = BgComplication.batteryField(85);
+        Test.assertEqualMessage(batt["label"], "85%", "battery label");
+        Test.assertMessage(batt["value"] != null, "battery value present");
+        var battUnknown = BgComplication.batteryField(-1);
+        Test.assertEqualMessage(battUnknown["label"], "--", "battery unknown -> --");
+        Test.assertMessage(battUnknown["value"] == null, "battery unknown -> null value");
+
+        var basal = BgComplication.basalField(0.75);
+        Test.assertEqualMessage(basal["label"], "0.75 U/hr", "basal label");
+        var basalZero = BgComplication.basalField(0.0);
+        Test.assertEqualMessage(basalZero["label"], "0.00 U/hr", "basal 0.0 is a REAL value, not --");
+        Test.assertMessage(basalZero["value"] != null, "basal 0.0 value present");
+        return true;
+    }
+
+    // Task 3: on a cold launch / background service the not-yet-populated reservoir/battery start at their
+    // -1 unknown defaults and MUST publish "--" (never a misleading 0) until the first statusRead fills a
+    // real value. Pins the default-state honesty.
+    (:test)
+    function coldLaunchUnknownFieldsRenderDashes(logger as Test.Logger) as Lang.Boolean {
+        Test.assertEqualMessage(BgComplication.reservoirField(-1.0)["label"], "--", "default reservoir -> --");
+        Test.assertEqualMessage(BgComplication.batteryField(-1)["label"], "--", "default battery -> --");
+        return true;
+    }
+
+    function sr(extra as Lang.Dictionary) as Lang.Dictionary {
+        var d = { "kind" => "statusRead" };
+        var keys = extra.keys();
+        for (var i = 0; i < keys.size(); i += 1) { d[keys[i]] = extra[keys[i]]; }
+        return d;
+    }
+
+    // Phase 20 (F1, D-02): the phone-selectable complication-slot set. Connect IQ caps an app at 4
+    // complications, so glucose (fixed) + three assignable slots; a phone-owned ordered list picks which
+    // up-to-3 fields fill them. DEFAULT = IOB + reservoir + battery (glucose is the fixed id 0).
+    (:test)
+    function complicationSlotsSanitizeAndRoundTrip(logger as Test.Logger) as Lang.Boolean {
+        // Sanitizer: allowed tokens only, de-duped, capped at 3, order preserved.
+        var s1 = AppState.sanitizeComplicationSlots(["basal", "iob", "iob", "bogus", "battery", "reservoir"]);
+        Test.assertEqualMessage(s1.size(), 3, "capped at 3 slots");
+        Test.assertEqualMessage(s1[0], "basal", "order preserved (basal first)");
+        Test.assertEqualMessage(s1[1], "iob", "de-duped iob kept once");
+        Test.assertEqualMessage(s1[2], "battery", "garbage 'bogus' dropped, battery kept");
+        var s2 = AppState.sanitizeComplicationSlots(["bogus", "nope"]);
+        Test.assertEqualMessage(s2.size(), 0, "all-garbage -> empty (default stands)");
+
+        // Parse + persist + restore round-trip; an empty/garbage list keeps the safe default.
+        AppState.garminComplicationSlots = ["iob", "reservoir", "battery"];   // default
+        AppState.handle(sr({ "garminComplicationSlots" => ["battery", "basal", "iob"] }));
+        Test.assertEqualMessage(AppState.garminComplicationSlots.size(), 3, "adopted 3-slot selection");
+        Test.assertEqualMessage(AppState.garminComplicationSlots[0], "battery", "adopted order");
+        AppState.handle(sr({ "garminComplicationSlots" => ["bogus"] }));   // all-garbage
+        Test.assertEqualMessage(AppState.garminComplicationSlots[0], "battery", "garbage list ignored (keeps last)");
+
+        AppState.garminComplicationSlots = [];   // simulate cold launch
+        AppState.loadPrefs();
+        Test.assertEqualMessage(AppState.garminComplicationSlots[0], "battery", "restored from Storage");
+
+        // fieldForToken dispatches to the right formatter.
+        AppState.iob = 3.0;
+        Test.assertEqualMessage(BgComplication.fieldForToken("iob")["label"], "3.00 U", "token iob -> IOB formatter");
+        Test.assertEqualMessage(BgComplication.fieldForToken("bogus")["label"], "--", "unknown token -> blank");
+        return true;
+    }
 }

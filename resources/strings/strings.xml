@@ -5,4 +5,17 @@
     <string id="ComplicationLong">Blood Glucose</string>
     <string id="ComplicationShort">BG</string>
     <string id="ComplicationFaceIt">faBolus BG</string>
+    <!-- Phase 20 (F1, D-02): labels for the three user-assignable pump-status complication slots
+         (display only). The slot content (IOB / reservoir / pump battery / basal rate) is chosen by a
+         phone-owned setting synced to the watch; the config-menu label is a static ordinal (slot N = the
+         Nth field the user selected on the phone). -->
+    <string id="ComplicationSlot1Long">faBolus Pump Status 1</string>
+    <string id="ComplicationSlot1Short">PS1</string>
+    <string id="ComplicationSlot1FaceIt">faBolus PS1</string>
+    <string id="ComplicationSlot2Long">faBolus Pump Status 2</string>
+    <string id="ComplicationSlot2Short">PS2</string>
+    <string id="ComplicationSlot2FaceIt">faBolus PS2</string>
+    <string id="ComplicationSlot3Long">faBolus Pump Status 3</string>
+    <string id="ComplicationSlot3Short">PS3</string>
+    <string id="ComplicationSlot3FaceIt">faBolus PS3</string>
 </strings>

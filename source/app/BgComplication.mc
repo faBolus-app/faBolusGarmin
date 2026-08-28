@@ -30,6 +30,15 @@ module BgComplication {
     (:background)
     const KEY_EPOCH = "bgEpoch"; // unix sec the BG was taken (for 6-min staleness)
 
+    // Phase 20 (F1, D-02): the THREE user-assignable pump-status complication slots (ids 1..3), published
+    // alongside the fixed glucose complication (id 0). Connect IQ caps an app at FOUR complications total,
+    // so only three slots exist; a phone-owned, watch-synced setting (AppState.garminComplicationSlots)
+    // chooses WHICH of the four available fields (IOB/reservoir/battery/basal) fill them and in what order.
+    // Display ONLY — each reads a field AppState already tracks and is republished on every statusRead
+    // reply + background temporal event via publishFromState. Ids MUST match complications.xml.
+    (:background)
+    const COMP_SLOT_IDS = [1, 2, 3];
+
     // Latin/ASCII trend arrow published inside the VALUE string. Face It / published complication
     // strings must use Latin characters (A-Z, a-z, 0-9, punctuation) — Unicode arrow glyphs (↑ → …)
     // fail to render on many faces, which (together with the numeric-<range> bug) is why BG showed 0.
@@ -162,9 +171,104 @@ module BgComplication {
     function pushComplication(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean) as Void {
     }
 
+    // ===== Phase 20 (F1, D-02) — the four pump-status complications, display only =====
+    // Pure per-field formatters: each returns { "value" => Numeric or null, "label" => String }. The
+    // `value` is the numeric slot (Numeric when known; null when the field is unknown, so no misleading
+    // number is written); `label` is the honest text slot ("--" for an unknown -1 sentinel, mirroring the
+    // BG complication's staleness marker — a numeric slot structurally cannot render "--"). Precision
+    // matches DetailsView (f2 = %.2f, n0 = toString) so all Garmin surfaces agree. No Complications/Storage
+    // dependency ⇒ unit-testable in the P6 harness. NEVER a dose input (C3).
+    (:background)
+    function iobField(iob as Lang.Float) as Lang.Dictionary {
+        // IOB is always a real value (default 0.0 = no active insulin); no unknown sentinel.
+        return { "value" => iob, "label" => iob.format("%.2f") + " U" };
+    }
+    (:background)
+    function reservoirField(reservoir as Lang.Float) as Lang.Dictionary {
+        if (reservoir < 0.0) { return { "value" => null, "label" => "--" }; }   // -1 = unknown ⇒ honest "--"
+        return { "value" => reservoir, "label" => reservoir.format("%.2f") + " U" };
+    }
+    (:background)
+    function batteryField(battery as Lang.Number) as Lang.Dictionary {
+        if (battery < 0) { return { "value" => null, "label" => "--" }; }        // -1 = unknown ⇒ honest "--"
+        return { "value" => battery, "label" => battery.toString() + "%" };
+    }
+    (:background)
+    function basalField(basalRate as Lang.Float) as Lang.Dictionary {
+        // Basal is always a real value (0.0 = suspended/zero rate, NOT unknown).
+        return { "value" => basalRate, "label" => basalRate.format("%.2f") + " U/hr" };
+    }
+
+    // Map a complication-slot field token (AppState.garminComplicationSlots) to its {value,label} pair.
+    // An unrecognized token yields a blank slot ("--", null value) — defensive; the token list is already
+    // sanitized against AppState.COMPLICATION_FIELDS before it reaches here.
+    (:background)
+    function fieldForToken(token as Lang.String) as Lang.Dictionary {
+        if (token.equals("iob")) { return iobField(AppState.iob); }
+        if (token.equals("reservoir")) { return reservoirField(AppState.reservoir); }
+        if (token.equals("battery")) { return batteryField(AppState.battery); }
+        if (token.equals("basal")) { return basalField(AppState.basalRate); }
+        return { "value" => null, "label" => "--" };
+    }
+
+    // Publish one field complication with the SAME two-step (value-only then enrichment) try/catch as
+    // pushComplication, each id independent so one unsupported/unowned field can't sink the others. An
+    // unknown field (value == null) writes ONLY the "--" shortLabel — the numeric slot is left untouched
+    // rather than a misleading 0 (the documented BG-complication structural limit). Annotation-split so a
+    // device lacking the Complications module compiles to the no-op stub below.
+    (:background, :complications)
+    function pushField(id as Lang.Number, field as Lang.Dictionary) as Void {
+        var v = field["value"];
+        var label = field["label"];
+        // Step 1 — value-only (only when known): the field every firmware accepts.
+        if (v != null) {
+            try {
+                Toybox.Complications.updateComplication(id, { :value => v });
+            } catch (e) {
+                return;   // id not registered / unsupported — nothing further to try.
+            }
+        }
+        // Step 2 — enrichment: the honest shortLabel (+ value when known).
+        try {
+            var params = { :shortLabel => label };
+            if (v != null) { params[:value] = v; }
+            Toybox.Complications.updateComplication(id, params);
+        } catch (e) {
+            if (v != null) {
+                try { Toybox.Complications.updateComplication(id, { :value => v }); } catch (e2) {}
+            }
+        }
+    }
+
+    // No-op stub for devices without the Complications module (excludeAnnotations = complications).
+    (:background, :nocomplications)
+    function pushField(id as Lang.Number, field as Lang.Dictionary) as Void {
+    }
+
+    // Publish the three assignable pump-status slots from AppState per the phone-synced selection
+    // (garminComplicationSlots). Slot i (id i+1) shows the i-th selected field; a slot with no assigned
+    // field (fewer than 3 selected) is blanked to "--" so a de-selected field's stale value can't linger.
+    // Each id is guarded independently in pushField; unknown reservoir/battery render "--". Display only.
+    (:background)
+    function publishFieldsFromState() as Void {
+        var slots = AppState.garminComplicationSlots;
+        for (var i = 0; i < COMP_SLOT_IDS.size(); i += 1) {
+            var field;
+            if (i < slots.size()) {
+                field = fieldForToken(slots[i] as Lang.String);
+            } else {
+                field = { "value" => null, "label" => "--" };   // unassigned slot: honest blank
+            }
+            pushField(COMP_SLOT_IDS[i], field);
+        }
+    }
+
     (:background)
     function publishFromState() as Void {
         remember(AppState.glucose, AppState.trend, AppState.readingEpoch);
         publish(AppState.glucose, AppState.trend, AppState.readingEpoch);
+        // F1 (D-02): refresh the four pump-status complications alongside glucose on every publish
+        // (statusRead reply + background temporal event), mirroring the glucose publish.
+        publishFieldsFromState();
     }
 }
