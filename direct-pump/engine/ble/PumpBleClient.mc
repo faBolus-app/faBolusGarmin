@@ -138,6 +138,12 @@ class PumpBleClient extends Btle.BleDelegate {
         try {
             if (state == Btle.CONNECTION_STATE_CONNECTED) {
                 _device = device;
+                // WR-04 recovery seam: a fresh connection clears any latched terminal state so the
+                // subscribe CCCD ops enqueued below can be driven. Without this, once _failClosed
+                // latches terminal the client is bricked across reconnect until the app restarts.
+                _opQueue.reset();
+                _ready = false;
+                _pendingSubscribes = 0;
                 _state("connected; bonding");
                 try {
                     device.requestBond();
@@ -184,10 +190,26 @@ class PumpBleClient extends Btle.BleDelegate {
     }
 
     function onCharacteristicWrite(characteristic as Btle.Characteristic, status as Btle.Status) as Void {
+        // FAIL CLOSED (BLE-M1, CR-01): a GATT write rejected by the peer/stack is reported
+        // ASYNCHRONOUSLY here with a non-success status (not as a synchronous throw). Advancing the
+        // queue on such a status drops a failed CONTROL packet and sends the next segment — the pump
+        // then reassembles a message missing a segment (CRC-rejected) while the app believes it
+        // succeeded. Only a success status may advance the queue.
+        if (status != Btle.STATUS_SUCCESS) {
+            _failClosed("char write status " + status.format("%d"));
+            return;
+        }
         opDone();
     }
 
     function onDescriptorWrite(descriptor as Btle.Descriptor, status as Btle.Status) as Void {
+        // FAIL CLOSED (BLE-M1, CR-01): a failed CCCD write arrives here with a non-success status.
+        // Decrementing _pendingSubscribes / declaring "ready" on failure would fire onReady() with a
+        // subscription that was never established — silent loss of pump notifications. Gate on status.
+        if (status != Btle.STATUS_SUCCESS) {
+            _failClosed("cccd write status " + status.format("%d"));
+            return;
+        }
         if (_pendingSubscribes > 0) {
             _pendingSubscribes -= 1;
             if (_pendingSubscribes == 0 && !_ready) {
@@ -210,6 +232,9 @@ class PumpBleClient extends Btle.BleDelegate {
         allowInsulin as Lang.Boolean
     ) as Void {
         if (_device == null) { _error("send with no device"); return; }
+        // WR-04: do not accrete ops after a latched terminal error. hasWork() ignores them (fail
+        // closed), so enqueuing here would be an unbounded silent leak with no delivery. Reject.
+        if (_opQueue.terminalError()) { _error("send after terminal error"); return; }
         var ch = characteristicFor(message.characteristic);
         if (ch == null) { _error("no characteristic for message"); return; }
         var packets = Packetize.packetize(message, authKey, _txIds.nextThenIncrement(), pumpTimeSinceReset, allowInsulin, null);
@@ -334,6 +359,9 @@ class PumpBleClient extends Btle.BleDelegate {
             Btle.setDelegate(null as Btle.BleDelegate);
         } catch (e) {
         }
+        // IN-02: drop the stale Device handle on teardown (the CGM twin nulls _seq). setDelegate(null)
+        // remains the unverified runtime release idiom (owner on-device checkpoint), left as-is.
+        _device = null;
     }
 
     private function characteristicFor(charEnum as Lang.Number) as Btle.Characteristic or Null {
