@@ -39,8 +39,7 @@ module EatingImuEnvelope {
     // Quantizes a raw sample-major Float window (length n*ch) into a packed int16 ByteArray (n*ch*2
     // bytes, little-endian pairs) using CHANNEL_SCALES[i % ch] per element — the exact inverse of
     // 19-05's GarminImuWindowDecode.decodeV2. ByteArray element reads/writes are SIGNED (a 0xFF byte
-    // reads back as -1), so every byte is masked with `& 0xFF` on write — mirrors the existing
-    // little-endian idiom in direct-pump/engine/protocol/Bytes.mc (toUint16/readUint16). Fail-safe:
+    // reads back as -1), so every byte is masked with `& 0xFF` on write. Fail-safe:
     // EatingSense always hands a full n*ch window in production, but a SHORT/empty window (e.g. a
     // test double's []) zero-fills the missing tail rather than throwing an Array Out Of Bounds Error
     // — an unguarded index here used to escape EVEN a surrounding try/catch in this SDK/simulator (see

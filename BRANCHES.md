@@ -1,6 +1,6 @@
 # Branch model, promotion, and the experimental gate
 
-The canonical branch-governance document for all three code repos — **faBolus**, **PumpX2Kit**, and
+The canonical branch-governance document for all three code repos — **faBolus**, **TandemKit**, and
 **faBolusGarmin** — lives in **faBolus** and governs this repo too:
 
 **→ [`faBolus/BRANCHES.md`](https://github.com/faBolus-app/faBolus/blob/main/BRANCHES.md)**

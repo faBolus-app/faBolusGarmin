@@ -47,9 +47,8 @@ one of *two* confirmations.
   - **Button** devices: **UP/DOWN** adjust the dose, **MENU** switches Units/Carbs, **START**
     delivers; confirm is a deliberate **two-button hold** (hold UP to arm, then hold START to
     deliver). No on-screen cursor.
-- `source/app/RemoteComm` — a transport **router** behind one `send(cmd)` seam: **phone-relay**
-  (default) or **direct-to-pump**. The same command dicts flow either way, so the UI is
-  transport-agnostic.
+- `source/app/RemoteComm` — phone-relay send behind one `send(cmd)` seam. Direct-to-pump is **not**
+  in this tree (preservation branches only).
 
 Beyond the remote, the repo also builds two more Connect IQ surfaces from the same BG feed:
 - a **glance** (compact BG in the glance carousel) — built into the app (`FaBolusGlanceView`, reads
@@ -60,22 +59,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md#add-a-watch-face-or-another-connect-iq-app
 and extending these. (A standalone watch-face app that consumed the complication previously lived on
 `main`; it has been removed and now lives only on the `experimental` branch.)
 
-### Experimental: direct-to-pump (Tandem)
-An optional engine lets the watch talk **directly** to a Tandem pump over BLE with no phone — a full
-Monkey C reimplementation of the pump protocol / auth / BLE, **byte-exact vs the pumpX2 `cliparser`
-oracle** (31/31 unit tests). This path **is** Tandem-specific and is **paused / compile-verified
-only**, pending on-hardware validation. It lives under `direct-pump/`, wired but dormant behind the
-same `RemoteComm` seam; the default host-agnostic phone-relay path does not use it.
-
-### Experimental: direct-to-watch CGM (Dexcom G7)
-An optional engine lets the watch read a **Dexcom G7 / ONE+** glucose value **directly over BLE** as
-a failover when the phone is out of range — a passive listener (it never authenticates, so it can't
-disconnect the official app), with the G7 message decoder ported from the vendored Swift
-`G7SensorKit`. It lives under `direct-cgm/` and is **paused / compile-verified only**
-(`monkeyc -f direct-cgm.jungle …`), pending on-hardware validation; it is **not** in the shipping
-build and not yet wired into `AppState.glucose`. See `direct-cgm/DIRECT_CGM_STATUS.md`. (The
-shipping remote already shows failover glucose whenever the phone relays it.) The Apple Watch
-equivalent — direct G7 BLE when the iPhone is unreachable — is live in the `faBolus` repo.
+Direct-to-pump BLE and direct-to-watch CGM engines are **not** on `main`. They live only on the
+`dev/direct-ble` / `experimental` preservation branches.
 
 ## Build & test
 ```
@@ -85,17 +70,16 @@ monkeyc -f monkey.jungle -o bin/faBolusGarmin.prg -y developer_key.der -d venu3s
 monkeyc -f test.jungle -o bin/faBolusGarmin-test.prg -y developer_key.der -d venu3s --unit-test -w
 monkeydo bin/faBolusGarmin-test.prg venu3s -t
 ```
-Golden oracle vectors live in `tests/golden_vectors.txt`; regenerate with `tools/gen_golden.sh`
-(needs JDK 14+ and the prebuilt `cliparser.jar`). Keep the Monkey C `RemoteCommand` mirror in sync
-with `faBolus/schema/command.schema.json` — see [CONTRIBUTING.md](CONTRIBUTING.md).
+Keep the Monkey C contract mirror in sync with `faBolus/schema/command.schema.json` — see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Related
-- [`faBolus`](https://github.com/faBolus-app/faBolus) — the iPhone / Apple Watch host and the
+- [`faBolus`](https://github.com/faBolus-app/faBolus) — the iPhone host and the
   contract (`schema/`) this remote speaks; its
   [ARCHITECTURE.md](https://github.com/faBolus-app/faBolus/blob/master/ARCHITECTURE.md) explains how
   remotes and hosts fit together and how to host the remotes from another app.
 - [`TandemKit`](https://github.com/faBolus-app/TandemKit) — the Swift Tandem protocol / auth / BLE
-  core; the reference the direct-pump engine ports from.
+  core used by the iPhone host.
 
 ## License & trademark
 

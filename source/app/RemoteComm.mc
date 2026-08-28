@@ -11,8 +11,7 @@ using Toybox.WatchUi as Ui;
 // schema by scripts/check-schema-drift.sh in CI. Commands are sent to the iPhone host over the
 // Connect IQ mobile SDK; the phone runs the confirm interlock and dispatches to the pump backend.
 //
-// (A direct-to-pump transport was prototyped behind a router here; it's paused and lives under
-// direct-pump/. This is the shipping phone-relay version.)
+// Phone-relay only on main. A direct-to-pump prototype is not in this tree.
 module RemoteComm {
     (:background)
     const SCHEMA_VERSION = 1;
@@ -83,7 +82,7 @@ module RemoteComm {
     }
 
     // Unit-test seam (mirrors testSuppressTransmit/testPhoneReachable above). Forces dismissAlert() to
-    // throw before it builds its dict — used by tests/RelayResilienceTest.mc's Test 1 (Phase 22 retarget)
+    // throw before it builds its dict — used by tests/RelayResilienceTest.mc's Test 1
     // to prove pollTick's dismiss-retry try/catch (FaBolusApp.mc) never lets a throw skip
     // scheduleNextPoll(), the loop's only re-arm path (C5-01/CX-G-05). Never assigned outside the unit
     // suite; false is the shipping default, so dismissAlert()'s returned dict shape is UNCHANGED in

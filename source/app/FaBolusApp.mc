@@ -23,14 +23,14 @@ using Toybox.Lang;
 // annotation is the minimal, correct scope: only the two override methods that actually RUN in the
 // restricted contexts carry the tag; everything else here stays unannotated and reachable only from the
 // normal foreground entry points. (typecheck -l2/-l3 still flags this class's OTHER methods as
-// "implicitly added to the background process" — a known, harmless SDK-compiler quirk that pre-dates
-// this plan: the App class already had (:background) declarations elsewhere (BgServiceDelegate/
-// BgCommListener) before 19-02, so the compiler conservatively scans the whole class; none of the
-// flagged symbols there are part of the REAL bg/glance call graph — see 19-02-SUMMARY.md.)
+// "implicitly added to the background process" — a known, harmless SDK-compiler quirk: the App class
+// already had (:background) declarations elsewhere (BgServiceDelegate/BgCommListener), so the compiler
+// conservatively scans the whole class; none of the flagged symbols there are part of the REAL
+// bg/glance call graph.)
 class FaBolusApp extends App.AppBase {
     private var _timer as Timer.Timer?;
     // Null until the phone sends the corresponding toggle (handlePhoneData) — see initialize()
-    // below (19-02, Task 2): NOT built eagerly, so a glance/background launch never pulls in EatingRelay
+    // below: NOT built eagerly, so a glance/background launch never pulls in EatingRelay
     // (and its EatingSense barrel) at all.
     private var _eating as EatingRelay?;   // wrist eating-sensing relay (phone-gated)
     // R2-19: self-rescheduling poll state. `_pollOutstanding` is true between sending a statusRead and its
@@ -132,7 +132,7 @@ class FaBolusApp extends App.AppBase {
         } catch (e) {
             // Background not permitted on this device/config — foreground updates still work.
         }
-        // Phase 20 (R2, D-04): ALSO register for event-driven phone-app-message push-wake (API 3.2.0), so
+        // Also register for event-driven phone-app-message push-wake (API 3.2.0), so
         // the phone can wake the closed-app background service immediately on a new CGM value / critical
         // alert (BgServiceDelegate.onPhoneAppMessage) instead of waiting for the next ~5-min temporal poll.
         // Additive to the temporal event above (both stay registered). Capability + try/catch guarded so a
@@ -300,7 +300,7 @@ class FaBolusApp extends App.AppBase {
             // views). Anything beyond the bound is simply left "new" — it is picked up by the NEXT
             // notifyNewAlerts() call, never dropped.
             var toPush = AppState.capAlertPushes(newAlerts);
-            // Phase 20 (R1/R4/F3, D-01): the watch alert output is now driven by the phone-synced,
+            // The watch alert output is driven by the phone-synced,
             // fail-closed alert-intensity gate (AppState.alertActionFor) — NOT a hardcoded vibrate. Resolve
             // the batch's most-severe tier + the device's vibrateOn/doNotDisturb state, then vibrate/tone/
             // backlight ONLY as the gate permits. DEFAULT is vibration-only for every tier; nothing audible
@@ -351,7 +351,7 @@ class FaBolusApp extends App.AppBase {
         AppState.saveSeenAlerts(AppState.reconciledSeenAlerts(presented));
     }
 
-    // Phase 20 (F3): turn a pure haptic pattern ([[dutyCyclePct, durationMs], ...] from
+    // Turn a pure haptic pattern ([[dutyCyclePct, durationMs], ...] from
     // AppState.vibePatternFor) into the Attention.VibeProfile array Attention.vibrate expects. This is the
     // ONLY place a VibeProfile is constructed — the severity→pattern decision stays pure + unit-testable in
     // AppState; only this thin builder touches Attention.

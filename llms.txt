@@ -1,23 +1,17 @@
 # faBolusGarmin — LLM guide
 
-> The Garmin (Connect IQ / Monkey C) remote for faBolus. It's a thin remote: it relays confirmed
-> bolus/status/control commands to the iPhone host over the Connect IQ transport (the phone owns the
-> pump). A separate experimental `direct-pump/` engine talks to the pump directly and is the most
-> safety-critical code. Experimental, not FDA-cleared.
+> Garmin (Connect IQ / Monkey C) remote for faBolus. Thin remote: it relays confirmed bolus / status /
+> control commands to the iPhone host over Connect IQ. The phone owns the pump. Experimental, not
+> FDA-cleared.
 
-This file is intentionally thin (a map, not a manual) to avoid drifting out of sync. For the real
-working guidance, use:
+Thin map so it does not drift. Working guide: [`AGENTS.md`](AGENTS.md).
 
-- **`AGENTS.md`** — canonical working guide: the `source/` layout + jungles/manifests/devices, the
-  command-mirror rule, adding a screen, and conventions.
-- **`README.md`** — architecture, supported devices, and the `direct-pump` / `direct-cgm` status.
-- **`docs/STORE-BUILDS.md`** — authoritative build / sign / publish steps (sideload key + both store
-  listings; `monkeyc` lives in the Connect IQ SDK's `bin/`).
-- **`docs/SECURITY.md`** — remote-bolus threat notes: the open GA-01 gesture-proof item (bench/product-
-  gated) + the controls (idempotency ledger, divergence guard, inbound validation, child/read-only) that
-  already mitigate its sub-threats.
-- Contract: the Monkey C `RemoteCommand` mirrors faBolus's `schema/command.schema.json` (source of
-  truth); run `scripts/check-schema-drift.sh` after changing fields.
+- **`README.md`** — architecture and the venu3s device floor.
+- **`docs/STORE-BUILDS.md`** — sideload and store `.iq` builds.
+- **`docs/SECURITY.md`** — remote-bolus notes (GA-01 is open; do not call the watch gesture one of
+  two confirmations).
+- Contract: Monkey C `RemoteCommand` mirrors faBolus `schema/command.schema.json`. Run
+  `scripts/check-schema-drift.sh` after field changes.
 
-Match the phone's command semantics exactly — the phone is the authority; note anything unverified
-on-hardware.
+No `direct-pump/` or `direct-cgm/` on `main`. Sibling protocol repo is `../TandemKit`.
+The phone is the authority; note anything unverified on-hardware.

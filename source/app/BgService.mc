@@ -38,11 +38,9 @@ class BgServiceDelegate extends System.ServiceDelegate {
             // whether a reply arrived — see the onTemporalEvent try/catch below, which exits on any
             // failure). This is the ACCEPTED INTERIM best-effort bound: a reply that lands after the
             // window closes is simply missed (no crash, no stuck service — the next ~5-min temporal
-            // event tries again). The documented, more-robust mechanism is
-            // Background.registerForPhoneAppMessageEvent (API 3.2.0), a push-wake callback that doesn't
-            // depend on the service's own bounded runtime — implementing THAT is Phase 20 R2's job, not
-            // this plan's (per D-03, this plan documents the bound rather than double-implementing the
-            // push-wake).
+            // event tries again). The more-robust push-wake is
+            // Background.registerForPhoneAppMessageEvent (onPhoneAppMessage below), which doesn't
+            // depend on the service's own bounded runtime.
             Comm.registerForPhoneAppMessages(method(:onPhoneMessage));
             // G-L2: register for inbound delivery errors where the device/firmware supports it (see
             // FaBolusApp.onStart's matching registration + comment for the `has` capability-guard
@@ -92,11 +90,11 @@ class BgServiceDelegate extends System.ServiceDelegate {
         Background.exit(null);
     }
 
-    // Phase 20 (R2, D-04): event-driven push-wake. When the app is CLOSED and the phone pushes a fresh
+    // Event-driven push-wake. When the app is CLOSED and the phone pushes a fresh
     // status (GarminRemoteBridge on a new CGM value / critical alert), the system wakes THIS background
     // service via Background.registerForPhoneAppMessageEvent (registered in FaBolusApp.registerBackground)
     // and delivers the pushed message here — refreshing the wrist immediately instead of waiting for the
-    // next ~5-min temporal poll. SUBSUMES Phase-19 finding G-M2. This is a FRESH service process, so its
+    // next ~5-min temporal poll. This is a FRESH service process, so its
     // AppState starts at compile-time defaults: restore the persisted prefs FIRST (mirrors
     // onTemporalEvent), then route the push through the SAME correlate→handle→publish→surface→exit path as
     // onPhoneMessage. A push-wake sent no request (mintedReqId == null) so isHandleablePush accepts a

@@ -15,9 +15,9 @@ class DetailsView extends Ui.View {
         return v < 0 ? "--" : v.toString();
     }
 
-    // Phase 09.15 T1-1 (D-01/D-08): Tandem's own zone word, capitalized exactly as the UI-SPEC
-    // Copywriting Contract specifies — an explicit literal table (never a runtime case-transform),
-    // so an out-of-set token can only ever fall through to "" and never render (D-06 guardrail #6).
+    // Tandem's own zone word, capitalized exactly as the UI-SPEC Copywriting Contract specifies —
+    // an explicit literal table (never a runtime case-transform), so an out-of-set token can only
+    // ever fall through to "" and never render.
     private function ciqZoneWord(token as Lang.String) as Lang.String {
         if (token.equals("increases")) { return "Increases"; }
         if (token.equals("decreases")) { return "Decreases"; }
@@ -27,10 +27,9 @@ class DetailsView extends Ui.View {
         return "";
     }
 
-    // Phase 09.15 T1-2 (D-08, epoch-not-age convention) — elapsed minutes computed HERE at draw time
-    // from the immutable source epoch, never transmitted as a pre-computed age (mirrors
-    // AppState.ageMinutes()'s identical pattern for the glucose reading). Clamped to 0 for a
-    // clock-skew/future stamp rather than a negative elapsed time.
+    // Elapsed minutes computed HERE at draw time from the immutable source epoch, never transmitted
+    // as a pre-computed age (mirrors AppState.ageMinutes()'s identical pattern for the glucose
+    // reading). Clamped to 0 for a clock-skew/future stamp rather than a negative elapsed time.
     private function ciqSuspendElapsedMinutes() as Lang.Number {
         var start = AppState.ciqSuspendStartEpochSec;
         if (start == null) { return 0; }
@@ -38,10 +37,9 @@ class DetailsView extends Ui.View {
         return mins < 0 ? 0 : mins;
     }
 
-    // Phase 09.15 T1-3/T1-4 (D-08, epoch-not-age convention) — elapsed minutes computed HERE at draw
-    // time from an immutable source epoch, never transmitted as a pre-computed age (mirrors
-    // ciqSuspendElapsedMinutes's identical pattern, kept as a separate generic helper so that
-    // existing function stays byte-unchanged). Clamped to 0 for a clock-skew/future stamp.
+    // Elapsed minutes computed HERE at draw time from an immutable source epoch, never transmitted
+    // as a pre-computed age (mirrors ciqSuspendElapsedMinutes). Clamped to 0 for a clock-skew/future
+    // stamp.
     private function elapsedMinutesSince(epoch as Lang.Number?) as Lang.Number {
         if (epoch == null) { return 0; }
         var mins = (Time.now().value() - (epoch as Lang.Number)) / 60;
@@ -53,9 +51,8 @@ class DetailsView extends Ui.View {
     private function detailRow(id as Lang.String) as Lang.String? {
         if (id.equals("iob")) { return "Active Insulin: " + f2(AppState.iob) + " U"; }
         if (id.equals("reservoir")) { return "Reservoir: " + f2(AppState.reservoir) + " U"; }
-        // Phase 09.27-03 (D-03/D-04/D-05): append a Charging marker ONLY when the phone's most-recent
-        // statusRead positively reported it (fail-closed AppState.batteryCharging) — never inferred
-        // from a rising percent, and the plain string otherwise (byte-identical to before this phase).
+        // Append a Charging marker ONLY when the phone's most-recent statusRead positively reported
+        // it (fail-closed AppState.batteryCharging) — never inferred from a rising percent.
         if (id.equals("battery")) {
             return "Battery: " + n0(AppState.battery) + "%" + (AppState.batteryCharging ? " · Charging" : "");
         }
@@ -65,9 +62,8 @@ class DetailsView extends Ui.View {
         if (id.equals("isf")) { return "ISF: " + (AppState.isf > 0 ? AppState.formatMgdl(AppState.isf) + " " + AppState.isfUnitLabel() : "--"); }
         if (id.equals("target")) { return "Target: " + (AppState.targetBg > 0 ? AppState.formatMgdl(AppState.targetBg) + " " + AppState.glucoseUnitLabel() : "--"); }
         if (id.equals("maxBolus")) { return "Max bolus: " + f2(AppState.maxUnits) + " U"; }
-        // Phase 09.15 T1-1 (D-01/D-08): a PRINTED word (Garmin has no VoiceOver, D-08 Garmin rule) —
-        // row omitted entirely (never "--") unless Control-IQ is running and the zone is a known
-        // token, never a stale/fabricated word (D-06 guardrail #5/#6).
+        // A PRINTED word (Garmin has no VoiceOver) — row omitted entirely (never "--") unless
+        // Control-IQ is running and the zone is a known token, never a stale/fabricated word.
         if (id.equals("ciqZone")) {
             if (AppState.controlIQEnabled && AppState.ciqZone != null) {
                 var word = ciqZoneWord(AppState.ciqZone as Lang.String);
@@ -75,9 +71,8 @@ class DetailsView extends Ui.View {
             }
             return null;
         }
-        // Phase 09.15 T1-2 (D-08/D-09.1, fail-closed cause-attribution) — a PRINTED row (Garmin has no
-        // VoiceOver, D-08 Garmin rule), shown ONLY when the pump's OWN control-state has confirmed the
-        // ACTIVE suspend is Control-IQ's. D-09.1 BINDING: Garmin has no generic deliverySuspended wire
+        // A PRINTED row (Garmin has no VoiceOver), shown ONLY when the pump's OWN control-state has
+        // confirmed the ACTIVE suspend is Control-IQ's. Garmin has no generic deliverySuspended wire
         // signal to fall back to, so an absent/false attribution renders the row entirely ABSENT —
         // never a fabricated "Control-IQ paused" claim, and never a plain "Basal" row this watch never
         // had in the first place. "CIQ" (not the full "Control-IQ") to stay within the ~28-char
@@ -91,9 +86,9 @@ class DetailsView extends Ui.View {
             }
             return null;
         }
-        // Phase 09.15 T1-3 (D-01/D-08, SP-5 fail-closed) — a PRINTED row (Garmin has no VoiceOver),
-        // omitted entirely (never "--") unless an auto-correction has actually been seen — no recent
-        // auto-correction is the common/expected case, not an error (matches ciqZone's convention).
+        // A PRINTED row (Garmin has no VoiceOver), omitted entirely (never "--") unless an
+        // auto-correction has actually been seen — no recent auto-correction is the common/expected
+        // case, not an error (matches ciqZone's convention).
         if (id.equals("autoCorrection")) {
             if (AppState.lastAutoCorrectionEpochSec != null) {
                 var mins = elapsedMinutesSince(AppState.lastAutoCorrectionEpochSec);
@@ -101,10 +96,9 @@ class DetailsView extends Ui.View {
             }
             return null;
         }
-        // Phase 09.15 T1-4 (D-01/D-08) — remote MARKER only (no on-watch/Garmin timeline). "CIQ" (not
-        // the full "Control-IQ") to stay within the ~28-char DetailsView.detailRow budget at
-        // FONT_XTINY, matching the ciqSuspend row's precedent. Never speculates WHY (D-06
-        // guardrail #6).
+        // Remote MARKER only (no on-watch/Garmin timeline). "CIQ" (not the full "Control-IQ") to stay
+        // within the ~28-char DetailsView.detailRow budget at FONT_XTINY, matching the ciqSuspend
+        // row's precedent. Never speculates WHY.
         if (id.equals("couldNotDeliver")) {
             if (AppState.ciqLastCouldNotDeliverEpochSec != null) {
                 var mins = elapsedMinutesSince(AppState.ciqLastCouldNotDeliverEpochSec);
@@ -112,17 +106,17 @@ class DetailsView extends Ui.View {
             }
             return null;
         }
-        // Phase 09.15 T1-8 (D-03, D-09.4 TEXT-ONLY — no drawn bar) — the honest "% of your configured
-        // max basal rate" text row, computed LOCALLY from AppState.basalRate/maxBasalUnitsPerHour
-        // (D-08: never a pre-rendered percentage on the wire). Row omitted entirely (never "0%"/"--")
-        // when the configured max is unknown/absent (D-03(v) fail-closed) — mirrors ciqZone's
-        // row-absent convention. The label ALWAYS contains "Basal" and ALWAYS shows both the current
-        // and configured max U/hr alongside the % (D-03(i)/(ii)) — this is faBolus's OWN construct,
-        // Tandem ships no such gauge, NEVER a Control-IQ figure. "%.2f" (not "%.0f") to match the
-        // Copywriting Contract's exact U/hr precision; typical values ("Basal 0.85/1.60 U/hr · 53%",
-        // 26 chars) hold well within the ~28-char FONT_XTINY budget — only the extreme, unrealistic
-        // edge of current==max==the pump's absolute ceiling (15.00 U/hr) reaches 27-29 chars, matching
-        // the ciqSuspend row's own documented over-budget precedent above.
+        // TEXT-ONLY — no drawn bar. The honest "% of your configured max basal rate" text row,
+        // computed LOCALLY from AppState.basalRate/maxBasalUnitsPerHour (never a pre-rendered
+        // percentage on the wire). Row omitted entirely (never "0%"/"--") when the configured max is
+        // unknown/absent (fail-closed) — mirrors ciqZone's row-absent convention. The label ALWAYS
+        // contains "Basal" and ALWAYS shows both the current and configured max U/hr alongside the %
+        // — this is faBolus's OWN construct, Tandem ships no such gauge, NEVER a Control-IQ figure.
+        // "%.2f" (not "%.0f") to match the Copywriting Contract's exact U/hr precision; typical
+        // values ("Basal 0.85/1.60 U/hr · 53%", 26 chars) hold well within the ~28-char FONT_XTINY
+        // budget — only the extreme, unrealistic edge of current==max==the pump's absolute ceiling
+        // (15.00 U/hr) reaches 27-29 chars, matching the ciqSuspend row's own documented over-budget
+        // precedent above.
         if (id.equals("maxBasal")) {
             var fraction = AppState.maxBasalFraction();
             if (fraction == null) { return null; }

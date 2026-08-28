@@ -1,7 +1,7 @@
 using Toybox.WatchUi as Ui;
 using Toybox.Lang;
 
-// Phase 20 (F2): transient, NON-acknowledgment feedback via WatchUi.showToast (API 3.4.0, venu3s) — a
+// Transient, NON-acknowledgment feedback via WatchUi.showToast (API 3.4.0, venu3s) — a
 // lighter surface than a full view push for status-only messages. Capability-guarded (`Ui has :showToast`)
 // with a graceful no-op fallback on older firmware, where the call site's existing AppState.message already
 // carries any persistent error. A toast NEVER replaces an acknowledgment-required surface — a dose confirm
