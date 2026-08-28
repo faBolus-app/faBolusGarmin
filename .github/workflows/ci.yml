@@ -41,10 +41,17 @@ jobs:
           set -euo pipefail
           WANT="${{ github.head_ref || github.ref_name }}"
           REPO="https://github.com/faBolus-app/faBolus.git"
-          if [ -n "$WANT" ] && git ls-remote --exit-code --heads "$REPO" "$WANT" >/dev/null 2>&1; then
+          # 2026-08-27: `experimental` is EXEMPT from branch-matching. faBolus `experimental` is a stale,
+          # 344-commit-behind abandoned integration branch whose command.schema.json predates the modern
+          # wire keys (Phase 14 supportsDismissAck/rawAlerts, Phase 20 alertIntensityMode/garmin-
+          # ComplicationSlots/…), so matching it produced a FALSE schema drift for this (refreshed) Garmin
+          # experimental integration branch. The authoritative current contract is faBolus `main`, so
+          # validate against it. (Restore branch-matching for `experimental` once faBolus `experimental`
+          # is itself refreshed to current.) `dev/**` surface branches still branch-match as before.
+          if [ -n "$WANT" ] && [ "$WANT" != "experimental" ] && git ls-remote --exit-code --heads "$REPO" "$WANT" >/dev/null 2>&1; then
             REF="$WANT"; HOW="matched the Garmin branch '$WANT'"
           else
-            REF="main"; HOW="fell back to main (no faBolus branch named '${WANT:-<none>}')"
+            REF="main"; HOW="using faBolus main (no matching faBolus branch, or 'experimental' is exempted — see comment)"
           fi
           SHA="$(git ls-remote "$REPO" "refs/heads/$REF" | cut -f1)"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
