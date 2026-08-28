@@ -2,6 +2,7 @@ using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Application.Storage;
 using Toybox.Time;
+using Toybox.Timer;
 using Toybox.Lang;
 
 // Compact glance shown in the widget/glance carousel: "faBolus" + last-known BG. It reads the same
@@ -17,7 +18,31 @@ using Toybox.Lang;
 // A reading older than 6 minutes shows "--".
 (:glance)
 class FaBolusGlanceView extends Ui.GlanceView {
+    private var _timer as Timer.Timer?;
+
     function initialize() { GlanceView.initialize(); }
+
+    // R3 (Phase 20): self-refresh while the glance is on screen, using the unused venu3s
+    // glance.liveUpdates capability, mirroring ClockView.onShow/onHide/onTick. onUpdate re-reads Storage
+    // (bg/bgEpoch/staleSec), so a periodic requestUpdate re-evaluates the value's STALENESS against the
+    // clock — a visible glance no longer freezes between the ~5-min background temporal polls. Display
+    // only; no dose path touched.
+    function onShow() as Void {
+        if (_timer == null) { _timer = new Timer.Timer(); }
+        _timer.start(method(:onTick), 30000, true);   // 30 s, matching ClockView
+        // R3: additionally kick ONE best-effort statusRead on appearance so the glance pulls a fresh value
+        // (matching ClockView.onShow). Fully guarded — RemoteComm.send's existing phoneReachable()+try/catch
+        // makes it a no-op when offline or if the glance runtime restricts Comm.transmit (degrade to
+        // timer-only self-refresh, never a crash). NOT a new repeating radio wake — a single kick on show.
+        RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRoutineRequestId()));
+    }
+
+    // Stop the redraw timer when the glance is hidden (battery — no ticking off-screen).
+    function onHide() as Void {
+        if (_timer != null) { _timer.stop(); }
+    }
+
+    function onTick() as Void { Ui.requestUpdate(); }
 
     function onUpdate(dc as Gfx.Dc) as Void {
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
