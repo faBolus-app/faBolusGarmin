@@ -102,6 +102,11 @@ class ProbeController {
         refresh();
     }
 
+    // BLE-L3: release the BLE client (stop scanning/watchdogs, drop the delegate) on app stop.
+    function close() as Void {
+        if (_client != null) { _client.close(); }
+    }
+
     private function refresh() as Void {
         WatchUi.requestUpdate();
     }

@@ -105,12 +105,18 @@ class ResumeCoordinator {
         return frame.slice(5, end); // skip [opcode,txId,len] (3) + appInstanceId (2)
     }
 
-    private function bytesEqual(a as Lang.ByteArray, b as Lang.ByteArray) as Lang.Boolean {
+    // Constant-time compare (BLE-L2), used at :86 for the JPAKE key-confirmation MAC. Length is
+    // not secret, so an early length return is allowed; but for equal-length inputs accumulate a
+    // bitwise diff over ALL bytes with NO boolean early-return inside the loop, so the compare's
+    // running time does not reveal WHERE the two MACs first differ (timing side-channel). Public
+    // so ConstantTimeCompareTest can assert position-independence directly.
+    public function bytesEqual(a as Lang.ByteArray, b as Lang.ByteArray) as Lang.Boolean {
         if (a.size() != b.size()) { return false; }
+        var diff = 0;
         for (var i = 0; i < a.size(); i++) {
-            if ((a[i] & 0xFF) != (b[i] & 0xFF)) { return false; }
+            diff |= (a[i] ^ b[i]) & 0xFF;
         }
-        return true;
+        return diff == 0;
     }
 }
 

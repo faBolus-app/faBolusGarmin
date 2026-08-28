@@ -14,7 +14,9 @@ class ProbeApp extends Application.AppBase {
         _probe.start();
     }
 
-    function onStop(state as Lang.Dictionary or Null) as Void {}
+    function onStop(state as Lang.Dictionary or Null) as Void {
+        if (_probe != null) { _probe.close(); }  // BLE-L3: teardown BLE on stop
+    }
 
     function getInitialView() as [ WatchUi.Views ] or [ WatchUi.Views, WatchUi.InputDelegates ] {
         if (_probe == null) { _probe = new ProbeController(); }
