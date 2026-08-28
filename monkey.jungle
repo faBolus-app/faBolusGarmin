@@ -9,8 +9,8 @@
 # need to drop it via a `<device>.resourcePath = resources` line — moot for the current venu3s-only
 # shipping target, which has a watch face and keeps the complication.
 #
-# The paused direct-to-pump work lives under direct-pump/ and is NOT part of this build
-# (see direct-pump/DIRECT_PUMP_STATUS.md). Its engine is exercised by test.jungle and probe.jungle.
+# NARROW-MAIN (2026-08-27): the paused direct-pump + direct-cgm BLE engines have been REMOVED from main
+# (never part of any shipping build); they live on the dev/direct-ble + experimental branches only.
 project.manifest = manifest.xml
 # G-L4 (19-03): pin an explicit type check level rather than relying on the compiler's implicit default
 # (Gradual). Level 2 (Informative) is the highest level this codebase currently compiles clean at without

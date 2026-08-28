@@ -64,9 +64,10 @@ compile() {  # <jungle> <device> [extra args...]
 
 echo "== barrel-free jungles =="
 compile datafield  venu3s -w
-compile probe      venu3s
-compile direct-cgm venu3s
 compile test       venu3s
+# NARROW-MAIN (2026-08-27): the paused direct-pump/direct-cgm BLE engines + their probe.jungle/
+# direct-cgm.jungle are removed from main (they live on dev/direct-ble + experimental), so this matrix
+# no longer compiles them here.
 
 echo "== shipping jungles (need barrels/EatingSense.barrel) =="
 if [ -f barrels/EatingSense.barrel ]; then

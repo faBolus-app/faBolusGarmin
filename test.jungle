@@ -1,7 +1,11 @@
-# Unit-test build for the direct-pump engine (oracle-parity + resume) + the AppState statusRead parse
-# (E5 history-epochs invariant) + (CX-G-12, 13-04) the full app lifecycle, minimal TestEntryApp entry.
+# Unit-test build for the AppState statusRead parse (E5 history-epochs invariant) + (CX-G-12, 13-04)
+# the full app lifecycle, minimal TestEntryApp entry.
 #   monkeyc -f test.jungle -o bin/faBolusGarmin-test.prg -y developer_key.der -d venu3s --unit-test -w
 #   monkeydo bin/faBolusGarmin-test.prg venu3s -t
+#
+# NARROW-MAIN (2026-08-27): the paused direct-pump + direct-cgm BLE engines (and their oracle-parity/
+# resume tests) are REMOVED from main and live on the dev/direct-ble + experimental branches only, so
+# this jungle no longer compiles direct-pump/engine — just source/app + tests.
 #
 # The AppState parse tests (tests/HistoryEpochsTest.mc, tests/GlucosePlotBoundsTest.mc — Phase 09.13
 # glucose plot height customization, D-05/D-06/D-07/D-08/D-10) need AppState.mc compiled in; VA-32 needs
@@ -28,11 +32,11 @@
 # (:complications) publisher compiles on venu3s.
 # G-L4 (19-03): pin the same explicit type check level as monkey.jungle/official.jungle — see
 # monkey.jungle's comment for why Level 2 (Informative), not Level 3 (Strict): the test binary compiles
-# the WHOLE app + direct-pump engine + the full test suite, and several pre-existing test files use
-# PolyType/Any patterns that only Level 3 flags — out of this plan's scope.
+# the WHOLE app + the full test suite, and several pre-existing test files use PolyType/Any patterns
+# that only Level 3 flags — out of this plan's scope.
 project.typecheck = 2
 project.manifest = manifest-test.xml
-base.sourcePath = direct-pump/engine/protocol;direct-pump/engine/auth;direct-pump/engine/messages;direct-pump/engine/ble;source/app;tests
+base.sourcePath = source/app;tests
 base.resourcePath = resources;resources-complications
 base.barrelPath = barrels/EatingSense.barrel
 base.excludeAnnotations = nocomplications

@@ -20,10 +20,10 @@
 /source/app/BolusView.mc            @zgranowitz
 /source/app/BolusDelegate.mc        @zgranowitz
 
-# The most safety-critical code: the paused direct-to-pump engine signs and sends real pump commands
-# and must stay byte-exact vs the pumpX2 oracle. It is excluded from every shipping build (P0-c) — keep
-# any change to that exclusion visible.
-/direct-pump/                       @zgranowitz
+# NARROW-MAIN (2026-08-27): the paused direct-pump + direct-cgm BLE engines have been removed from main
+# and live on the dev/direct-ble + experimental branches only, so there is no /direct-pump/ path on main
+# to own here. (The most safety-critical code — it signs/sends real pump commands and must stay byte-exact
+# vs the pumpX2 oracle — is owned on those branches.)
 
 # CI, the branch model, governance, and licensing — changes to how the project proves and attributes
 # itself.

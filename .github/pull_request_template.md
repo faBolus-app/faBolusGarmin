@@ -23,8 +23,9 @@ Fill in what applies; delete what doesn't. See CONTRIBUTING.md, AGENTS.md, and B
       subject is changing it, and says so
 - [ ] Preserves the honest-staleness signal: an unknown-age or stale reading stays `--` / flagged
       stale, never shown as "now" and never a fabricated value (group A / A1)
-- [ ] `direct-pump/` stays excluded from every shipping jungle and no manifest gains a BLE permission
-      (P0-c) — or this PR's explicit subject is that hold, and says so
+- [ ] The paused direct-pump/direct-cgm BLE engines are NOT reintroduced to main and no manifest gains a
+      BLE permission (P0-c; narrow-main — they live on dev/direct-ble + experimental) — or this PR's
+      explicit subject is that hold, and says so
 
 ## Contract (schema mirror)
 
