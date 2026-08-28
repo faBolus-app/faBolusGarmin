@@ -73,3 +73,26 @@ jobs:
         uses: actions/checkout@v4
       - name: Check the SBOM / attribution chain
         run: ./scripts/check-sbom.sh
+
+  # Semgrep — the shared local ruleset lives in ONE place (faBolus `.semgrep/deslop.yml`) rather than
+  # being copied into each repo. Only the `phase-ticket-comment` and `migration-breadcrumb-comment`
+  # rules cover Monkey C (`source/app/*.mc`); there is no Realm-class Monkey C linter, and adding a new
+  # Connect IQ toolchain step is out of scope.
+  #
+  # Advisory (continue-on-error): every hit needs human triage. A Monkey C device caveat — touch vs
+  # buttons, complication limits, the honest `--` staleness render, the 1-2-3 / hold confirm gesture —
+  # is KEEP even when it sits next to a ticket ID.
+  semgrep:
+    name: Semgrep deslop rules (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Check out faBolusGarmin
+        uses: actions/checkout@v4
+      - name: Fetch the shared deslop ruleset
+        run: curl -fsSL -o /tmp/deslop.yml
+          https://raw.githubusercontent.com/faBolus-app/faBolus/main/.semgrep/deslop.yml
+      - name: Semgrep (local deslop rules)
+        run: |
+          pipx install semgrep || pip install --user semgrep
+          semgrep --config /tmp/deslop.yml --metrics=off --error=false source
