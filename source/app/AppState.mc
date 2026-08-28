@@ -174,6 +174,27 @@ module AppState {
     (:background)
     var bolusPasscodeRequired as Lang.Boolean = false;
 
+    // Phase 20 (R1/R4/F3, D-01): the PHONE-OWNED, watch-synced alert-intensity setting. The watch reads
+    // these off the statusRead reply (handle) + restores them on a cold launch (loadPrefs) and gates ALL
+    // watch alert output (vibrate/tone/backlight/DND-override) through the pure alertActionFor() gate. The
+    // config lives on the phone (SettingsView, plan 20-02); there is NO watch-side properties.xml/settings
+    // UI (D-05). DEFAULT = vibration-only for EVERY severity, nothing audible and nothing DND-piercing
+    // unless the user opts in. `alertIntensityMode` is a frozen 3-token enum ("silent"|"vibrate"|"audible");
+    // an absent/unrecognized value fails closed to "vibrate". `alertAudibleMinSeverity` is the severity
+    // floor (tier token) at/above which "audible" mode plays a tone (default "critical"). Persisted +
+    // change-detected exactly like garminBolusEnabled so a relaunch / background service honors the last
+    // phone-synced value. SETTINGS-ONLY: this NEVER feeds/gates/delays a dose (C3/C5) — alert-surface only.
+    (:background)
+    var alertIntensityMode as Lang.String = "vibrate";
+    (:background)
+    var alertAudibleMinSeverity as Lang.String = "critical";
+    // The "let critical alerts override Do Not Disturb / vibrateOn=off" opt-in. USER setting, turn-off-able,
+    // DEFAULT OFF (D-01): nothing pierces DND unless the user turns this on. In Silent mode + OFF the watch
+    // is FULLY silent for every alert including critical; + ON adds an opt-in critical-only vibration wrist
+    // fallback (never a tone).
+    (:background)
+    var alertCriticalOverridesDnd as Lang.Boolean = false;
+
     // B2 (S1 + O3): the pump's automated-controller identity + its Control-IQ runtime on/off, pushed on
     // the statusRead reply so the watch can reconstruct the auto-correction DISCLOSURE locally (no prose
     // crosses the wire). Both mirror faBolusCore (ControllerVariant / PumpSnapshot.controlIQEnabled).
@@ -365,6 +386,16 @@ module AppState {
         // persisting matches garminBolusEnabled and avoids that transient.
         var bpr0 = Storage.getValue("bolusPasscodeRequired");
         if (bpr0 instanceof Lang.Boolean) { bolusPasscodeRequired = bpr0; }
+        // Phase 20 (R1/R4/F3, D-01): restore the persisted alert-intensity setting the same guarded way,
+        // so a cold launch / background service honors the last phone-synced value instead of silently
+        // reverting to the vibration-only default until the next statusRead. Fail-closed guards mirror the
+        // handle() parse (mode must be a frozen token; floor must be a valid tier).
+        var aim0 = Storage.getValue("alertIntensityMode");
+        if (aim0 instanceof Lang.String && containsStr(ALERT_MODES, aim0 as Lang.String)) { alertIntensityMode = aim0; }
+        var aams0 = Storage.getValue("alertAudibleMinSeverity");
+        if (aams0 instanceof Lang.String && isValidSeverityTier(aams0 as Lang.String)) { alertAudibleMinSeverity = aams0; }
+        var acod0 = Storage.getValue("alertCriticalOverridesDnd");
+        if (acod0 instanceof Lang.Boolean) { alertCriticalOverridesDnd = acod0; }
         // P-mmol / D-04: restore the persisted display-unit token the same guarded way, so a cold
         // launch before the first statusRead already renders in the last unit the phone pushed
         // (fail-closed to the "mgdl" default when never set / not yet a recognized token).
@@ -1743,6 +1774,27 @@ module AppState {
                 if (bolusPasscodeRequired != bpr) { Storage.setValue("bolusPasscodeRequired", bpr); }
                 bolusPasscodeRequired = bpr;
             }
+            // Phase 20 (R1/R4/F3, D-01): the phone-owned alert-intensity setting (mode / audible floor /
+            // critical-DND-override). Persisted + change-detected exactly like garminBolusEnabled so a
+            // relaunch / background service honors the last phone-synced value. FAIL-CLOSED: `mode` adopts
+            // only one of the frozen tokens ("silent"|"vibrate"|"audible") — an absent/garbage value keeps
+            // the safe "vibrate" default (vibration-only, nothing audible, nothing DND-piercing).
+            // SETTINGS-ONLY (C3/C5) — never a dose input; alert-surface only.
+            var aim = data["alertIntensityMode"];
+            if (aim instanceof Lang.String && containsStr(ALERT_MODES, aim as Lang.String)) {
+                if (!alertIntensityMode.equals(aim)) { Storage.setValue("alertIntensityMode", aim); }
+                alertIntensityMode = aim;
+            }
+            var aams = data["alertAudibleMinSeverity"];
+            if (aams instanceof Lang.String && isValidSeverityTier(aams as Lang.String)) {
+                if (!alertAudibleMinSeverity.equals(aams)) { Storage.setValue("alertAudibleMinSeverity", aams); }
+                alertAudibleMinSeverity = aams;
+            }
+            var acod = data["alertCriticalOverridesDnd"];
+            if (acod instanceof Lang.Boolean) {
+                if (alertCriticalOverridesDnd != acod) { Storage.setValue("alertCriticalOverridesDnd", acod); }
+                alertCriticalOverridesDnd = acod;
+            }
             // B2 (S1 + O3): the pump's controller identity + Control-IQ runtime on/off, for the LOCAL
             // auto-correction disclosure. FROZEN token set (CONTROLLER_VARIANTS = the schema
             // `controllerVariant` enum) — an unknown/garbage variant is ignored (keeps the last / safe
@@ -2086,6 +2138,10 @@ module AppState {
         return [histOut, epOut];
     }
     // Keep ≤50 well-formed alert dicts (each must have id/kind/title of the right type).
+    // Phase 20 (D-01): ADDITIVELY preserve an optional per-alert `severity` tier string (a valid tier token
+    // only; absent/malformed stays absent) so the F3/R4 gate (alertSeverityTier/alertActionFor) has a
+    // reliable per-alert salience signal. Backward-compatible — a legacy phone omits it and the gate then
+    // fails closed to highest salience (unknown ⇒ critical). Never a dose input.
     (:background)
     function sanitizeAlerts(arr as Lang.Array) as Lang.Array {
         var out = [];
@@ -2094,7 +2150,10 @@ module AppState {
             var e = arr[k];
             if (e instanceof Lang.Dictionary
                 && isNum(e["id"]) && isNum(e["kind"]) && (e["title"] instanceof Lang.String)) {
-                out.add({ "id" => e["id"], "kind" => e["kind"], "title" => strCap(e["title"], 80) });
+                var o = { "id" => e["id"], "kind" => e["kind"], "title" => strCap(e["title"], 80) };
+                var sev = e["severity"];
+                if (sev instanceof Lang.String && isValidSeverityTier(sev as Lang.String)) { o["severity"] = sev; }
+                out.add(o);
             }
         }
         return out;
@@ -2144,6 +2203,115 @@ module AppState {
     (:background)
     function alertIdentity(a as Lang.Dictionary) as Lang.String {
         return a["kind"].toString() + "-" + a["id"].toString();
+    }
+
+    // ===== Phase 20 (R1/R4/F3, D-01) — the pure, phone-synced watch alert gate =====
+    // Frozen severity-tier token set (least→most salient). The phone (plan 20-02) classifies each alert's
+    // typed kind into one of these and puts it on the wire as the per-alert `severity`; the watch never
+    // invents its own severity. Kept small + frozen (never a raw enum on the wire — Pitfall 6).
+    (:background)
+    const ALERT_TIERS = ["info", "high", "critical"];
+    (:background)
+    const ALERT_MODES = ["silent", "vibrate", "audible"];
+
+    (:background)
+    function isValidSeverityTier(t as Lang.String) as Lang.Boolean {
+        return containsStr(ALERT_TIERS, t);
+    }
+
+    // Rank a tier: info=0, high=1, critical=2. Unknown ⇒ critical's rank (highest salience, never
+    // suppressed) — a fail-closed CLASSIFICATION only (see the D-01 note on alertActionFor: this rule
+    // NEVER resurrects output against an explicit Silent+override-off user choice).
+    (:background)
+    function severityRank(t as Lang.String) as Lang.Number {
+        if (t.equals("info")) { return 0; }
+        if (t.equals("high")) { return 1; }
+        return 2;   // "critical" or anything unknown ⇒ highest salience
+    }
+
+    // Read an alert's per-alert `severity` tier. A valid tier token is honored; an absent/malformed one
+    // fails closed to "critical" (highest salience) so a legacy phone (no severity) or a garbage value can
+    // never SUPPRESS a genuinely critical alert. Pure + Attention/DeviceSettings-free (unit-testable).
+    (:background)
+    function alertSeverityTier(a as Lang.Dictionary) as Lang.String {
+        var s = a["severity"];
+        if (s instanceof Lang.String && isValidSeverityTier(s as Lang.String)) { return s; }
+        return "critical";
+    }
+
+    // The most-severe tier across a batch of alerts (fail toward higher salience — if ANY new alert is
+    // critical the single batch vibrate/tone uses the critical treatment). Empty ⇒ "info" (never reached
+    // with output, since notifyNewAlerts only gates when the batch is non-empty).
+    (:background)
+    function mostSevereTier(list as Lang.Array) as Lang.String {
+        var best = "info";
+        var bestRank = -1;
+        for (var i = 0; i < list.size(); i += 1) {
+            var t = alertSeverityTier(list[i] as Lang.Dictionary);
+            var r = severityRank(t);
+            if (r > bestRank) { bestRank = r; best = t; }
+        }
+        return best;
+    }
+
+    // F3: the per-tier haptic signature as PURE data ([[dutyCyclePct, durationMs], ...]) — distinct per
+    // tier so the wearer can tell a critical from an info by feel: critical ⇒ triple-long, high ⇒ double,
+    // info ⇒ single-short. The caller (FaBolusApp) turns these into Attention.VibeProfile objects (the
+    // only Attention touch), so this stays unit-testable. Unknown key ⇒ the critical (most-salient) pattern.
+    (:background)
+    function vibePatternFor(key as Lang.String) as Lang.Array {
+        if (key.equals("info")) { return [[50, 200]]; }
+        if (key.equals("high")) { return [[75, 300], [75, 300]]; }
+        return [[100, 400], [100, 400], [100, 400]];   // "critical" / unknown ⇒ triple-long
+    }
+
+    // THE GATE (pure — no Attention, no DeviceSettings): resolve the {vibrate, vibeProfileKey, tone,
+    // backlight} decision from the already-classified severity tier, the phone-synced intensity mode +
+    // audible floor + critical-override opt-in, and the device's vibrateOn / doNotDisturb state.
+    //
+    // D-01 SAFETY INVARIANTS encoded here:
+    //  • DEFAULT (mode "vibrate", override off) ⇒ vibration-only for EVERY tier; nothing audible, nothing
+    //    pierces DND unless opted in.
+    //  • FULLY-SILENT GUARANTEE: mode "silent" + criticalOverridesDnd=false ⇒ ZERO output (no vibrate, no
+    //    tone, no backlight) for EVERY tier INCLUDING critical (and including an unknown-severity alert,
+    //    which alertSeverityTier already resolved to "critical"). There is NO code path that forces output
+    //    in this combination — the phone is the sole authoritative alerting surface.
+    //  • Silent + override ON ⇒ opt-in wrist fallback: a CRITICAL-tier alert gets a vibrate (NEVER a tone);
+    //    a non-critical tier stays silent.
+    //  • The explicit user Silent(+override-off) choice ALWAYS wins: the unknown⇒critical fail-closed rule
+    //    is a CLASSIFICATION applied before this gate; it does not resurrect output inside Silent.
+    //  • Non-silent (vibrate/audible): routine (non-critical) honors vibrateOn/doNotDisturb; the critical
+    //    tier pierces DND ONLY when criticalOverridesDnd is on. Audible tone+backlight fire only for a tier
+    //    at/above the audible floor that also passes the DND gate.
+    (:background)
+    function alertActionFor(tier as Lang.String, mode as Lang.String, audibleMinSeverity as Lang.String,
+                            criticalOverridesDnd as Lang.Boolean, vibrateOn as Lang.Boolean,
+                            doNotDisturb as Lang.Boolean) as Lang.Dictionary {
+        var isCritical = tier.equals("critical");
+        // Silent mode: the phone owns alerting entirely — the ONLY watch output is the opt-in critical
+        // wrist-vibration fallback (never a tone), and only when the user turned the override on.
+        if (mode.equals("silent")) {
+            if (criticalOverridesDnd && isCritical) {
+                return { "vibrate" => true, "vibeProfileKey" => tier, "tone" => false, "backlight" => false };
+            }
+            return { "vibrate" => false, "vibeProfileKey" => tier, "tone" => false, "backlight" => false };
+        }
+        // Non-silent (vibrate / audible): DND / vibrateOn is HONORED for routine alerts; the critical tier
+        // pierces it only on the opt-in.
+        var dndBlocks = doNotDisturb || !vibrateOn;
+        var vibrate;
+        if (isCritical) {
+            vibrate = dndBlocks ? criticalOverridesDnd : true;
+        } else {
+            vibrate = !dndBlocks;
+        }
+        // Audible tone+backlight only when the user chose "audible", the tier is at/above the audible floor,
+        // AND the DND gate permitted output (a routine alert under DND, or a critical alert not opted to
+        // pierce, stays quiet).
+        var audible = mode.equals("audible")
+                      && vibrate
+                      && (severityRank(tier) >= severityRank(audibleMinSeverity));
+        return { "vibrate" => vibrate, "vibeProfileKey" => tier, "tone" => audible, "backlight" => audible };
     }
 
     // 14-10 (D1) — the raw-snapshot proof-of-absence oracle's OWN identity parser. Deliberately NOT

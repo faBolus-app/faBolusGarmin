@@ -319,12 +319,35 @@ class FaBolusApp extends App.AppBase {
             // views). Anything beyond the bound is simply left "new" — it is picked up by the NEXT
             // notifyNewAlerts() call, never dropped.
             var toPush = AppState.capAlertPushes(newAlerts);
-            // Vibrate ONCE for the batch, then push a Confirmation for EACH alert in the capped set.
-            // Push LEAST-serious first (iterate the most-serious-first list in reverse) so the
-            // most-serious confirmation ends on TOP of the view stack — the one the wearer sees + acts
-            // on first.
-            if (Attention has :vibrate) {
-                Attention.vibrate([new Attention.VibeProfile(75, 400)]);
+            // Phase 20 (R1/R4/F3, D-01): the watch alert output is now driven by the phone-synced,
+            // fail-closed alert-intensity gate (AppState.alertActionFor) — NOT a hardcoded vibrate. Resolve
+            // the batch's most-severe tier + the device's vibrateOn/doNotDisturb state, then vibrate/tone/
+            // backlight ONLY as the gate permits. DEFAULT is vibration-only for every tier; nothing audible
+            // and nothing pierces DND unless the user opted in on the phone. FULLY-SILENT guarantee: in
+            // Silent mode + critical-override-off the gate returns zero output for every tier including
+            // critical — there is no code path here that forces vibrate/tone (the phone is authoritative).
+            var tier = AppState.mostSevereTier(toPush);
+            var ds = System.getDeviceSettings();
+            var vibrateOn = (ds has :vibrateOn) ? ds.vibrateOn : true;        // permissive if unreadable
+            var dnd = (ds has :doNotDisturb) ? ds.doNotDisturb : false;       // not-in-DND if unreadable
+            var action = AppState.alertActionFor(tier, AppState.alertIntensityMode,
+                                                 AppState.alertAudibleMinSeverity,
+                                                 AppState.alertCriticalOverridesDnd, vibrateOn, dnd);
+            // Vibrate ONCE for the batch (F3 severity-encoded pattern), then push a Confirmation for EACH
+            // alert in the capped set. Push LEAST-serious first (iterate the most-serious-first list in
+            // reverse) so the most-serious confirmation ends on TOP of the view stack — the one the wearer
+            // sees + acts on first.
+            if (action["vibrate"] && (Attention has :vibrate)) {
+                Attention.vibrate(buildVibeProfiles(AppState.vibePatternFor(action["vibeProfileKey"])));
+            }
+            // R1: audible tone + backlight escalate ONLY when the gate returns them (mode "audible", the
+            // tier is at/above the user's audible floor, and the DND gate permitted output) — each
+            // capability-guarded so an unsupported device silently degrades to vibration-only.
+            if (action["tone"] && (Attention has :playTone)) {
+                Attention.playTone(Attention.TONE_ALARM);
+            }
+            if (action["backlight"] && (Attention has :backlight)) {
+                Attention.backlight(true);
             }
             // CX-G-10: commit 'seen' PER successfully-presented alert, not a single write of every
             // active identity made BEFORE this loop ran (the old bug — a partial-loop failure could
@@ -342,6 +365,19 @@ class FaBolusApp extends App.AppBase {
         // "a cleared alert re-notifies if it re-fires"), while an identity that wasn't actually
         // presented (skipped by the count bound, or a failed pushView) is never marked seen.
         AppState.saveSeenAlerts(AppState.reconciledSeenAlerts(presented));
+    }
+
+    // Phase 20 (F3): turn a pure haptic pattern ([[dutyCyclePct, durationMs], ...] from
+    // AppState.vibePatternFor) into the Attention.VibeProfile array Attention.vibrate expects. This is the
+    // ONLY place a VibeProfile is constructed — the severity→pattern decision stays pure + unit-testable in
+    // AppState; only this thin builder touches Attention.
+    function buildVibeProfiles(pattern as Lang.Array) as Lang.Array {
+        var out = [];
+        for (var i = 0; i < pattern.size(); i += 1) {
+            var p = pattern[i] as Lang.Array;
+            out.add(new Attention.VibeProfile(p[0] as Lang.Number, p[1] as Lang.Number));
+        }
+        return out;
     }
 
     // CX-G-10: the single explicit "did this alert actually get presented" seam. The Connect IQ 9.2.0
