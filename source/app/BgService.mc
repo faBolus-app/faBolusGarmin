@@ -70,7 +70,7 @@ class BgServiceDelegate extends System.ServiceDelegate {
         if (data instanceof Lang.Dictionary) {
             // R2-15/VA-16: this service sent a statusRead and must publish + exit ONLY on the CORRELATED
             // reply — the phone echoes our minted requestId, so we match on it (falling back to the kind
-            // discriminator for a legacy phone that doesn't echo). A non-reply dict (an eating_sense/hr_ctl
+            // discriminator for a legacy phone that doesn't echo). A non-reply dict (an eating_sense
             // toggle, a stray bolusStatus echo, etc.) OR a reply carrying a DIFFERENT requestId is IGNORED —
             // return WITHOUT exiting so the service stays alive for the real reply (the system still bounds
             // our total runtime). Exiting on it would drop the fresh read we're waiting for and republish stale.

@@ -1588,7 +1588,7 @@ module AppState {
     // Route an inbound phone message.
     // R2-15/VA-16 (pure): is this inbound phone message the correlated statusRead reply the background
     // service is waiting for? The background poll sends a statusRead and must publish + exit ONLY on the
-    // matching reply — an unrelated dict (an eating_sense/hr_ctl toggle, a stray bolusStatus echo, or an
+    // matching reply — an unrelated dict (an eating_sense toggle, a stray bolusStatus echo, or an
     // empty {}) that lands first must be IGNORED (not mistaken for the reply, which would exit early and
     // drop the fresh read). This is the KIND discriminator, retained as the R2-15 fallback for a legacy
     // phone that does not echo the requestId; `isCorrelatedStatusReply` layers true id correlation on top.

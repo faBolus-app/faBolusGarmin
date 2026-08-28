@@ -13,8 +13,8 @@
 # BgComplication.mc + DetailsView.mc — AppState's only app-code deps, verified: every other capitalized ref
 # in it is comment-only) specifically to AVOID EatingRelay.mc and its private EatingSense barrel.
 #
-# CX-G-12 (13-04): that exclusion left the HIGH/CRIT poll-liveness (C5-01/CX-G-05, FaBolusApp.pollTick +
-# HeartRateRelay.emitIfDue) and dedup-reset (CX-G-07, FaBolusApp.notifyNewAlerts) mechanisms completely
+# CX-G-12 (13-04): that exclusion left the HIGH/CRIT poll-liveness (C5-01/CX-G-05, FaBolusApp.pollTick's
+# dismiss-retry resend loop) and dedup-reset (CX-G-07, FaBolusApp.notifyNewAlerts) mechanisms completely
 # outside the test binary — see the old headers on PollBackoffTest.mc/OutcomeWatchdogTest.mc/
 # HoldTeardownTest.mc ("the FaBolusApp poll that drives them isn't test-compiled — see test.jungle").
 # FaBolusApp.mc's dependency graph (onStart/getInitialView/notifyNewAlerts → Nav → the full screen carousel

@@ -12,7 +12,7 @@ using Toybox.Test;
 // notifyNewAlerts()/pushAlertConfirm() are non-private specifically so this file can exercise the REAL
 // production method (mirrors handlePhoneData's own CX-G-03 rationale) — a FaBolusApp subclass overrides
 // pushAlertConfirm() to simulate a per-identity pushView failure without a live view stack (mirrors
-// tests/RelayResilienceTest.mc's ThrowingHeartRateRelay pattern). FaBolusApp.mc is compiled into the
+// tests/RelayResilienceTest.mc's ThrowingEatingRelay double-substitution pattern). FaBolusApp.mc is compiled into the
 // test binary wholesale (see test.jungle, CX-G-12).
 module SeenAlertsOrderingTest {
 

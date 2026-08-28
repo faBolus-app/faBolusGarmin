@@ -136,7 +136,7 @@ module RemoteComm {
         return System.getDeviceSettings().phoneConnected;
     }
 
-    // Unit-test seam (mirrors FaBolusApp's documented scheduleCount()/setHrRelay() test seams). The
+    // Unit-test seam (mirrors FaBolusApp's documented scheduleCount() test seam). The
     // Connect IQ simulator has no phone companion, so a REAL Comm.transmit() during the unit suite pops a
     // modal "There is no data connection … connect an Android device to ADB" dialog for EVERY send the
     // tests drive (pollTick's statusRead, sendBolus, the cancel path) — and pollTick's re-armed poll timers

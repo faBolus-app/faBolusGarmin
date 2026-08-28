@@ -29,9 +29,9 @@ using Toybox.Lang;
 // flagged symbols there are part of the REAL bg/glance call graph — see 19-02-SUMMARY.md.)
 class FaBolusApp extends App.AppBase {
     private var _timer as Timer.Timer?;
-    // Both null until the phone sends the corresponding toggle (handlePhoneData) — see initialize()
-    // below (19-02, Task 2): NOT built eagerly, so a glance/background launch never pulls in EatingRelay/
-    // HeartRateRelay (and EatingRelay's EatingSense barrel) at all.
+    // Null until the phone sends the corresponding toggle (handlePhoneData) — see initialize()
+    // below (19-02, Task 2): NOT built eagerly, so a glance/background launch never pulls in EatingRelay
+    // (and its EatingSense barrel) at all.
     private var _eating as EatingRelay?;   // wrist eating-sensing relay (phone-gated)
     // R2-19: self-rescheduling poll state. `_pollOutstanding` is true between sending a statusRead and its
     // reply arriving (statusRead replies aren't reqId-correlated, so "outstanding" is tracked by arrival —
