@@ -21,5 +21,6 @@ pointer. Read the canonical doc before opening a PR. In brief, as it applies her
   Monkey C mirror against faBolus's `schema/command.schema.json` at the **matching** branch (else
   `main`), logging the resolved ref **and its SHA** so a silent fallback can't green a mismatch.
 
-See also [`AGENTS.md`](AGENTS.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md) — both carry the §1.3/§1.4
-cross-reference, the lockstep clause, and the published device floor.
+See also [`CONTRIBUTING.md`](CONTRIBUTING.md) — it carries the §1.3/§1.4 cross-reference, the
+lockstep clause, and the published device floor. [`AGENTS.md`](AGENTS.md) links here rather than
+restating them.

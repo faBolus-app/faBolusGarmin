@@ -38,8 +38,9 @@ class DetailsView extends Ui.View {
     }
 
     // Elapsed minutes computed HERE at draw time from an immutable source epoch, never transmitted
-    // as a pre-computed age (mirrors ciqSuspendElapsedMinutes). Clamped to 0 for a clock-skew/future
-    // stamp.
+    // as a pre-computed age. Clamped to 0 for a clock-skew/future stamp. Mirrors
+    // ciqSuspendElapsedMinutes above and is deliberately kept as a separate generic helper so that
+    // one stays unchanged — do not merge the two.
     private function elapsedMinutesSince(epoch as Lang.Number?) as Lang.Number {
         if (epoch == null) { return 0; }
         var mins = (Time.now().value() - (epoch as Lang.Number)) / 60;

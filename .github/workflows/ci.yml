@@ -21,7 +21,7 @@ on:
 # GUI simulator, which needs a display GitHub runners don't have; (3) the shipping jungles need the
 # private, git-ignored EatingSense.barrel. Faking a green Garmin build badge would be worse than an
 # honest, scoped gate. The full matrix (4 barrel-free jungles + the shipping jungle for venu3s only
-# + the 29-case unit suite) is verified locally — see AGENTS.md.
+# + the unit suite) is verified locally — see AGENTS.md.
 jobs:
   schema-drift:
     name: Monkey C ↔ contract schema drift

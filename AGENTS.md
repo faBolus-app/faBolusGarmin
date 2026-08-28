@@ -31,7 +31,8 @@ Sibling repos: `../faBolus`, `../TandemKit`.
 
 ## Build + test
 - **Local gate:** `./scripts/build-and-test.sh` compiles every jungle and runs the unit suite in the
-  simulator. CI only runs schema-drift. `monkeydo`'s exit code lies — the script parses
+  simulator. CI runs only the schema-drift contract check and the SBOM / license-provenance check
+  (`scripts/check-sbom.sh`) — see `.github/workflows/ci.yml`. `monkeydo`'s exit code lies — the script parses
   `PASSED (…failed=0, errors=0)`.
 - **Sideload:** `monkeyc -f monkey.jungle -o bin/faBolus.prg -y developer_key.der -d venu3s`
 - Store builds: [`docs/STORE-BUILDS.md`](docs/STORE-BUILDS.md) (Connect IQ SDK 9.2.0).
