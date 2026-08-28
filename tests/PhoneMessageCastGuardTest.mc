@@ -7,7 +7,7 @@ using Toybox.Test;
 // `type != null` null-check — a non-null, non-String `type` (a malformed/hostile wire dict) hit an
 // UNGUARDED cast and would crash the phone-message handler (a watch-side denial-of-service). The exact
 // site: FaBolusApp.mc's onPhoneMessage (now handlePhoneData), the `type != null && (type as
-// Lang.String).equals("eating_sense")` / `...equals("hr_ctl")` checks — confirmed via `grep -n "as
+// Lang.String).equals("eating_sense")` check — confirmed via `grep -n "as
 // Lang\." source/app/FaBolusApp.mc` before editing (RESEARCH Open Question 1). Fixed by instanceof-
 // guarding before the cast, mirroring BgService.mc's already-guarded pattern. AppState.handle()'s own
 // `data["kind"] as Lang.String?` (a second, independent unguarded-cast site found via the same grep
@@ -51,14 +51,6 @@ module PhoneMessageCastGuardTest {
         var app = new FaBolusApp();
         app.handlePhoneData({ "type" => "eating_sense", "on" => true });
         app.handlePhoneData({ "type" => "eating_sense", "on" => false });
-        return true;
-    }
-
-    // Positive path: a well-formed hr_ctl toggle behaves exactly as before.
-    (:test)
-    function wellFormedHrCtlToggleStillWorks(logger as Test.Logger) as Lang.Boolean {
-        var app = new FaBolusApp();
-        app.handlePhoneData({ "type" => "hr_ctl", "on" => true });
         return true;
     }
 

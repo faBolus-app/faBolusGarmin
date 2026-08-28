@@ -21,8 +21,6 @@ module StatusReplyTest {
     function nonStatusReadIsNotReply(logger as Test.Logger) as Lang.Boolean {
         Test.assertMessage(!AppState.isStatusReply({ "type" => "eating_sense", "on" => true }),
             "eating_sense toggle ⇒ false (no kind)");
-        Test.assertMessage(!AppState.isStatusReply({ "type" => "hr_ctl", "on" => true }),
-            "hr_ctl toggle ⇒ false (no kind)");
         Test.assertMessage(!AppState.isStatusReply({ "kind" => "bolusStatus", "requestId" => "x" }),
             "bolusStatus echo ⇒ false");
         Test.assertMessage(!AppState.isStatusReply({}),
