@@ -6,12 +6,12 @@ using Toybox.Lang;
 // resources-complications/complications/complications.xml). Publishes a NUMERIC :value (matching the
 // complication's numeric <range>, so Face It can range-color it) with the trend in the :unit slot as a
 // Latin-safe arrow (from the phone's direction token; Unicode arrow glyphs fail to render on many faces).
-// LIMITATION (audit): a numeric/ranged complication cannot render "--" in its numeric :value slot, so a
+// LIMITATION: a numeric/ranged complication cannot render "--" in its numeric :value slot, so a
 // stale reading keeps its last NUMBER there — the pure-numeric display is STRUCTURALLY unable to flag
-// staleness (a stale glucose can look current). P16 §1.3 (fail-graceful): the shortLabel TEXT is the one
+// staleness (a stale glucose can look current). Fail-graceful: the shortLabel TEXT is the one
 // complication sub-surface that can carry a marker, so staleness is made honest there in BOTH display
 // modes (see shortLabelFor) — string-rendering faces can no longer show a stale reading as current.
-// R2-18 (audit): when the reading is stale we ALSO drop the numeric :ranges breakpoints (see
+// When the reading is stale we ALSO drop the numeric :ranges breakpoints (see
 // pushComplication), so a range-coloring face no longer paints the frozen last number with an in-range
 // (or any) color cue — removing a SECOND misleading "current" signal on top of the raw number. The
 // residual structural limit is now only a face that renders the bare numeric :value with no face-side
@@ -55,24 +55,23 @@ module BgComplication {
         return "";
     }
 
-    // P16 §1.3 (fail-graceful): compute the complication shortLabel string. This is the ONE complication
+    // Fail-graceful: compute the complication shortLabel string. This is the ONE complication
     // sub-surface that can carry text, so it is where staleness is made honest for string-rendering faces:
     //   • stringTrend  mode → "--" when stale (the value is replaced), else "<value><arrow>".
     //   • numericColor mode → keeps "<value>" so a face can still range-color the number, but appends an
     //     explicit " old" marker when stale so a string-rendering face cannot show a stale reading as
     //     current. (The pure-NUMERIC :value display remains structurally unable to convey staleness — see
     //     the LIMITATION note above — so the honest marker lives here, in the text label.)
-    // C5-03 (V-Audit): `value` renders here via `AppState.formatMgdl` — the SAME mg/dL→mmol funnel every
+    // `value` renders here via `AppState.formatMgdl` — the SAME mg/dL→mmol funnel every
     // other Garmin glucose surface uses — so this text sub-surface honors the phone's selected unit
     // (mgdl/mmol) instead of a raw `.toString()`. This makes `shortLabelFor` depend on the AppState
     // module's `glucoseUnit` (no longer purely a function of its own parameters, though it still has no
-    // Complications-module dependency and remains unit-testable in the P6 harness — AppState.mc imports
+    // Complications-module dependency and remains unit-testable in the `tests/` harness — AppState.mc imports
     // only Lang/Graphics/Math/Time/System/Storage). The `value` PARAMETER passed in — and the numeric
     // `:value`/`:ranges` slots this label is paired with in pushComplication — stay raw mg/dL Numbers
     // throughout; only the rendered text changes. (The numeric slot itself cannot show a converted mmol
     // float: a `String` :value regresses the complication to its range floor — see the "MUST be a
-    // Number" comment in pushComplication below — so unit conversion is fixable ONLY on this text half,
-    // per C5-03's own finding.)
+    // Number" comment in pushComplication below — so unit conversion is fixable ONLY on this text half.)
     (:background)
     function shortLabelFor(value as Lang.Number, arrow as Lang.String, stale as Lang.Boolean,
                            stringMode as Lang.Boolean) as Lang.String {
@@ -138,20 +137,20 @@ module BgComplication {
         // breakpoints the CONSUMER (Face It / watch face) colors by — a publisher can't set the color
         // itself. The real "reads 0" fix is the NUMERIC :value in step 1 (a String value fell back to the
         // range floor). Stale keeps the last numeric value but drops the arrow (numeric can't render "--")
-        // and, in numericColor mode, drops the :ranges color cue too (R2-18, below).
+        // and, in numericColor mode, drops the :ranges color cue too (see below).
         try {
-            // GA-08 / P16 §1.3: in "stringTrend" mode the surface is the STRING shortLabel — it carries
+            // In "stringTrend" mode the surface is the STRING shortLabel — it carries
             // the value + Latin trend arrow, and "--" when stale. In "numericColor" mode the shortLabel
             // keeps the last number (so the face can range-color it) but appends an explicit stale marker,
             // and we attach range breakpoints for the face to color by ONLY while the reading is fresh
-            // (R2-18: a stale number drops :ranges so it loses the misleading in-range color cue).
+            // (a stale number drops :ranges so it loses the misleading in-range color cue).
             // shortLabelFor makes staleness honest in BOTH modes; the numeric :value slot stays as the last
             // reading (a numeric complication cannot render "--" there — the documented structural limit).
             var stringMode = AppState.complicationDisplay.equals("stringTrend");
             var label = shortLabelFor(value, arrow, stale, stringMode);
             var params = { :value => value, :unit => (stale ? "" : arrow), :shortLabel => label };
             if (!stringMode && !stale) {
-                // R2-18 (V-Audit): attach the glucose range breakpoints ONLY when the reading is fresh. When
+                // Attach the glucose range breakpoints ONLY when the reading is fresh. When
                 // stale we drop :ranges so a range-coloring face can no longer paint the frozen last number
                 // with an in-range (or any) color cue — a misleading "current & in-range" signal on a value
                 // that is actually old. The numeric :value slot still keeps the last reading (a numeric
@@ -177,7 +176,7 @@ module BgComplication {
     // number is written); `label` is the honest text slot ("--" for an unknown -1 sentinel, mirroring the
     // BG complication's staleness marker — a numeric slot structurally cannot render "--"). Precision
     // matches DetailsView (f2 = %.2f, n0 = toString) so all Garmin surfaces agree. No Complications/Storage
-    // dependency ⇒ unit-testable in the P6 harness. NEVER a dose input (C3).
+    // dependency ⇒ unit-testable in the `tests/` harness. NEVER a dose input.
     (:background)
     function iobField(iob as Lang.Float) as Lang.Dictionary {
         // IOB is always a real value (default 0.0 = no active insulin); no unknown sentinel.
@@ -213,7 +212,7 @@ module BgComplication {
 
     // Publish one field complication with the SAME two-step (value-only then enrichment) try/catch as
     // pushComplication, each id independent so one unsupported/unowned field can't sink the others.
-    // 20-REVIEW WR-03: an unknown/de-selected field (value == null) writes :value => null to CLEAR any
+    // An unknown/de-selected field (value == null) writes :value => null to CLEAR any
     // prior numeric — otherwise a value-rendering face keeps a stale IOB/reservoir/battery number behind
     // the honest "--" shortLabel. (Complications.Data.:value accepts Null.) Annotation-split so a device
     // lacking the Complications module compiles to the no-op stub below.
@@ -230,7 +229,7 @@ module BgComplication {
             }
         }
         // Step 2 — enrichment: the honest shortLabel + the value slot. For an unknown field this writes
-        // :value => null to CLEAR any stale number (WR-03); for a known field it writes the number.
+        // :value => null to CLEAR any stale number; for a known field it writes the number.
         try {
             Toybox.Complications.updateComplication(id, { :value => v, :shortLabel => label });
         } catch (e) {

@@ -46,7 +46,7 @@ class CgmView extends Ui.View {
         var plotT = h * 0.42, plotB = h * 0.82;
         var plotH = plotB - plotT;
 
-        // Gridlines with right-edge labels (y-axis max = VMAX). D-10: computed strictly INSIDE the
+        // Gridlines with right-edge labels (y-axis max = VMAX). Computed strictly INSIDE the
         // resolved [plotFloor, plotCeiling] domain (AppState.plotGridlines) so a gridline never lands
         // on the edge itself — never a hardcoded [100, 200, 300]. Positions (y) stay computed from the
         // mg/dL breakpoints — only the rendered LABEL TEXT converts to the active unit (same
@@ -63,7 +63,7 @@ class CgmView extends Ui.View {
             dc.drawText(plotR + w * 0.02, y, Gfx.FONT_XTINY, AppState.formatMgdl(v), Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER);
         }
 
-        // Data dots (CGM-style). E5: when the phone sent per-point source timestamps (historyEpochs,
+        // Data dots (CGM-style). When the phone sent per-point source timestamps (historyEpochs,
         // aligned 1:1 with history — enforced by the AppState parse), position each reading on a REAL
         // time x-axis so a data GAP renders as a horizontal gap, not evenly-spaced dots. When epochs
         // are unavailable/misaligned (historyEpochs empty), fall back to the exact prior uniform-index

@@ -6,7 +6,7 @@ using Toybox.Math;
 using Toybox.Lang;
 using EatingSenseKit;
 
-// G-M3 (19-04): pure, EatingRelay-instance-free construction of the `imu_window` wire envelope — a
+// Pure, EatingRelay-instance-free construction of the `imu_window` wire envelope — a
 // MODULE (not class members) so its consts (CHANNEL_SCALES etc.) are externally accessible as
 // `EatingImuEnvelope.CONST` (mirrors AppState's own module-const convention, e.g.
 // AppState.POLL_REPLY_DEADLINE_SEC) and tests/EatingImuQuantizeTest.mc can drive the quantize/
@@ -19,15 +19,15 @@ module EatingImuEnvelope {
     // +/-8g full-scale (~0.000244 g resolution), gyro channels a +/-1000 dps full-scale (~0.0305 dps
     // resolution) — generous headroom for wrist eating-gesture motion while keeping ~16-bit precision.
     // NOT a hardcoded duplicate on the phone side: this SAME array travels IN the wire envelope's
-    // "scale" key and 19-05's GarminImuWindowDecode.decodeV2 reads it back out of the envelope (never a
-    // separately-maintained Swift constant), so the two sides can never silently drift apart. The
-    // faBolusNudge MESSAGE_CONTRACT.md is the external document-of-record for these units/ranges to
-    // sync (deferred owner note: that repo is not present in this checkout).
+    // "scale" key and the phone-side GarminImuWindowDecode.decodeV2 reads it back out of the envelope
+    // (never a separately-maintained Swift constant), so the two sides can never silently drift apart.
+    // The faBolusNudge MESSAGE_CONTRACT.md is the external document-of-record for these units/ranges to
+    // sync (that repo is not present in this checkout).
     const ACCEL_SCALE = 8.0 / 32767.0;
     const GYRO_SCALE = 1000.0 / 32767.0;
     const CHANNEL_SCALES = [ACCEL_SCALE, ACCEL_SCALE, ACCEL_SCALE, GYRO_SCALE, GYRO_SCALE, GYRO_SCALE];
 
-    // Builds the v2 compact int16 imu_window envelope for one raw window. Keys mirror 19-05's
+    // Builds the v2 compact int16 imu_window envelope for one raw window. Keys mirror the
     // phone-side GarminImuWindowDecode.decodeV2 EXACTLY: ch (Int channel count), n (Int
     // samples/channel), scale (Array<Float>, length ch, IN the envelope — never a hardcoded duplicate
     // constant), data (packed int16 ByteArray, n*ch*2 bytes, little-endian pairs, sample-major).
@@ -38,7 +38,7 @@ module EatingImuEnvelope {
 
     // Quantizes a raw sample-major Float window (length n*ch) into a packed int16 ByteArray (n*ch*2
     // bytes, little-endian pairs) using CHANNEL_SCALES[i % ch] per element — the exact inverse of
-    // 19-05's GarminImuWindowDecode.decodeV2. ByteArray element reads/writes are SIGNED (a 0xFF byte
+    // the phone-side GarminImuWindowDecode.decodeV2. ByteArray element reads/writes are SIGNED (a 0xFF byte
     // reads back as -1), so every byte is masked with `& 0xFF` on write. Fail-safe:
     // EatingSense always hands a full n*ch window in production, but a SHORT/empty window (e.g. a
     // test double's []) zero-fills the missing tail rather than throwing an Array Out Of Bounds Error
@@ -58,7 +58,7 @@ module EatingImuEnvelope {
         return out;
     }
 
-    // Test-only mirror of the PHONE's decodeV2 (19-05's GarminImuWindowDecode.decodeV2) — lets
+    // Test-only mirror of the PHONE's decodeV2 (GarminImuWindowDecode.decodeV2) — lets
     // tests/EatingImuQuantizeTest.mc assert the quantize/dequantize pair round-trips within the fixed
     // scale's resolution without depending on the phone/Swift code. NEVER called by production code —
     // the phone owns the real dequantize.
@@ -89,11 +89,11 @@ class EatingRelay {
     hidden var _timer;
     hidden var _sensing = false;
     hidden var _running = false;
-    // G-M3: observable count of dropped imu_window sends — EatingCommListener.onError used to be a
+    // Observable count of dropped imu_window sends — EatingCommListener.onError used to be a
     // no-op, making a silently-dropped send invisible. Test-only-seam style (mirrors
     // FaBolusApp.scheduleCount()/isRunning() above).
     hidden var _dropCount as Lang.Number = 0;
-    // 13-LW-01 (LOW): observable count of onWindow's own empty-catch guard firing (a
+    // Observable count of onWindow's own empty-catch guard firing (a
     // buildEnvelope/transmitWindow throw) — previously silent, giving zero observability into a
     // persistent transmit failure. A DIFFERENT failure mode from _dropCount above (that one counts an
     // ASYNC EatingCommListener.onError after a send was actually dispatched; this counts a SYNCHRONOUS
@@ -117,14 +117,14 @@ class EatingRelay {
         if (_timer != null) { _timer.stop(); }
     }
 
-    // Test-observable running state (see tests/RelayResilienceTest.mc, C5-02).
+    // Test-observable running state (see tests/RelayResilienceTest.mc).
     function isRunning() as Lang.Boolean { return _running; }
 
-    // Test-observable drop count (see tests/EatingImuQuantizeTest.mc, G-M3).
+    // Test-observable drop count (see tests/EatingImuQuantizeTest.mc).
     function dropCount() as Lang.Number { return _dropCount; }
     function recordDrop() as Void { _dropCount += 1; }
 
-    // Test-observable onWindow guard-failure count (13-LW-01; see tests/RelayResilienceTest.mc).
+    // Test-observable onWindow guard-failure count (see tests/RelayResilienceTest.mc).
     function onWindowGuardFailureCount() as Lang.Number { return _onWindowGuardFailureCount; }
 
     function beginBurst() as Void {
@@ -147,11 +147,11 @@ class EatingRelay {
     // EatingSense hands us one raw window (Array<Float>, length WINDOW*6, [ax,ay,az,gx,gy,gz …]).
     function onWindow(window) as Void {
         if (!(System.getDeviceSettings().phoneConnected)) { return; }
-        // C5-02: EatingRelay owns its OWN timer lifecycle (beginBurst/endBurst above), completely
+        // EatingRelay owns its OWN timer lifecycle (beginBurst/endBurst above), completely
         // independent of FaBolusApp's poll loop — so pollTick's "scheduleNextPoll still runs" guarantee
         // does not apply here. onWindow is invoked as an EatingSenseKit callback; an unguarded throw
         // propagating out of it could crash the relay's owning process out from under its own
-        // still-armed duty-cycle timer. Guard independently. G-M3 (19-04): the guard now wraps
+        // still-armed duty-cycle timer. Guard independently. The guard wraps
         // buildEnvelope too (not just transmitWindow) — quantizeWindow indexes into `window`, so a
         // malformed/short window (e.g. a test double's []) can throw during envelope-building itself,
         // before transmitWindow is ever reached (see tests/RelayResilienceTest.mc,
@@ -160,7 +160,7 @@ class EatingRelay {
             var msg = EatingImuEnvelope.buildEnvelope(window, RATE, WINDOW, Time.now().value());
             transmitWindow(msg);
         } catch (e) {
-            // 13-LW-01: was silently swallowed with zero observability — now counted (see
+            // Was silently swallowed with zero observability — now counted (see
             // _onWindowGuardFailureCount above), still deliberately non-fatal (the duty-cycle timer must
             // not be stranded by a transmit failure).
             _onWindowGuardFailureCount += 1;
@@ -181,7 +181,7 @@ class EatingCommListener extends Comm.ConnectionListener {
         _relay = relay;
     }
     function onComplete() as Void {}
-    // G-M3: was a no-op — a silently-dropped imu_window send was invisible. Now increments the
+    // Was a no-op — a silently-dropped imu_window send was invisible. Now increments the
     // owning relay's observable drop counter (tests/EatingImuQuantizeTest.mc).
     function onError() as Void { _relay.recordDrop(); }
 }

@@ -95,4 +95,5 @@ jobs:
       - name: Semgrep (local deslop rules)
         run: |
           pipx install semgrep || pip install --user semgrep
-          semgrep --config /tmp/deslop.yml --metrics=off --error=false source
+          # No --error: semgrep exits 0 with findings by default, which is what "advisory" means here.
+          semgrep --config /tmp/deslop.yml --metrics=off source

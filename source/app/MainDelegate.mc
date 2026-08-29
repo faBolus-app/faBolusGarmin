@@ -22,11 +22,11 @@ class MainDelegate extends Ui.BehaviorDelegate {
     function pressBolusButton() as Lang.Boolean {
         // No bolus button on the CGM-only screen: swallow the input.
         if (!_showBolus) { return true; }
-        // GA-02: read-only must block STARTING a bolus, but NEVER block CANCELLING one already in
+        // Read-only must block STARTING a bolus, but NEVER block CANCELLING one already in
         // flight — cancel is a safety action. So check canCancel() BEFORE the read-only gate.
         if (AppState.canCancel()) {
-            // CX-G-04/C5-04: honor RemoteComm.send()'s Bool — mirrors the sibling failed-transmit
-            // handling (AppState.sendBolusNow / noteBolusSendFailed, VA-12). On a failed dispatch, do
+            // Honor RemoteComm.send()'s Bool — mirrors the sibling failed-transmit
+            // handling (AppState.sendBolusNow / noteBolusSendFailed). On a failed dispatch, do
             // NOT flip to "cancelling" (that would look done and non-retryable — canCancel() itself
             // doesn't consult `status`, only bolusing()+pendingRequestId, so leaving status untouched
             // keeps the cancel retryable) and surface an error via `message`. On a successful dispatch,
@@ -53,7 +53,7 @@ class MainDelegate extends Ui.BehaviorDelegate {
         // Inert when bolusing isn't possible (phone unreachable or pump disconnected) — matches the
         // greyed button. Swallow the input so nothing opens.
         if (!AppState.canBolus()) { return true; }
-        Nav.openBolusEntry();   // resets + shows the G5 one-time notice on first use
+        Nav.openBolusEntry();   // resets + shows the one-time bolus notice (BolusIntroView) on first use
         return true;
     }
 
@@ -70,7 +70,7 @@ class MainDelegate extends Ui.BehaviorDelegate {
         return true;   // swallow taps elsewhere so the glance doesn't jump to bolus
     }
 
-    // GA-06: on a touch device a tap is ALSO delivered as onSelect/onKey. Suppress the physical-button
+    // On a touch device a tap is ALSO delivered as onSelect/onKey. Suppress the physical-button
     // handlers there (return false → fall through to the validated onTap path) so a single tap can't
     // double-route into pressBolusButton().
     function onSelect() as Lang.Boolean { if (DeviceProfile.isTouch()) { return false; } return pressBolusButton(); }

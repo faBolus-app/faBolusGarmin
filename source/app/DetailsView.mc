@@ -129,7 +129,7 @@ class DetailsView extends Ui.View {
         return null;
     }
 
-    // VA-32 (V-Audit): PURE y-position helper, extracted so the collapsed-layout guard below is
+    // PURE y-position helper, extracted so the collapsed-layout guard below is
     // unit-testable (the rest of DetailsView is view-code, so it stays sim/hardware-only). A phone-pushed
     // detailsOrder of only opt-in CIQ ids can collapse the visible rows down to just the always-appended
     // alerts row (size 1); the old `step = (bottom-top)/(rows.size()-1)` would then divide by zero and hand

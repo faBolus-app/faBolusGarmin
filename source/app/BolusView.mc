@@ -12,7 +12,7 @@ class BolusEntryView extends Ui.View {
     // Poll once on entering the bolus screen: ask the phone to force a fresh CGM read so the estimate
     // is current (not continuously — battery). The phone also re-reads + runs the guard at delivery.
     function onShow() as Void {
-        // 19-03 (G-M1): ROUTINE mint (fires on every screen show) — see RemoteComm.newRoutineRequestId().
+        // ROUTINE mint (fires on every screen show) — see RemoteComm.newRoutineRequestId().
         RemoteComm.send(RemoteComm.statusReadFresh(RemoteComm.newRoutineRequestId()));
     }
 
@@ -54,7 +54,7 @@ class BolusEntryView extends Ui.View {
         var dr = deliverRect(w, h);
 
         // Computed insulin (carbs mode) — kept clear of the value and the Deliver button.
-        // task #93 op-109 parity check: computeUnits()'s IOB term reads AppState.iob, which is a pure,
+        // op-109 parity check: computeUnits()'s IOB term reads AppState.iob, which is a pure,
         // unrounded pass-through of the host's statusRead "units" field (op-109 swan6hrIOB — see
         // AppState.handle()) — the watch never re-derives IOB itself, on this line or on the Details
         // screen. The phone remains the single calculator + 0.10 U divergence guard at delivery.
