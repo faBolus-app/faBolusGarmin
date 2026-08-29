@@ -21,7 +21,7 @@ module RemoteComm {
     // command that arrives too late (stale bolus = double-dose hazard). Time.now().value() is real
     // wall-clock — NOT System.getTimer() (monotonic device-uptime), which newRequestId() uses.
     //
-    // C2 §2.3: `code` is the entered 4-digit bolus passcode, or null when no passcode was required. It is
+    // `code` is the entered 4-digit bolus passcode, or null when no passcode was required. It is
     // added to the wire dict ("bolusPasscode") ONLY when non-null (same additive-field idiom as sentAt /
     // bgMgdl) — omitted entirely otherwise. The PHONE is the sole authority: it verifies the code and
     // denies the bolus if wrong/absent. The watch never verifies or persists it (see AppState.sendBolusNow).
@@ -41,9 +41,9 @@ module RemoteComm {
     // from carbsGrams and delivers. We include this watch's own estimate (remoteEstimateUnits) so the
     // phone can reject the bolus if the two diverge (stale-settings guard). bg omitted when stale/unknown.
     //
-    // C2 §2.3: `code` is added ("bolusPasscode") only when non-null — see bolusRequest() above.
+    // `code` is added ("bolusPasscode") only when non-null — see bolusRequest() above.
     //
-    // AB4 (Addendum B Option B): `includeStale` is the EXPLICIT per-attempt intent that the wearer chose
+    // `includeStale` is the EXPLICIT per-attempt intent that the wearer chose
     // to include a stale-but-real CGM reading in the correction (the three-way stale prompt's "include").
     // It is added to the wire dict ("includeStaleBG" => true) ONLY when true (same additive-field idiom as
     // bgMgdl / bolusPasscode) — omitted entirely otherwise, NEVER sent as false. The host fails closed on
@@ -84,7 +84,7 @@ module RemoteComm {
     // Unit-test seam (mirrors testSuppressTransmit/testPhoneReachable above). Forces dismissAlert() to
     // throw before it builds its dict — used by tests/RelayResilienceTest.mc's Test 1
     // to prove pollTick's dismiss-retry try/catch (FaBolusApp.mc) never lets a throw skip
-    // scheduleNextPoll(), the loop's only re-arm path (C5-01/CX-G-05). Never assigned outside the unit
+    // scheduleNextPoll(), the loop's only re-arm path. Never assigned outside the unit
     // suite; false is the shipping default, so dismissAlert()'s returned dict shape is UNCHANGED in
     // shipping use.
     var testDismissAlertThrows = false;
@@ -101,7 +101,7 @@ module RemoteComm {
         };
     }
 
-    // Advanced-control requests (B5): ask the phone to suspend/resume insulin. The phone re-confirms
+    // Advanced-control requests: ask the phone to suspend/resume insulin. The phone re-confirms
     // on-device and only honors them when advanced control is enabled for a Mobi — the watch never
     // triggers delivery changes unilaterally.
     function suspendPump(requestId as Lang.String) as Lang.Dictionary {
@@ -147,10 +147,10 @@ module RemoteComm {
 
     // Sends a command dictionary to the paired phone app. No-ops safely offline; never crashes.
     //
-    // VA-14: returns whether the command was DISPATCHED to the transport (true) or dropped because the
+    // Returns whether the command was DISPATCHED to the transport (true) or dropped because the
     // phone was unreachable / Comm.transmit threw synchronously (false). Routine callers (statusRead / HR
     // / cancel) ignore the return exactly as before — a returned-but-unused value is fine in Monkey C, so
-    // this stays backward-compatible. AlertConfirmDelegate (VA-14) reads it so an offline alert-dismiss
+    // this stays backward-compatible. AlertConfirmDelegate reads it so an offline alert-dismiss
     // isn't shown as cleared while the alert is still active on the pump. (For the bolus path use
     // sendBolus(), which also reports ASYNC transport failures via BolusCommListener.)
     function send(cmd as Lang.Dictionary) as Lang.Boolean {
@@ -164,7 +164,7 @@ module RemoteComm {
         }
     }
 
-    // VA-12: the BOLUS-specific send — reports dispatch so sendBolusNow never leaves a stuck "delivering…".
+    // The BOLUS-specific send — reports dispatch so sendBolusNow never leaves a stuck "delivering…".
     // Returns false (no bolus went out) when the phone is unreachable or Comm.transmit throws
     // synchronously. A LATE/ASYNC transport failure (reachable at transmit, the send fails afterward) is
     // surfaced by BolusCommListener.onError → AppState.noteBolusSendFailed(reqId) (reqId-guarded so a late
@@ -180,7 +180,7 @@ module RemoteComm {
         }
     }
 
-    // VA-17: a request id unique across a reboot / a background↔foreground process split / a
+    // A request id unique across a reboot / a background↔foreground process split / a
     // System.getTimer() rollover. The OLD id (getTimer() ms-since-boot + a per-process module counter)
     // collided across sessions — the host ledger keys on (peer, requestId), so a reused id could replay an
     // old outcome or report a duplicate. The core fix is the PERSISTED monotonic sequence: read the last
@@ -202,7 +202,7 @@ module RemoteComm {
         return Time.now().value().toString() + "-" + _counter.toString() + "-" + System.getTimer().toString();
     }
 
-    // 19-03 (G-M1): the ROUTINE counterpart of newRequestId() above, for every hot-path mint that is
+    // The ROUTINE counterpart of newRequestId() above, for every hot-path mint that is
     // NOT dose-authorizing — statusRead / statusReadFresh (pollTick, every View.onShow, the background
     // temporal service) and dismissAlert (a wearer's confirm). Those fire far more often than a bolus
     // (every ~15s of foreground polling alone) and their ids are never ledgered by the host for
@@ -213,7 +213,7 @@ module RemoteComm {
     // the SAME defense-in-depth folding newRequestId() uses. The "r" infix keeps a routine id's format
     // (`<wallSec>-r<n>-<timer>`) textually distinct from a durable id's (`<wallSec>-<n>-<timer>`), so
     // the two id spaces can never collide even minted in the same wall-clock second. The persisted
-    // "reqSeq" sequence — and therefore VA-17's reboot invariant — stays reserved for newRequestId()
+    // "reqSeq" sequence — and therefore its cross-reboot uniqueness invariant — stays reserved for newRequestId()
     // alone; RoutineRequestIdTest pins that this mint never reads/advances it.
     (:background)
     var _routineCounter = 0;
@@ -232,7 +232,7 @@ class CommListener extends Comm.ConnectionListener {
     function onError() as Void {}
 }
 
-// VA-12: the BOLUS transmit listener. Unlike CommListener (routine traffic, no-op), an ASYNC transport
+// The BOLUS transmit listener. Unlike CommListener (routine traffic, no-op), an ASYNC transport
 // error on a bolus send must not leave the wearer staring at a stuck "delivering…" — onError() flips the
 // in-flight status to "failed" via AppState.noteBolusSendFailed(reqId), guarded by reqId so a late error
 // for a superseded request is ignored, then requests a redraw. The authoritative terminal outcome still

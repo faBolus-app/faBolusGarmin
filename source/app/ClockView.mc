@@ -8,7 +8,7 @@ using Toybox.Lang;
 
 // A clock screen that also shows the current CGM value + trend, with NO bolus button. One of the
 // swipeable screens (id "clock"), added to the order from phone settings. The clock style (analog vs
-// digital) is DISPLAY-ONLY, driven by the phone's `clockAnalog` setting (P15 E4b) and persisted in
+// digital) is DISPLAY-ONLY, driven by the phone's `clockAnalog` setting and persisted in
 // Storage — there is no on-watch toggle. This is a screen inside the app — NOT a watch face.
 class ClockView extends Ui.View {
     private const KEY_ANALOG = "clockAnalog";   // Bool from the phone (statusRead); default false (digital)
@@ -18,10 +18,10 @@ class ClockView extends Ui.View {
     function initialize() { View.initialize(); }
 
     // Pull a fresh status when the screen appears (same self-heal as the glance), and start a periodic
-    // self-redraw so the analog hands advance even with no phone push (E4: the minute hand must not sit
+    // self-redraw so the analog hands advance even with no phone push (the minute hand must not sit
     // stale between the ~5-min status polls). 30 s keeps the minute hand crisp near minute boundaries.
     function onShow() as Void {
-        // 19-03 (G-M1): ROUTINE mint (fires on every screen show) — see RemoteComm.newRoutineRequestId().
+        // ROUTINE mint (fires on every screen show) — see RemoteComm.newRoutineRequestId().
         RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRoutineRequestId()));
         if (_timer == null) { _timer = new Timer.Timer(); }
         _timer.start(method(:onTick), 30000, true);
@@ -34,7 +34,7 @@ class ClockView extends Ui.View {
 
     function onTick() as Void { Ui.requestUpdate(); }
 
-    // G-L4 (19-03): coerce the Storage read to a real Boolean via an instanceof-guard — Storage.getValue()
+    // Coerce the Storage read to a real Boolean via an instanceof-guard — Storage.getValue()
     // returns an untyped Object?, which the `as Lang.Boolean` declaration below flags under a strict
     // typeCheckLevel; a corrupt/wrong-typed persisted value now fails to false (digital), matching the
     // prior null-fallback exactly.
@@ -77,7 +77,7 @@ class ClockView extends Ui.View {
         }
     }
 
-    // Conventional analog dial (E4 redesign): rim, hour ticks emphasized at 12/3/6/9, hour NUMERALS
+    // Conventional analog dial: rim, hour ticks emphasized at 12/3/6/9, hour NUMERALS
     // 1–12, and tapered hour/minute hands. Angle 0 = 12 o'clock (top); screen y grows downward, so a
     // direction is (+sin, -cos) and its perpendicular is (+cos, +sin).
     private function drawAnalog(dc as Gfx.Dc, cx as Lang.Numeric, cy as Lang.Numeric, r as Lang.Numeric, t) as Void {
@@ -136,7 +136,7 @@ class ClockView extends Ui.View {
             var gw = dc.getTextWidthInPixels(g, font);
             TrendArrow.draw(dc, cx + gw / 2 + 16, cy, 10, AppState.trend, col);
         }
-        // E3: reading age below the value (same source-epoch age + styling as MainView — orange when
+        // Reading age below the value (same source-epoch age + styling as MainView — orange when
         // stale, else gray). Suppressed when the value is hidden or the age is unknown ("").
         if (!isHidden) {
             var age = AppState.ageLabel();

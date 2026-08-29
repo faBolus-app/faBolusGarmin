@@ -14,7 +14,7 @@ class MainView extends Ui.View {
     // reconnect whose recovery push never reached the watch — that would otherwise leave the Bolus
     // button stuck greyed until the next 15s poll happened to land.
     function onShow() as Void {
-        // 19-03 (G-M1): ROUTINE mint (fires on every screen show) — see RemoteComm.newRoutineRequestId().
+        // ROUTINE mint (fires on every screen show) — see RemoteComm.newRoutineRequestId().
         RemoteComm.send(RemoteComm.statusRead(RemoteComm.newRoutineRequestId()));
     }
 
@@ -57,7 +57,7 @@ class MainView extends Ui.View {
         // Bolus button (bottom) — omitted on the CGM-only screen.
         if (!_showBolus) { return; }
 
-        // GA (round-2): read-only blocks STARTING a bolus but must NEVER hide the ability to CANCEL an
+        // Read-only blocks STARTING a bolus but must NEVER hide the ability to CANCEL an
         // in-flight one. So draw the red Cancel whenever canCancel() is true — before considering
         // read-only. When there's nothing to cancel and we're read-only, draw no bolus control at all.
         var fill; var label; var labelColor; var disabled = false;
@@ -76,7 +76,7 @@ class MainView extends Ui.View {
         dc.fillRoundedRectangle(bx, by, bw, bh, 12);
         dc.setColor(labelColor, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, by + bh / 2, Gfx.FONT_SMALL, label, vc);
-        // 17-09: mirror BolusOnlyView — say WHY the button is disabled (pump not connected / bolus in
+        // Mirror BolusOnlyView — say WHY the button is disabled (pump not connected / bolus in
         // progress / phone not connected) under the grayed button, via the SAME AppState.bolusBlockLabel(),
         // instead of a silent gray control on the glance.
         if (disabled) {

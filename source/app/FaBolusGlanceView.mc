@@ -53,13 +53,13 @@ class FaBolusGlanceView extends Ui.GlanceView {
         var bg = Storage.getValue("bg");
         var ep = Storage.getValue("bgEpoch");
         var epNum = (ep == null) ? 0 : ep;
-        // GA-08: honor the phone-synced, persisted staleness window (not a hardcoded 6 min) so the glance
+        // Honor the phone-synced, persisted staleness window (not a hardcoded 6 min) so the glance
         // matches the in-app screens. Falls back to 360 s only until the first statusRead persists it.
         var ss = Storage.getValue("staleSec");
         var staleSec = (ss instanceof Lang.Number && ss > 0) ? ss : 360;
         var stale = (bg == null) || (epNum <= 0) || ((Time.now().value() - epNum) > staleSec);
-        // P-mmol: the unit token is read directly from Storage (same reasoning as staleSec above),
-        // guarded to a recognized "mgdl"|"mmol" token (fail-closed to mgdl otherwise/absent, D-04).
+        // The unit token is read directly from Storage (same reasoning as staleSec above),
+        // guarded to a recognized "mgdl"|"mmol" token (fail-closed to mgdl otherwise/absent).
         var gu = Storage.getValue("glucoseDisplayUnit");
         var unitToken = (gu instanceof Lang.String && AppState.isValidUnitToken(gu as Lang.String)) ? gu : "mgdl";
         var text = stale ? "--" : (AppState.displayGlucoseForUnit(bg as Lang.Number, unitToken) + " " + AppState.glucoseUnitLabelForToken(unitToken));
