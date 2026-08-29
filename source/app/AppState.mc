@@ -85,7 +85,7 @@ module AppState {
     var hideDelaySec as Lang.Number or Null = null;
     (:background)
     var history as Lang.Array = [];       // recent mg/dL (Numbers), oldest → newest, for the plot
-    // E5: per-point Unix-sec source timestamps, aligned 1:1 with `history` (same size, oldest →
+    // Per-point Unix-sec source timestamps, aligned 1:1 with `history` (same size, oldest →
     // newest). Empty ⇒ the phone sent no (or misaligned) epochs and the plot falls back to assumed
     // ~5-min index spacing. INVARIANT after parsing: historyEpochs.size() == history.size() (1:1) OR
     // historyEpochs is empty — never a partial/off-by-one array (see the lockstep parse in handle()).
@@ -93,7 +93,7 @@ module AppState {
     var historyEpochs as Lang.Array = [];
     (:background)
     var alerts as Lang.Array = [];        // active pump alerts: dicts {id, kind, title}
-    // VA-14: transient — set true by AlertConfirmDelegate when a "clear alert" dismiss couldn't be
+    // Transient — set true by AlertConfirmDelegate when a "clear alert" dismiss couldn't be
     // dispatched (phone unreachable) so the alert was NOT removed locally; AlertsListView renders a
     // "Phone not connected — not cleared" notice. Cleared at the top of the next handle() (any phone
     // reply reconciles the alerts list authoritatively). Never persisted — purely a UI hint.
@@ -126,35 +126,36 @@ module AppState {
     (:background)
     var readOnly as Lang.Boolean = false;
 
-    // P13 capability channel ("supportsRemoteAlertDismiss"): whether the pump firmware honors a REMOTE
+    // Capability channel ("supportsRemoteAlertDismiss"): whether the pump firmware honors a REMOTE
     // alert dismissal. t:slim X2 silently rejects it (dismiss only snoozes locally); Mobi clears it on
     // the pump. Drives the confirm verb (alertActionWord). Safe default false => "Snooze" (honest — the
     // dismiss won't clear on the pump); the statusRead that carries an alert also carries this flag.
     (:background)
     var supportsRemoteAlertDismiss as Lang.Boolean = false;
 
-    // CX-G-08 (14-09, checkpoint #5/M2, H1) — DYNAMIC pump-tied capability: true only when the phone
+    // DYNAMIC pump-tied capability: true only when the phone
     // build supports the authenticated dismissAck path AND the connected pump honors a remote dismiss.
     // UNLIKE supportsRemoteAlertDismiss above (declared false, NEVER persisted/restored), this one IS
     // persisted (Storage.setValue on parse, mirroring garminBolusEnabled) and restored in loadPrefs —
     // so a relaunch resumes in ack-mode instead of defaulting false and letting the FIRST post-relaunch
-    // filtered statusRead fall through to the 14-08 fallback with no authenticated ack (H1's exact
-    // fail-open). Parsed in handle() BEFORE the alerts-replace (below) for the same reason.
+    // filtered statusRead fall through to the statusRead-reconcile fallback (`reconcileDismissSent`)
+    // with no authenticated ack (the exact fail-open). Parsed in handle() BEFORE the alerts-replace
+    // (below) for the same reason.
     (:background)
     var supportsDismissAck as Lang.Boolean = false;
 
-    // 14-10 (D1) — DYNAMIC pump-tied capability, the exact NEGATION of supportsDismissAck: true only
+    // DYNAMIC pump-tied capability, the exact NEGATION of supportsDismissAck: true only
     // when the phone build supports the raw-snapshot backstop AND the connected pump does NOT honor a
     // remote dismiss (t:slim X2 — no op-184 dismissAck is ever emitted for it). Mirrors
     // supportsDismissAck exactly: persisted (Storage.setValue on parse) and restored in loadPrefs, so a
     // relaunch resumes on the raw-snapshot tier instead of defaulting false and falling through to the
-    // 14-08 fallback on the first post-relaunch reply. Parsed in handle() BEFORE the alerts-replace,
-    // alongside supportsDismissAck, for the same H1 reason. The two capabilities can never both be true
-    // for the same connected pump.
+    // statusRead-reconcile fallback (`reconcileDismissSent`) on the first post-relaunch reply. Parsed in
+    // handle() BEFORE the alerts-replace, alongside supportsDismissAck, for the same reason. The two
+    // capabilities can never both be true for the same connected pump.
     (:background)
     var supportsRawAlertSnapshot as Lang.Boolean = false;
 
-    // P12 group D: the host's authoritative "may a remote start a bolus right now?" (schema `canBolus`),
+    // The host's authoritative "may a remote start a bolus right now?" (schema `canBolus`),
     // plus its reason token (`bolusBlockReason`: "pumpNotLinked" | "bolusInFlight" | "accessDenied").
     // null until the host sends them (older host) → pumpBolusAllowed() falls back to deriving from the
     // connection string. Lets the START gate stop treating a substring match of the localized display
@@ -164,7 +165,7 @@ module AppState {
     (:background)
     var hostBolusBlockReason as Lang.String or Null = null;
 
-    // P15 §2.3: whether the phone has enabled bolusing FROM THIS GARMIN. Default false ⇒ fail-closed: a
+    // Whether the phone has enabled bolusing FROM THIS GARMIN. Default false ⇒ fail-closed: a
     // cold launch / glance with no push keeps the bolus affordance hidden until a push arms it (persisted
     // so a restart doesn't re-hide an already-enabled watch). The host also refuses a Garmin deliver when
     // false (AccessPolicy). `bolusPasscodeRequired` mirrors whether a 4-digit passcode confirms the bolus.
@@ -182,7 +183,7 @@ module AppState {
     // absent/unrecognized value fails closed to "vibrate". `alertAudibleMinSeverity` is the severity
     // floor (tier token) at/above which "audible" mode plays a tone (default "critical"). Persisted +
     // change-detected exactly like garminBolusEnabled so a relaunch / background service honors the last
-    // phone-synced value. SETTINGS-ONLY: this NEVER feeds/gates/delays a dose (C3/C5) — alert-surface only.
+    // phone-synced value. SETTINGS-ONLY: this NEVER feeds/gates/delays a dose — alert-surface only.
     (:background)
     var alertIntensityMode as Lang.String = "vibrate";
     (:background)
@@ -194,12 +195,12 @@ module AppState {
     (:background)
     var alertCriticalOverridesDnd as Lang.Boolean = false;
 
-    // B2 (S1 + O3): the pump's automated-controller identity + its Control-IQ runtime on/off, pushed on
+    // The pump's automated-controller identity + its Control-IQ runtime on/off, pushed on
     // the statusRead reply so the watch can reconstruct the auto-correction DISCLOSURE locally (no prose
     // crosses the wire). Both mirror faBolusCore (ControllerVariant / PumpSnapshot.controlIQEnabled).
     // `controllerVariant` is a FROZEN token (schema `controllerVariant` enum): "none" / "controlIQ" /
     // "controlIQPro" — never invent others. DISPLAY-ONLY: neither ever gates, changes, or delays a bolus
-    // (C3 — nothing here feeds a dose). Safe legacy default ("none" / false) ⇒ render nothing controller-
+    // — nothing here feeds a dose. Safe legacy default ("none" / false) ⇒ render nothing controller-
     // specific. Not persisted (matches the nearby display-only capability fields, e.g.
     // supportsRemoteAlertDismiss): a cold launch shows nothing controller-specific until the first push.
     (:background)
@@ -212,7 +213,7 @@ module AppState {
     // row locally. Same display-only, not-persisted treatment as controllerVariant/controlIQEnabled
     // just above (a capability-like fact that changes rarely enough that a cold launch showing nothing
     // Sleep/Exercise-specific until the first push is acceptable, matching those two fields'
-    // documented reasoning). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    // documented reasoning). DISPLAY-ONLY: never gates, changes, or delays a bolus.
     (:background)
     var controlIQMode as Lang.Number = 0;
     // The already-decoded exercise countdown (op-179), a RAW remaining-seconds DURATION — NOT an
@@ -231,7 +232,7 @@ module AppState {
     // to survive a restart between phone syncs (matches `garminBolusEnabled`'s persistence, not the
     // display-only capability fields) because it changes far more often and a watch that restarts
     // mid-session should still show the last-known zone rather than nothing. `null` ⇒ render the row
-    // ABSENT — never a stale/fabricated word. DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    // ABSENT — never a stale/fabricated word. DISPLAY-ONLY: never gates, changes, or delays a bolus.
     (:background)
     var ciqZone as Lang.String? = null;
 
@@ -254,13 +255,13 @@ module AppState {
     // `ciqSuspendedForLow` above — this is never cleared on an absent key, only ever overwritten by a
     // newer instant. Persisted (survives a restart between phone syncs, matches `ciqZone`'s own
     // persistence). `null` ⇒ the row renders ABSENT (never "--" — no recent auto-correction is the
-    // common/expected case, not an error). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    // common/expected case, not an error). DISPLAY-ONLY: never gates, changes, or delays a bolus.
     (:background)
     var lastAutoCorrectionEpochSec as Lang.Number? = null;
     // The immutable SOURCE epoch of the most-recent "Control-IQ tried and couldn't deliver an
     // automatic correction" event. Remote MARKER only (no on-watch/Garmin timeline — this device
     // never had the pump history to build one from). `null` ⇒ the marker renders ABSENT.
-    // DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    // DISPLAY-ONLY: never gates, changes, or delays a bolus.
     (:background)
     var ciqLastCouldNotDeliverEpochSec as Lang.Number? = null;
 
@@ -272,7 +273,7 @@ module AppState {
     // `lastAutoCorrectionEpochSec`'s monotonic one. Persisted (survives a restart between phone
     // syncs, matches `ciqZone`'s own persistence). `null` ⇒ the bar/numeral renders ABSENT (never a
     // frozen 0%/100% bar, never a negative countdown). DISPLAY-ONLY: never gates, changes, or delays
-    // a bolus (C3).
+    // a bolus.
     (:background)
     var lockoutUntilEpochSec as Lang.Number? = null;
 
@@ -283,7 +284,7 @@ module AppState {
     // the moment it actually cleared would misrepresent the pump's real configured limit. Persisted
     // (survives a restart between phone syncs, matches `lockoutUntilEpochSec`'s own persistence).
     // `null` ⇒ the "% of configured max basal" text row renders ABSENT (fail-closed: hidden, never
-    // "0%"/"--"). DISPLAY-ONLY: never gates, changes, or delays a bolus (C3).
+    // "0%"/"--"). DISPLAY-ONLY: never gates, changes, or delays a bolus.
     (:background)
     var maxBasalUnitsPerHour as Lang.Float? = null;
 
@@ -309,7 +310,7 @@ module AppState {
     // of the four available fields (COMPLICATION_FIELDS) occupy them and in what order. DEFAULT = glucose
     // (fixed) + IOB + reservoir + pump battery (all three slots filled) until the user re-assigns them on
     // the phone. Sanitized on parse/restore (allowed tokens only, de-duped, capped at 3). Display only —
-    // never a dose input (C3).
+    // never a dose input.
     (:background)
     const COMPLICATION_FIELDS = ["iob", "reservoir", "battery", "basal"];
     (:background)
@@ -343,13 +344,13 @@ module AppState {
             var gcsSan = sanitizeComplicationSlots(gcs);
             if (gcsSan.size() > 0) { garminComplicationSlots = gcsSan; }
         }
-        // GA-08: restore the staleness policy so a restart / background launch honors the phone-synced
+        // Restore the staleness policy so a restart / background launch honors the phone-synced
         // value instead of silently reverting to the 6-min default until the next statusRead.
         var ss = Storage.getValue("staleSec");
         if (ss instanceof Lang.Number && ss > 0) { staleSec = ss; }
         var hd = Storage.getValue("hideDelaySec");
         hideDelaySec = (hd instanceof Lang.Number && hd >= 0) ? hd : null;   // absent/null = never hide
-        // P15 §2.3: restore the persisted bolus-enable so a cold launch stays on the last-known value
+        // Restore the persisted bolus-enable so a cold launch stays on the last-known value
         // (fail-closed to false when never armed) instead of re-hiding an already-enabled watch.
         var gbe = Storage.getValue("garminBolusEnabled");
         if (gbe instanceof Lang.Boolean) { garminBolusEnabled = gbe; }
@@ -387,7 +388,7 @@ module AppState {
         // nothing. A corrupt/absent/non-positive value keeps the safe default (null ⇒ row absent).
         var mbu0 = fltRange(Storage.getValue("maxBasalUnitsPerHour"), 0.01, 25.0);
         if (mbu0 != null) { maxBasalUnitsPerHour = mbu0; }
-        // C2 §2.3: restore the persisted passcode-required flag the same way, so a cold launch before the
+        // Restore the persisted passcode-required flag the same way, so a cold launch before the
         // first statusRead already knows a passcode confirms the bolus — closing the window where a
         // required→(default not-required) flip could briefly offer the tap/hold confirm instead. Default
         // false is a safe fail-open here (worst case the phone still denies an unverified bolus), but
@@ -404,7 +405,7 @@ module AppState {
         if (aams0 instanceof Lang.String && isValidSeverityTier(aams0 as Lang.String)) { alertAudibleMinSeverity = aams0; }
         var acod0 = Storage.getValue("alertCriticalOverridesDnd");
         if (acod0 instanceof Lang.Boolean) { alertCriticalOverridesDnd = acod0; }
-        // P-mmol: restore the persisted display-unit token the same guarded way, so a cold
+        // Restore the persisted display-unit token the same guarded way, so a cold
         // launch before the first statusRead already renders in the last unit the phone pushed
         // (fail-closed to the "mgdl" default when never set / not yet a recognized token).
         var gu0 = Storage.getValue("glucoseDisplayUnit");
@@ -418,7 +419,7 @@ module AppState {
         if (pf0 instanceof Lang.Number && pf0 > 0 && pf0 < 1000) { plotFloor = pf0; }
         if (pc0 instanceof Lang.Number && pc0 > 0 && pc0 < 1000) { plotCeiling = pc0; }
         if (plotFloor >= plotCeiling) { plotFloor = 40; plotCeiling = 300; }   // min-gap invariant
-        // CX-G-01 (wrist half): restore the durable unresolved-delivery tombstone (if any) so a cold
+        // Restore the durable unresolved-delivery tombstone (if any) so a cold
         // relaunch still knows a prior dispatch is unresolved — reattemptBlocked() consults this in
         // sendBolusNow, independent of pendingRequestId (deliberately NOT restored here — the tombstone
         // alone is sufficient to block a re-send; see the field's own doc comment).
@@ -432,14 +433,14 @@ module AppState {
                 unresolvedTombstoneDoseKey = strCap(tomb["doseKey"], 64);
             }
         }
-        // CX-G-08 (14-09, H1/HIGH-B): restore the two-lane dismiss state (retry lane + display
+        // Restore the two-lane dismiss state (retry lane + display
         // provisional lane) AND the persisted supportsDismissAck capability, so a cold relaunch resumes
         // in ack-mode (last-known) and keeps a wearer-dismissed-but-unacked alert overlaid instead of
         // starting fresh with no memory of it.
         loadDismissState();
     }
 
-    // Frozen wire-token set for the display-unit field (Pitfall 6 — never a raw enum on the wire).
+    // Frozen wire-token set for the display-unit field (never a raw enum on the wire).
     (:background, :glance)
     function isValidUnitToken(t as Lang.String) as Lang.Boolean {
         return t.equals("mgdl") || t.equals("mmol");
@@ -585,7 +586,7 @@ module AppState {
         return (Time.now().value() - readingEpoch) > (staleSec + hideDelaySec);
     }
 
-    // AB4 (Addendum B): the three stale-CGM choices, mirroring faBolusCore StaleBolusChoice. Kept as
+    // The three stale-CGM choices, mirroring faBolusCore StaleBolusChoice. Kept as
     // module consts + pure predicates HERE (not on the view) so the safety-critical semantics are
     // unit-testable — the view/delegate aren't compiled into the test binary (see test.jungle).
     const STALE_INCLUDE = 0;      // dose the correction off the stale-but-REAL reading (insulin-INCREASING)
@@ -597,7 +598,7 @@ module AppState {
     // Mirror of StaleBolusPrompt.bgForCalculation: only "include" carries the stale reading into the dose.
     function staleChoiceIncludesBg(opt as Lang.Number) as Lang.Boolean { return opt == STALE_INCLUDE; }
 
-    // AB4 (Addendum B): mirror of StaleBolusPrompt.shouldWarn — show the three-way stale-CGM choice only
+    // Mirror of StaleBolusPrompt.shouldWarn — show the three-way stale-CGM choice only
     // when there IS a reading value AND it is stale at compose. No reading at all is simply carbs-only
     // (nothing to include); a fresh reading composes normally. Same staleness the UI grays (glucoseStale).
     // (Garmin: only carbs mode has a correction term, so the delegate additionally gates on carbs mode.)
@@ -605,7 +606,7 @@ module AppState {
         return glucose != null && glucoseStale();
     }
 
-    // AB4 (Addendum B): the BG (mg/dL) to feed the correction / send with a carb bolus — mirror of
+    // The BG (mg/dL) to feed the correction / send with a carb bolus — mirror of
     // StaleBolusPrompt.bgForCalculation composed with freshness. Fresh → the reading. Stale → included
     // ONLY when the wearer made the explicit per-attempt "include" choice this compose (includeStaleBg);
     // otherwise nil-dropped to carbs-only. No reading → nil. A nil result means the carb request omits
@@ -632,7 +633,7 @@ module AppState {
     // Whether the PUMP side permits a new bolus — the host's authoritative flag when present (schema
     // `canBolus`: pump linked AND not mid-delivery AND remotes not read-only), otherwise derived from
     // the connection string. Excludes phone reachability (the Garmin's own local link), so it is
-    // deterministically unit-testable; canBolus() ANDs in reachability. P12 group D: this is what
+    // deterministically unit-testable; canBolus() ANDs in reachability. This is what
     // stops the START gate from depending on a substring match of the localized display string.
     (:background)
     function pumpBolusAllowed() as Lang.Boolean {
@@ -640,7 +641,7 @@ module AppState {
         return pumpConnected() && !bolusing();
     }
 
-    // R2-03: app-level liveness — the faBolus phone app has sent a reply within CONNECTION_STALE_SEC.
+    // App-level liveness — the faBolus phone app has sent a reply within CONNECTION_STALE_SEC.
     // Distinct from RemoteComm.phoneReachable() (the raw BLE link, which stays "connected" even when
     // faBolus is killed). 0 (never replied / cold launch) fails closed. Anchored on `lastReplyEpoch`,
     // stamped at the top of handle() on every inbound reply. Pure decision (wall-clock only) → testable.
@@ -650,13 +651,13 @@ module AppState {
     }
 
     // A new bolus is only possible when the phone (which owns the pump link) is reachable AND the faBolus
-    // app is live (recent reply, R2-03) AND the pump side permits it. The Garmin never touches the pump
+    // app is live (recent reply) AND the pump side permits it. The Garmin never touches the pump
     // directly. `pumpBolusAllowed()` stays PURE (no liveness) so its own tests remain deterministic.
     function canBolus() as Lang.Boolean {
         return garminBolusEnabled && RemoteComm.phoneReachable() && appLive() && pumpBolusAllowed();
     }
 
-    // P15 §2.3 / G4: the bolus affordance is HOST-POLICY-disabled when the phone put the remote in
+    // The bolus affordance is HOST-POLICY-disabled when the phone put the remote in
     // read-only mode OR hasn't enabled Garmin bolusing. Distinct from canBolus() (which ALSO needs phone
     // reachability + pump-side allowance): this is exactly the pair of phone-pushed flags whose mid-flow
     // flip must tear down an already-armed confirm. Deterministic (no reachability) → unit-testable.
@@ -664,13 +665,13 @@ module AppState {
         return readOnly || !garminBolusEnabled;
     }
 
-    // VA-07: a fingerprint of everything that makes an armed Garmin dose still valid to send. When ANY of
+    // A fingerprint of everything that makes an armed Garmin dose still valid to send. When ANY of
     // these change on a statusRead the armed dose is no longer the one the wearer confirmed against, so
     // `bolusEligibilityGen` is bumped (see handle()) and the armed confirm is torn down / the send refused
     // (re-confirm). `lastBolus` is folded in so an OBSERVED completed bolus (a new "last bolus" amount)
     // between arm and send also invalidates.
     //
-    // CX-G-09: also folds in `appLive()` and `armContextExpired()` — liveness + elapsed-time-since-arm.
+    // Also folds in `appLive()` and `armContextExpired()` — liveness + elapsed-time-since-arm.
     // Note both are evaluated ONLY from inside handle() (the sole caller), where `lastReplyEpoch` has
     // JUST been stamped a few lines above (top of handle()) — so `appLive()` is unconditionally true at
     // THIS evaluation point every time; it is folded in anyway so the fingerprint's identity is already
@@ -693,15 +694,15 @@ module AppState {
             + "|" + live + "|" + expired;
     }
 
-    // VA-07: snapshot the current eligibility generation at compose (BolusEntryDelegate.captureDose, after
+    // Snapshot the current eligibility generation at compose (BolusEntryDelegate.captureDose, after
     // deliverUnits is set). A later statusRead that changes the fingerprint bumps `bolusEligibilityGen`
     // past this snapshot → mustTeardownArmedBolus()/sendBolusNow() refuse the now-stale arm.
     function armBolus() as Void {
         armedEligibilityGen = bolusEligibilityGen;
-        armedAtEpoch = Time.now().value();   // CX-G-09: elapsed-time anchor for armContextExpired()
+        armedAtEpoch = Time.now().value();   // elapsed-time anchor for armContextExpired()
     }
 
-    // G4 + VA-07: whether an armed, pre-delivery confirm must be torn down RIGHT NOW — nothing has been
+    // Whether an armed, pre-delivery confirm must be torn down RIGHT NOW — nothing has been
     // sent yet (status == null; once a request is out the outcome flow owns the screen and must not be
     // disturbed) AND EITHER bolusing was policy-disabled (read-only / Garmin-bolus-off) OR the therapy/
     // policy state changed since the wearer armed (armedEligibilityGen != bolusEligibilityGen). Pure/
@@ -721,26 +722,26 @@ module AppState {
         return "";
     }
 
-    // P13 capability channel: the verb for the alert-dismiss confirmation — "Clear" when the pump honors
+    // Capability channel: the verb for the alert-dismiss confirmation — "Clear" when the pump honors
     // a REMOTE dismissal (Mobi), "Snooze" when it doesn't (t:slim, where it only snoozes locally), so the
     // Garmin prompt is honest and matches the phone. Pure/deterministic → unit-testable.
     function alertActionWord() as Lang.String {
         return supportsRemoteAlertDismiss ? "Clear" : "Snooze";
     }
 
-    // B2 (S1 + O3) — auto-correction DISCLOSURE derivation. A faithful Monkey C hand-port of faBolusCore
+    // Auto-correction DISCLOSURE derivation. A faithful Monkey C hand-port of faBolusCore
     // `ControllerDescriptor` + `AutoCorrectionDisclosure`, kept HERE as pure module functions so the
     // safety-neutral copy is unit-testable (the view is not compiled into the test binary — see
     // test.jungle). DISPLAY-ONLY: every function returns a string to show (or "") — nothing here blocks,
-    // disables, clamps, delays, or resizes a dose; the Deliver button is unchanged (C3).
+    // disables, clamps, delays, or resizes a dose; the Deliver button is unchanged.
     //
-    // §13 clinical-disclosure values (subject to the clinical-review distribution gate), mirroring the
+    // Clinical-disclosure values (subject to the clinical-review distribution gate), mirroring the
     // faBolusCore source of truth so the copy is a verbatim cross-surface contract:
     //   • display names "Control-IQ" / "Control-IQ+"  (ControllerDescriptor.displayName)
     //   • lockout window 60 min for BOTH variants      (AutomaticCorrection.blockedByRecentBolusMinutes)
     //   • thresholds 180 / 150-when-rising             (AutoCorrectionDisclosure.disclose{,Rising}AtOrAbove)
     //   • "rising" = the pump's OWN reported up arrows  (risingTrends [.rising,.up,.upUp] → up45/up/upup);
-    //     C8 — the arrow is READ, never a computed/synthesized glucose rate.
+    //     the arrow is READ, never a computed/synthesized glucose rate.
     // FROZEN token set (schema `controllerVariant` enum) — never invent others.
     (:background)
     const CONTROLLER_VARIANTS = ["none", "controlIQ", "controlIQPro"];
@@ -752,7 +753,7 @@ module AppState {
     // maxBasalUnitsPerHour`, clamped to [0.0, 1.0]. `null` (fail-closed) when
     // `maxBasalUnitsPerHour` is unknown/absent — this is faBolus's OWN construct, never a Control-IQ
     // figure. DISPLAY-ONLY: a fraction, never a dose/units value; never gates,
-    // changes, or delays a bolus (C3).
+    // changes, or delays a bolus.
     function maxBasalFraction() as Lang.Float? {
         if (maxBasalUnitsPerHour == null) { return null; }
         var max = maxBasalUnitsPerHour as Lang.Float;
@@ -763,16 +764,16 @@ module AppState {
         return fraction;
     }
 
-    // A short user-facing reason the bolus button is disabled, so the bolus screen can say WHY (P12
-    // exit: every disabled control shows a reason). Prefers the host's reason token; falls back to the
+    // A short user-facing reason the bolus button is disabled, so the bolus screen can say WHY
+    // (every disabled control shows a reason). Prefers the host's reason token; falls back to the
     // connection string / reachability for an older host. "" when a bolus IS possible.
     function bolusBlockLabel() as Lang.String {
         if (canBolus()) { return ""; }
         if (!RemoteComm.phoneReachable()) { return "Phone not connected"; }
-        // R2-03: the BLE link is up but the faBolus app hasn't replied within CONNECTION_STALE_SEC (app
+        // The BLE link is up but the faBolus app hasn't replied within CONNECTION_STALE_SEC (app
         // killed / backgrounded) — say we're reconnecting rather than showing a stale-derived reason.
         if (!appLive()) { return "Reconnecting…"; }
-        // P15 §2.3: bolusing from this Garmin is turned off on the phone — say so (and how to fix it).
+        // Bolusing from this Garmin is turned off on the phone — say so (and how to fix it).
         if (!garminBolusEnabled) { return "Bolusing off (enable on phone)"; }
         var t = bolusReasonText(hostBolusBlockReason);
         if (!t.equals("")) { return t; }
@@ -853,7 +854,7 @@ module AppState {
     var defaultMode as Lang.String = "carbs";
     var unitsValue as Lang.Float = 0.0;
     var carbsValue as Lang.Number = 0;
-    // AB4 (Addendum B): per-attempt choice to include a STALE CGM reading in the correction. Off by
+    // Per-attempt choice to include a STALE CGM reading in the correction. Off by
     // default and cleared by reset() before every compose, so it is NEVER sticky and NEVER a default —
     // set true only when the wearer explicitly picks "include" in the three-way stale prompt this attempt.
     var includeStaleBg as Lang.Boolean = false;
@@ -877,7 +878,7 @@ module AppState {
     (:background)
     var sawPhoneBolusing as Lang.Boolean = false;
 
-    // CX-G-01 (wrist half): a DURABLE unresolved-delivery tombstone {requestId, sentAt, doseKey},
+    // A DURABLE unresolved-delivery tombstone {requestId, sentAt, doseKey},
     // persisted to Application.Storage — UNLIKE `pendingRequestId` above, which is in-memory only and
     // lost on a nav/restart/kill. Written ONLY once dispatch to the phone might have occurred (i.e.
     // AFTER RemoteComm.sendBolus returns dispatched==true in sendBolusNow, via
@@ -885,7 +886,7 @@ module AppState {
     // happens BEFORE the phoneReachable() check; a synchronously-failed dispatch there — the outOfRange
     // return, or a `dispatched==false` transmit failure — means nothing reached the phone, so no phone
     // echo can EVER arrive, and a durable tombstone in that case would be an unrecoverable permanent
-    // lock — the codex HIGH this fixes). Consulted by reattemptBlocked() so a fresh sendBolusNow — even
+    // lock). Consulted by reattemptBlocked() so a fresh sendBolusNow — even
     // after a cold relaunch that lost pendingRequestId — is refused while unresolved. Cleared ONLY on an
     // authoritative terminal echo (delivered/cancelled/failed) for the MATCHING requestId — see
     // handle()'s bolusStatus branch, which checks this independently of pendingRequestId (onBack's
@@ -928,7 +929,7 @@ module AppState {
         Storage.deleteValue(KEY_UNRESOLVED_TOMBSTONE);
     }
 
-    // codex HIGH: the write is gated on `dispatched` here, structurally separated from sendBolusNow's
+    // The write is gated on `dispatched` here, structurally separated from sendBolusNow's
     // own control flow, specifically so "no durable tombstone unless dispatch might have occurred" is
     // directly unit-testable — RemoteComm.sendBolus's own true/false outcome depends on
     // System.getDeviceSettings().phoneConnected, which is not sim-controllable in this environment (see
@@ -937,7 +938,7 @@ module AppState {
         if (dispatched) { persistUnresolvedTombstone(reqId, sentAt, doseKey); }
     }
 
-    // VA-07: armed-dose eligibility generation. `bolusEligibilityGen` increments whenever the bolus
+    // Armed-dose eligibility generation. `bolusEligibilityGen` increments whenever the bolus
     // eligibility fingerprint changes on a statusRead (see handle()); `armBolus()` snapshots it into
     // `armedEligibilityGen` at compose (BolusEntryDelegate.captureDose). A mismatch means the therapy/
     // policy state changed AFTER the wearer armed, so the armed confirm must be torn down and the send
@@ -949,9 +950,9 @@ module AppState {
     (:background)
     var _prevEligibilityFp as Lang.String? = null;
 
-    // CX-G-09: the wall-clock instant the CURRENT arm (armBolus()) was snapshotted — 0 before the first
-    // ever arm. This is the "elapsed-time" half of CX-G-09, distinct from `appLive()`'s own liveness
-    // anchor (`lastReplyEpoch`, refreshed by every inbound reply): a dose can stay "live" the whole time
+    // The wall-clock instant the CURRENT arm (armBolus()) was snapshotted — 0 before the first
+    // ever arm. This is the "elapsed-time" half of the arm-staleness guard, distinct from `appLive()`'s
+    // own liveness anchor (`lastReplyEpoch`, refreshed by every inbound reply): a dose can stay "live" the whole time
     // (the phone keeps replying to routine polls) yet the wearer's OWN confirm can still land long after
     // they armed it — this tracks THAT gap specifically. `armContextExpired()` is the pure decision;
     // sendBolusNow() re-checks it at the final send (belt), and eligibilityFingerprint() folds it in so
@@ -961,7 +962,7 @@ module AppState {
     (:background)
     const ARM_CONTEXT_STALE_SEC = 120;
 
-    // CX-G-09 (pure): has the CURRENTLY-armed context aged past ARM_CONTEXT_STALE_SEC since armBolus()?
+    // Pure: has the CURRENTLY-armed context aged past ARM_CONTEXT_STALE_SEC since armBolus()?
     // Guards on armedAtEpoch > 0 so "never armed" can never spuriously read as expired. Deterministic
     // (wall-clock only, no reachability) → unit-testable.
     (:background)
@@ -969,14 +970,14 @@ module AppState {
         return armedAtEpoch > 0 && (Time.now().value() - armedAtEpoch) > ARM_CONTEXT_STALE_SEC;
     }
 
-    // R2-02: outcome watchdog. `outcomeSentEpoch` is the wall-clock (Unix sec) a bolus/cancel was sent;
+    // Outcome watchdog. `outcomeSentEpoch` is the wall-clock (Unix sec) a bolus/cancel was sent;
     // if no authoritative terminal echo arrives within OUTCOME_DEADLINE_SEC the watchdog flips a stuck
     // "delivering"/"cancelling" to an honest "unknown" (never fabricating delivered/cancelled). Distinct
     // from `lastReplyEpoch` (reply-time, below) — this is send-time.
     var outcomeSentEpoch as Lang.Number = 0;
     const OUTCOME_DEADLINE_SEC = 30;
 
-    // R2-03: app-level liveness. `lastReplyEpoch` is the wall-clock (Unix sec) of the last inbound phone
+    // App-level liveness. `lastReplyEpoch` is the wall-clock (Unix sec) of the last inbound phone
     // reply (stamped at the top of handle()); `appLive()` gates a bolus on a RECENT reply — distinct from
     // the raw BLE link (RemoteComm.phoneReachable()), which stays "connected" even when faBolus is killed.
     (:background)
@@ -984,15 +985,15 @@ module AppState {
     (:background)
     const CONNECTION_STALE_SEC = 60;
 
-    // R2-19: foreground poll cadence + the reply-outstanding deadline. Deadline ordering (batch guidance,
-    // kept consistent): POLL_REPLY_DEADLINE_SEC (12) < OUTCOME_DEADLINE_SEC (30) < CONNECTION_STALE_SEC
-    // (60); POLL_MAX_MS bounds the backoff so R2-02's watchdog backstop (which rides the poll's reschedule
-    // loop) keeps ticking. The jitter + outstanding-gate live in FaBolusApp; only pollBaseDelayMs is pure.
+    // Foreground poll cadence + the reply-outstanding deadline. Deadline ordering (kept consistent):
+    // POLL_REPLY_DEADLINE_SEC (12) < OUTCOME_DEADLINE_SEC (30) < CONNECTION_STALE_SEC (60); POLL_MAX_MS
+    // bounds the backoff so the outcome watchdog's backstop (which rides the poll's reschedule loop)
+    // keeps ticking. The jitter + outstanding-gate live in FaBolusApp; only pollBaseDelayMs is pure.
     const POLL_REPLY_DEADLINE_SEC = 12;
     const POLL_BASE_MS = 15000;
     const POLL_MAX_MS = 120000;
 
-    // CX-G-03: the requestId minted for the FOREGROUND poll's statusRead REQUEST (FaBolusApp.pollTick),
+    // The requestId minted for the FOREGROUND poll's statusRead REQUEST (FaBolusApp.pollTick),
     // retained so FaBolusApp.handlePhoneData can accept ONLY the correlated reply — mirroring
     // BgServiceDelegate.mintedReqId (BgService.mc) exactly. Before this, the fg path applied ANY
     // statusRead-kind reply without checking it was the one WE asked for; a stale/late reply (e.g. from a
@@ -1003,15 +1004,15 @@ module AppState {
     function reset() as Void {
         mode = defaultMode; unitsValue = 0.0; carbsValue = 0;
         pendingRequestId = null; status = null; message = null; sawPhoneBolusing = false;
-        outcomeSentEpoch = 0;     // R2-02: clear the outcome watchdog send-stamp with the in-flight state
-        includeStaleBg = false;   // AB4: the stale-BG include choice is per-attempt — never carried over
+        outcomeSentEpoch = 0;     // clear the outcome watchdog send-stamp with the in-flight state
+        includeStaleBg = false;   // the stale-BG include choice is per-attempt — never carried over
     }
 
-    // C2 §2.3 / P15 §2.3 — the SINGLE bolus send funnel. Extracted verbatim from HoldView.deliver() so
+    // The SINGLE bolus send funnel. Extracted verbatim from HoldView.deliver() so
     // BOTH confirm surfaces send through the identical path with NO duplicated or divergent delivery
     // semantics:
     //   • HoldView (tap/hold confirm, no passcode)      → sendBolusNow(null)
-    //   • PasscodeEntryView (passcode confirm, §2.3)     → sendBolusNow(enteredCode)
+    //   • PasscodeEntryView (passcode confirm)          → sendBolusNow(enteredCode)
     // It mints the reqId, sets pendingRequestId, resets the lost-echo tracker, checks reachability, sets
     // status="delivering", and calls the RemoteComm builder — exactly as before. `code` is threaded to the
     // builder, which adds "bolusPasscode" to the wire only when non-null. The WATCH NEVER verifies or
@@ -1019,30 +1020,30 @@ module AppState {
     //
     // Returns false — WITHOUT sending anything — when a hard guard blocks the send, so the caller de-arms
     // its own view-local confirm state and the wearer re-confirms against current state:
-    //   • P15 §2.3 / G4 policy-disabled (read-only ON or Garmin bolusing OFF pushed while confirming);
-    //   • VA-07 the eligibility generation moved since the arm (therapy/policy/last-bolus changed);
-    //   • VA-07 the pump no longer permits a bolus (pumpBolusAllowed() re-check at transmit);
-    //   • CX-G-09 the wrist context has gone stale/offline (appLive()) or the arm itself has aged past
+    //   • policy-disabled (read-only ON or Garmin bolusing OFF pushed while confirming);
+    //   • the eligibility generation moved since the arm (therapy/policy/last-bolus changed);
+    //   • the pump no longer permits a bolus (pumpBolusAllowed() re-check at transmit);
+    //   • the wrist context has gone stale/offline (appLive()) or the arm itself has aged past
     //     ARM_CONTEXT_STALE_SEC (armContextExpired()) — re-checked HERE, at the literal final send, so a
     //     dose armed in a since-expired context is never transmitted even when no intervening statusRead
     //     ever bumped bolusEligibilityGen to catch it;
-    //   • R2-02 an outcome is still pending (reattemptBlocked() — never mint a second reqId in flight).
+    //   • an outcome is still pending (reattemptBlocked() — never mint a second reqId in flight).
     // Returns true when a request was sent OR a terminal status was set (outOfRange), i.e. the confirm
     // surface is done and status now owns the screen.
     function sendBolusNow(code as Lang.String?) as Lang.Boolean {
         if (bolusPolicyDisabled()) { return false; }
-        // VA-07: refuse a send whose eligibility changed since the wearer armed (therapy/policy/last-bolus
+        // Refuse a send whose eligibility changed since the wearer armed (therapy/policy/last-bolus
         // moved), and re-check the pump-side allowance right here at transmit — the caller de-arms its
         // view-local confirm on false so the wearer re-confirms against current state (never a stale dose).
         if (armedEligibilityGen != bolusEligibilityGen) { return false; }
-        // CX-G-09: re-check liveness + elapsed-time-since-arm at the FINAL send. Reuses the existing
+        // Re-check liveness + elapsed-time-since-arm at the FINAL send. Reuses the existing
         // appLive() primitive (no new liveness concept) — this is the hard backstop independent of
         // whether eligibilityFingerprint() ever got a chance to observe the change via an intervening
-        // statusRead (see that function's own CX-G-09 note).
+        // statusRead (see that function's own note).
         if (!appLive()) { return false; }
         if (armContextExpired()) { return false; }
         if (!pumpBolusAllowed()) { return false; }
-        // R2-02: never mint a second reqId on top of an outcome that's still pending (double-dose decision
+        // Never mint a second reqId on top of an outcome that's still pending (double-dose decision
         // hazard); the caller de-arms and the existing in-flight outcome flow keeps ownership of the screen.
         if (reattemptBlocked()) { return false; }
         var reqId = RemoteComm.newRequestId();
@@ -1052,16 +1053,16 @@ module AppState {
             status = "outOfRange"; message = "iPhone unreachable"; return true;
         }
         status = "delivering";
-        outcomeSentEpoch = Time.now().value();   // R2-02: stamp send-time for the outcome watchdog
+        outcomeSentEpoch = Time.now().value();   // stamp send-time for the outcome watchdog
         // Carbs mode: send carbsGrams (+ bg + this watch's estimate) so the phone is the single
         // calculator and can run the divergence guard. Units mode: send the units as before.
-        // VA-12: dispatch through RemoteComm.sendBolus (NOT the fire-and-forget send) so a transmit that
+        // Dispatch through RemoteComm.sendBolus (NOT the fire-and-forget send) so a transmit that
         // fails is reported back — dispatched==false means nothing went out.
         var dispatched = false;
         if (mode.equals("carbs")) {
-            // AB4 (Addendum B): fresh → the reading; stale → included only on the explicit per-attempt
+            // Fresh → the reading; stale → included only on the explicit per-attempt
             // "include" choice, else nil-dropped (carbs-only). bgForBolus() encapsulates that decision.
-            // Option B: also forward the include-stale INTENT (includeStaleBg — the same per-attempt flag,
+            // Also forward the include-stale INTENT (includeStaleBg — the same per-attempt flag,
             // cleared by reset()) so the host can honor an acknowledged-stale correction instead of failing
             // closed to carbs-only. The builder omits it entirely unless true (never sent on units mode).
             var bg = bgForBolus();
@@ -1069,11 +1070,11 @@ module AppState {
         } else {
             dispatched = RemoteComm.sendBolus(RemoteComm.bolusRequest(deliverUnits, reqId, code), reqId);
         }
-        // CX-G-01 (wrist half): persist the durable tombstone ONLY when dispatch might have occurred —
-        // see maybeWriteUnresolvedTombstone's own doc for why this exact gate matters (codex HIGH: a
+        // Persist the durable tombstone ONLY when dispatch might have occurred —
+        // see maybeWriteUnresolvedTombstone's own doc for why this exact gate matters (a
         // provably-unsent request must never leave a permanent lock).
         maybeWriteUnresolvedTombstone(dispatched, reqId, outcomeSentEpoch, doseKeyFor());
-        // VA-12: a synchronously-failed dispatch (the phone dropped between the reachability check above
+        // A synchronously-failed dispatch (the phone dropped between the reachability check above
         // and transmit, or Comm.transmit threw) must surface as "failed" — never a stuck "delivering…".
         // An ASYNC transport failure AFTER a true dispatch is caught by BolusCommListener.onError →
         // noteBolusSendFailed(reqId). We keep pendingRequestId so a late authoritative echo can still
@@ -1085,15 +1086,15 @@ module AppState {
         return true;
     }
 
-    // R2-02: an outcome is PENDING while a bolus/cancel we sent hasn't reached an authoritative terminal
+    // An outcome is PENDING while a bolus/cancel we sent hasn't reached an authoritative terminal
     // state — only "delivering"/"cancelling" (delivered/cancelled/failed/unknown/outOfRange are terminal).
     // Pure/deterministic → unit-testable.
     function outcomePending() as Lang.Boolean {
         return status != null && (status.equals("delivering") || status.equals("cancelling"));
     }
 
-    // VA-15: a bolus status is TERMINAL once it reaches an authoritative outcome — delivered/cancelled/failed,
-    // plus 'unknown' as a degraded-terminal (R2-02's honest timeout). The complement of outcomePending's
+    // A bolus status is TERMINAL once it reaches an authoritative outcome — delivered/cancelled/failed,
+    // plus 'unknown' as a degraded-terminal (the watchdog's honest timeout). The complement of outcomePending's
     // non-terminal set (delivering/cancelling). Pure/deterministic → unit-testable. Used to stop a late
     // duplicate NON-terminal echo (same requestId) from regressing an authoritative terminal in handle().
     (:background)
@@ -1101,9 +1102,9 @@ module AppState {
         return s != null && (s.equals("delivered") || s.equals("cancelled") || s.equals("failed") || s.equals("unknown"));
     }
 
-    // 14-CR-01 (CX-G-01 durable tombstone, BLOCKER): a status is AUTHORITATIVELY RESOLVED only for a
+    // A status is AUTHORITATIVELY RESOLVED only for a
     // genuine outcome — delivered/cancelled/failed. Deliberately EXCLUDES "unknown": that token is
-    // R2-02's honest-timeout / the phone's FB-02 indeterminate echo, meaning the outcome is still
+    // the outcome watchdog's honest-timeout / the phone's indeterminate echo, meaning the outcome is still
     // genuinely AMBIGUOUS — exactly the case the unresolved-delivery tombstone exists to guard against a
     // race re-send. isTerminalStatus() above INCLUDES "unknown" because it serves a different purpose
     // (stopping a late non-terminal echo from regressing an honest timeout in the block below) — do not
@@ -1113,14 +1114,14 @@ module AppState {
         return s != null && (s.equals("delivered") || s.equals("cancelled") || s.equals("failed"));
     }
 
-    // R2-02: the outcome deadline has passed with no authoritative terminal echo. Guards on
+    // The outcome deadline has passed with no authoritative terminal echo. Guards on
     // outcomeSentEpoch > 0 so a pending status with no send-stamp can never spuriously expire.
     function outcomeDeadlineExpired() as Lang.Boolean {
         return outcomePending() && outcomeSentEpoch > 0
             && (Time.now().value() - outcomeSentEpoch) > OUTCOME_DEADLINE_SEC;
     }
 
-    // R2-02: the watchdog tick. Flips a stuck delivering/cancelling to an honest "unknown" once the
+    // The watchdog tick. Flips a stuck delivering/cancelling to an honest "unknown" once the
     // deadline expires — NEVER fabricating delivered/cancelled. KEEPS pendingRequestId so a late
     // authoritative echo (by requestId) can still upgrade the outcome. Returns true when it changed state
     // so the caller (HoldView timer / FaBolusApp poll) can Ui.requestUpdate(). Idempotent once flipped.
@@ -1131,7 +1132,7 @@ module AppState {
         return true;
     }
 
-    // R2-02: clear ALL in-flight bolus state — used by HoldDelegate.onBack() so a back-out doesn't orphan
+    // Clear ALL in-flight bolus state — used by HoldDelegate.onBack() so a back-out doesn't orphan
     // a "delivering" status + pendingRequestId (a stale outcome left on screen that could confuse a later
     // attempt). The phone owns the actual delivery + its own (peer,requestId) ledger, so forgetting the
     // local view state here never re-triggers or double-doses.
@@ -1140,9 +1141,9 @@ module AppState {
         sawPhoneBolusing = false; outcomeSentEpoch = 0;
     }
 
-    // R2-02: a NEW send must be refused while an outcome is still pending — never mint a second reqId on
+    // A NEW send must be refused while an outcome is still pending — never mint a second reqId on
     // top of an in-flight one. Checked in sendBolusNow before minting.
-    // CX-G-01 (wrist half): ALSO refused while a durable unresolved-delivery tombstone survives from a
+    // ALSO refused while a durable unresolved-delivery tombstone survives from a
     // PRIOR process (a cold relaunch loses `status`/`outcomePending()`'s in-memory backing, but the
     // tombstone is durable) — this is what makes a relaunch honor an unresolved dispatch, not just the
     // current process's own in-memory outcome tracking.
@@ -1150,7 +1151,7 @@ module AppState {
         return outcomePending() || hasUnresolvedTombstone();
     }
 
-    // VA-12: mark an in-flight bolus send as FAILED — pure/guarded so it can never regress a terminal
+    // Mark an in-flight bolus send as FAILED — pure/guarded so it can never regress a terminal
     // outcome or touch the wrong request. Called by RemoteComm.BolusCommListener.onError (async transport
     // failure) and by sendBolusNow itself when the synchronous dispatch reports false. No-op unless there
     // IS an in-flight request (pendingRequestId non-null), the reqId matches it (a late error for a
@@ -1165,7 +1166,7 @@ module AppState {
         if (message == null) { message = "Send failed — not delivered."; }
     }
 
-    // R2-19 (pure): the base poll delay (ms) for a given consecutive-miss backoff level — POLL_BASE_MS
+    // Pure: the base poll delay (ms) for a given consecutive-miss backoff level — POLL_BASE_MS
     // doubled per level, capped at POLL_MAX_MS. level 0 => 15000, 1 => 30000, 2 => 60000, 3+ => 120000.
     // Jitter + the outstanding-gate live in FaBolusApp (sim/hardware-only); this pure step is unit-tested.
     function pollBaseDelayMs(level as Lang.Number) as Lang.Number {
@@ -1177,7 +1178,7 @@ module AppState {
         return d;
     }
 
-    // G5 (Garmin half): a one-time, plain-language notice shown the first time the wearer opens the
+    // A one-time, plain-language notice shown the first time the wearer opens the
     // bolus flow — that bolusing from the watch is off by default and is turned on/off from faBolus on
     // the phone. The "shown" flag is PERSISTED so it appears exactly once for the life of the install
     // (survives restarts / re-opens). Garmin-local: this does NOT invert or restate any host copy — the
@@ -1190,9 +1191,9 @@ module AppState {
         Storage.setValue(KEY_BOLUS_INTRO_SHOWN, true);
     }
 
-    // C2 §2.3 (Garmin half): a SEPARATE one-time notice, shown the FIRST time a passcode is actually
+    // A SEPARATE one-time notice, shown the FIRST time a passcode is actually
     // required, explaining that a 4-digit passcode set in faBolus on the phone now confirms a bolus
-    // (replacing the tap/hold). The plan's "prompt at pairing time" has no on-watch equivalent — pairing
+    // (replacing the tap/hold). A "prompt at pairing time" has no on-watch equivalent — pairing
     // is done phone-side on Garmin — so this first-use notice is the correct on-watch stand-in. Its own
     // persisted flag (separate from KEY_BOLUS_INTRO_SHOWN) so it appears exactly once for the life of the
     // install, set at DISPLAY time (before the notice is pushed) so it shows once even if the wearer backs
@@ -1239,7 +1240,7 @@ module AppState {
     // oracle-backed calculator and runs the divergence guard before delivery.
     //
     // This is a hand-port of faBolusCore/BolusMath.estimate() — the faithful Tandem oracle logic
-    // (audit C-01). Keep it in lockstep with that Swift/Java source. The key correctness point:
+    // Keep it in lockstep with that Swift/Java source. The key correctness point:
     //   • food = carbs / carbRatio
     //   • fromBG = (glucose - target) / isf   (SIGNED — a below-target BG is negative and REDUCES the dose)
     //   • fromIOB = -iob (only when iob > 0)   — IOB offsets a BG correction, never a bare carb dose
@@ -1247,7 +1248,7 @@ module AppState {
     //   • below target: apply (fromBG + fromIOB) if it keeps the total positive, else floor total at 0
     // The old code floored the *correction* at 0 before combining, which dropped every below-target
     // reduction and over-recommended. Units mode is a manual fixed dose (no correction / IOB).
-    // GA-04: the oracle's BolusCalcUnits.doublePrecision — BigDecimal.setScale(2, HALF_UP): round to two
+    // The oracle's BolusCalcUnits.doublePrecision — BigDecimal.setScale(2, HALF_UP): round to two
     // decimals, ties AWAY from zero (so it matches faBolusCore/BolusMath.dp on every component). Monkey C's
     // Math.round is not HALF_UP for negatives, so we floor(|v|*100 + 0.5) and re-apply the sign.
     function dp2(v as Lang.Float) as Lang.Float {
@@ -1271,18 +1272,18 @@ module AppState {
     // The carb+correction math ONLY (unrounded, unclamped) — factored out of computeUnits()'s former
     // "carbs" branch so callers can read the SAME calculator total regardless of the CURRENT mode,
     // without a second, independently-drifting copy of this logic.
-    // 0.0 when the carb ratio hasn't arrived from the phone (FB-01 — do NOT silently assume 10 g/U;
+    // 0.0 when the carb ratio hasn't arrived from the phone (do NOT silently assume 10 g/U;
     // that is an unverified guess that could misdose. `carbCalcAvailable()` tells "genuinely zero"
     // apart from "not available yet").
     function carbCorrectionTotal() as Lang.Float {
         if (carbRatio <= 0.0) { return 0.0; }
-        // GA-04: round EACH component to two decimals (half-up) before combining — exactly as the
+        // Round EACH component to two decimals (half-up) before combining — exactly as the
         // oracle-backed host does. Combining unrounded components then rounding only the total drifted
         // by one 0.05 U pump increment on ~1.5% of inputs, and the host's 0.10 U tolerance accepted it,
         // so the delivered dose could differ from the number shown on the hold screen.
         var fromCarbs = dp2(carbsValue.toFloat() / carbRatio);
         var fromBG = 0.0;
-        // AB4 (Addendum B): a stale BG is dropped from the correction (carbs-only) UNLESS the wearer
+        // A stale BG is dropped from the correction (carbs-only) UNLESS the wearer
         // made the explicit, per-attempt "include" choice this compose (includeStaleBg) — never sticky,
         // never default. Fresh always corrects. Keeps the wrist preview in lockstep with bgForBolus().
         if (isf > 0 && glucose != null && (!glucoseStale() || includeStaleBg)) {
@@ -1306,7 +1307,7 @@ module AppState {
         return carbsValue.toString() + " g";
     }
 
-    // FB-01: a carb bolus can only be estimated on the wrist once the pump's carb ratio has synced from
+    // A carb bolus can only be estimated on the wrist once the pump's carb ratio has synced from
     // the phone. Units mode never needs it. When false the UI shows "calculator unavailable" and blocks
     // the bolus (we do NOT fall back to an assumed 10 g/U).
     function carbCalcAvailable() as Lang.Boolean {
@@ -1314,11 +1315,11 @@ module AppState {
     }
 
     // Route an inbound phone message.
-    // R2-15/VA-16 (pure): is this inbound phone message the correlated statusRead reply the background
+    // Pure: is this inbound phone message the correlated statusRead reply the background
     // service is waiting for? The background poll sends a statusRead and must publish + exit ONLY on the
     // matching reply — an unrelated dict (an eating_sense toggle, a stray bolusStatus echo, or an
     // empty {}) that lands first must be IGNORED (not mistaken for the reply, which would exit early and
-    // drop the fresh read). This is the KIND discriminator, retained as the R2-15 fallback for a legacy
+    // drop the fresh read). This is the KIND discriminator, retained as the fallback for a legacy
     // phone that does not echo the requestId; `isCorrelatedStatusReply` layers true id correlation on top.
     (:background)
     function isStatusReply(dict as Lang.Dictionary) as Lang.Boolean {
@@ -1326,7 +1327,7 @@ module AppState {
         return kind instanceof Lang.String && (kind as Lang.String).equals("statusRead");
     }
 
-    // R2-15 (pure): TRUE request-id correlation for a statusRead reply. The watch mints a requestId for its
+    // Pure: TRUE request-id correlation for a statusRead reply. The watch mints a requestId for its
     // statusRead REQUEST and retains it; the phone now ECHOES that id in its reply (faBolus
     // AppModel.statusCommand(replyingTo:)). Accept a reply as OURS iff it is a statusRead (kind) AND its
     // echoed requestId matches the one we minted. A reply with NO requestId is a legacy phone that doesn't
@@ -1356,22 +1357,22 @@ module AppState {
 
     (:background)
     function handle(data as Lang.Dictionary) as Void {
-        // CX-G-11: reuse the existing strCap() guard (instanceof-checked, GA-09) instead of the bare
+        // Reuse the existing strCap() guard (instanceof-checked) instead of the bare
         // `as Lang.String?` cast — a non-null, non-String `kind` (malformed/hostile wire dict) used to hit
         // an unguarded cast here and crash the handler. A non-String kind now safely resolves to null,
         // same as an absent kind.
         var kind = strCap(data["kind"], 64);
         if (kind == null) { return; }
-        // R2-03: any well-formed inbound reply (statusRead OR bolusStatus) proves the faBolus app is
+        // Any well-formed inbound reply (statusRead OR bolusStatus) proves the faBolus app is
         // alive — stamp the liveness anchor before dispatching. appLive()/canBolus() read this.
         lastReplyEpoch = Time.now().value();
-        // VA-14: any phone reply reconciles the alerts list authoritatively, so clear the transient
+        // Any phone reply reconciles the alerts list authoritatively, so clear the transient
         // offline-dismiss notice here (its lifetime is "until the next handle()").
         alertDismissFailedOffline = false;
         if (kind.equals("statusRead")) {
-            // Guard the assignment (audit): a partial statusRead that omits bgMgdl must NOT null out the
+            // Guard the assignment: a partial statusRead that omits bgMgdl must NOT null out the
             // last-known glucose (which would blank the value + disable correction dosing). Keep last.
-            // GA-09: every field is range/finite-validated before it mutates state; a bad value returns
+            // Every field is range/finite-validated before it mutates state; a bad value returns
             // null and the last good reading is kept (see numRange/fltRange/validTrend/strCap).
             var bg = numRange(data["bgMgdl"], 0, 600); if (bg != null) { glucose = bg; }
             var t = validTrend(data["trend"]); if (t != null) { trend = t; }
@@ -1391,8 +1392,8 @@ module AppState {
             var bc = data["batteryCharging"];
             batteryCharging = (bc instanceof Lang.Boolean) && bc;
             var cn = strCap(data["message"], 120); if (cn != null) { connection = cn; }
-            // GA-03 / round-2: the AUTHORITATIVE terminal outcome is the phone's bolusStatus echo (by
-            // requestId), handled below — including the FB-02 "unknown" status when the pump outcome is
+            // The AUTHORITATIVE terminal outcome is the phone's bolusStatus echo (by
+            // requestId), handled below — including the "unknown" status when the pump outcome is
             // genuinely indeterminate. If we've seen the phone bolusing and it's no longer bolusing but the
             // terminal echo never arrived, do NOT fabricate an outcome from the connection string. That
             // applies to a cancel too: a cancel REQUEST we sent is not a confirmed cancellation — the pump
@@ -1411,12 +1412,12 @@ module AppState {
             // recovery above) settles it to the just-delivered amount.
             var deliveringNow = (status != null && (status.equals("delivering") || status.equals("cancelling")));
             var lb = fltRange(data["lastBolusUnits"], 0.0, 100.0); if (lb != null && !deliveringNow) { lastBolus = lb; }
-            // Group A (defect A1). Prefer the phone's IMMUTABLE source epoch: an age is computed when
+            // Prefer the phone's IMMUTABLE source epoch: an age is computed when
             // the phone composes the message, so by the time it lands here it already understates the
             // reading's true age. Fall back to the age only for a host too old to send an epoch.
             //
             // A reading with NEITHER an epoch nor an age has an UNKNOWN age, and unknown must mean
-            // stale. It previously meant "now" — which is exactly A1: a value labelled "1 minute old"
+            // stale. It previously meant "now" — a value labelled "1 minute old"
             // that was in fact hours stale, and which then passed `!glucoseStale()` and fed the
             // correction term at `computeUnits()`. Leaving `readingEpoch` untouched makes such a value
             // inherit the previous reading's epoch and age out, matching what iOS already does
@@ -1434,7 +1435,7 @@ module AppState {
             }
             // Staleness policy from the phone: glucoseStaleMinutes (>0), glucoseHideDelayMinutes
             // (0 = hide when stale, absent = never hide).
-            // 19-03 (G-M1/T-19-09): the persist below is now CONDITIONAL on glucoseStaleMinutes being
+            // The persist below is CONDITIONAL on glucoseStaleMinutes being
             // present+in-range (sm != null) — previously it ran on EVERY statusRead reply regardless,
             // which (a) clobbered the persisted policy with the in-memory default/last-good value on a
             // reply that simply omitted the key (never the phone's intent — every other field in this
@@ -1443,7 +1444,7 @@ module AppState {
             var sm = numRange(data["glucoseStaleMinutes"], 1, 720);
             if (sm != null) {
                 staleSec = sm * 60;
-                // GA-08: persist the staleness policy so the glance / complication (separate launch
+                // Persist the staleness policy so the glance / complication (separate launch
                 // contexts) and a cold restart honor it before the next statusRead arrives.
                 Storage.setValue("staleSec", staleSec);
             }
@@ -1451,7 +1452,7 @@ module AppState {
             hideDelaySec = (hd != null) ? hd * 60 : null;
             if (hideDelaySec != null) { Storage.setValue("hideDelaySec", hideDelaySec); }
             else { Storage.deleteValue("hideDelaySec"); }
-            // E5: parse history and its per-point epochs in LOCKSTEP so the two arrays are guaranteed
+            // Parse history and its per-point epochs in LOCKSTEP so the two arrays are guaranteed
             // equal-length and 1:1 aligned. sanitizeHistory drops out-of-range mg/dL, which would
             // misalign a separately-sanitized epochs array — so when epochs are present AND the raw
             // arrays are the same length, sanitize them as PAIRS (keep index k only if BOTH the reading
@@ -1469,44 +1470,45 @@ module AppState {
                     historyEpochs = [];   // no/misaligned epochs → fall back to assumed spacing
                 }
             }
-            // CX-G-08 (14-09, H1): parse the DYNAMIC pump-tied capability BEFORE the alerts replace
-            // below: a relaunch's first
-            // post-restart filtered statusRead (capability restored+re-parsed from THIS message) must
-            // not fall through to the 14-08 fallback with no authenticated ack. Persisted (mirrors
-            // garminBolusEnabled), NOT supportsRemoteAlertDismiss (declared false, never restored).
+            // Parse the DYNAMIC pump-tied capability BEFORE the alerts replace below: a relaunch's
+            // first post-restart filtered statusRead (capability restored+re-parsed from THIS message)
+            // must not fall through to the statusRead-reconcile fallback (`reconcileDismissSent`) with
+            // no authenticated ack. Persisted (mirrors garminBolusEnabled), NOT
+            // supportsRemoteAlertDismiss (declared false, never restored).
             var sda2 = data["supportsDismissAck"];
             if (sda2 instanceof Lang.Boolean) {
-                // 19-03 (G-M1/T-19-10): change-detected — this capability is present on EVERY reply, so
+                // Change-detected — this capability is present on EVERY reply, so
                 // writing unconditionally re-wrote the same flash cell on every poll even when unchanged.
                 if (supportsDismissAck != sda2) { Storage.setValue(KEY_SUPPORTS_DISMISS_ACK, sda2); }
                 supportsDismissAck = sda2;
             }
-            // 14-10 (D1) — the raw-snapshot backstop's DYNAMIC capability, parsed+persisted alongside
-            // supportsDismissAck (same H1 reason: BEFORE the alerts-replace below, so the first
+            // The raw-snapshot backstop's DYNAMIC capability, parsed+persisted alongside
+            // supportsDismissAck (same reason: BEFORE the alerts-replace below, so the first
             // post-relaunch statusRead resolves the correct tier).
             var sra = data["supportsRawAlertSnapshot"];
             if (sra instanceof Lang.Boolean) {
-                // 19-03 (G-M1/T-19-10): change-detected, same reasoning as supportsDismissAck above.
+                // Change-detected, same reasoning as supportsDismissAck above.
                 if (supportsRawAlertSnapshot != sra) { Storage.setValue(KEY_SUPPORTS_RAW_ALERT_SNAPSHOT, sra); }
                 supportsRawAlertSnapshot = sra;
             }
-            // 14-10 (D1) — detect whether `rawAlerts` is a PRESENT Array (nil/non-Array ⇒ absent) and, if
+            // Detect whether `rawAlerts` is a PRESENT Array (nil/non-Array ⇒ absent) and, if
             // so, parse it into an identity set BEFORE the alerts-replace, using the TITLE-AGNOSTIC
             // absence-oracle parser (rawAlertIdentities, below) — never sanitizeAlerts, which would drop
             // a valid (id,kind) over a malformed title and falsely treat it as absent.
             var ra = data["rawAlerts"];
             var rawPresent = (ra instanceof Lang.Array);
             var rawIdents = rawPresent ? rawAlertIdentities(ra as Lang.Array) : [];
-            // CX-G-08/14-10: a fresh, authoritative alerts list just replaced the old one.
+            // A fresh, authoritative alerts list just replaced the old one.
             // CAPABILITY-FIRST 3-way (never chosen by rawAlerts' presence): (1) supportsDismissAck ⇒
-            // 14-09 authenticated-ack-only (unchanged); (2) else supportsRawAlertSnapshot ⇒ the NEW
+            // authenticated-ack-only; (2) else supportsRawAlertSnapshot ⇒ the
             // raw-snapshot tier — prune provisionals proven absent from a PRESENT rawAlerts (skip the
             // prune entirely when absent — fail-closed, keep-visible), THEN always overlay; (3) else ⇒
-            // the 14-08 fallback (reconcileDismissSent — the ONLY proof-of-absence event for the
-            // dismissSentAlertIdentities mechanism; markDismissSent/reconcileDismissSent above). NEVER
-            // more than one branch: overlaying in the fallback branch would defeat its filtered-absence
-            // removal with a stale, never-to-be-acked provisional; falling through from the raw tier to
-            // the 14-08 fallback on an absent rawAlerts would reintroduce the local-snooze fail-open.
+            // the statusRead-reconcile fallback (reconcileDismissSent — the ONLY proof-of-absence event
+            // for the dismissSentAlertIdentities mechanism; markDismissSent/reconcileDismissSent
+            // above). NEVER more than one branch: overlaying in the fallback branch would defeat its
+            // filtered-absence removal with a stale, never-to-be-acked provisional; falling through
+            // from the raw tier to that fallback on an absent rawAlerts would reintroduce the
+            // local-snooze fail-open.
             var al = data["alerts"];
             if (al instanceof Lang.Array) {
                 alerts = sanitizeAlerts(al);
@@ -1520,16 +1522,16 @@ module AppState {
                 }
             }
             var ro = data["remotesReadOnly"]; if (ro instanceof Lang.Boolean) { readOnly = ro; }
-            // P13 capability channel: whether a remote dismiss clears on the pump (Mobi) or only snoozes
+            // Capability channel: whether a remote dismiss clears on the pump (Mobi) or only snoozes
             // locally (t:slim) — drives the alert confirm verb. Strict guard: a non-boolean is ignored.
             var sd = data["supportsRemoteAlertDismiss"]; if (sd instanceof Lang.Boolean) { supportsRemoteAlertDismiss = sd; }
-            // P12 group D: the host's semantic bolus availability + reason token (see hostCanBolus).
+            // The host's semantic bolus availability + reason token (see hostCanBolus).
             var cb = data["canBolus"]; if (cb instanceof Lang.Boolean) { hostCanBolus = cb; }
             var cbr = data["bolusBlockReason"]; if (cbr instanceof Lang.String) { hostBolusBlockReason = strCap(cbr, 40); }
-            // P15 §2.3: whether bolusing from this Garmin is enabled on the phone (default OFF). Persist so a
+            // Whether bolusing from this Garmin is enabled on the phone (default OFF). Persist so a
             // cold launch stays fail-closed on the last-known value. Also the passcode-required flag (drives
             // confirm). Strict guards: a non-boolean is ignored (keeps the last / safe default).
-            // 19-03 (G-M1/T-19-10): change-detected — garminBolusEnabled/bolusPasscodeRequired are present
+            // Change-detected — garminBolusEnabled/bolusPasscodeRequired are present
             // on EVERY reply, so writing unconditionally re-wrote the same flash cell on every poll.
             var gbe2 = data["garminBolusEnabled"];
             if (gbe2 instanceof Lang.Boolean) {
@@ -1537,7 +1539,7 @@ module AppState {
                 garminBolusEnabled = gbe2;
             }
             var bpr = data["bolusPasscodeRequired"];
-            // C2 §2.3: persist like garminBolusEnabled so a cold launch / background context knows a
+            // Persist like garminBolusEnabled so a cold launch / background context knows a
             // passcode is required before the first statusRead (loadPrefs restores it). Strict guard: a
             // non-boolean is ignored (keeps the last / safe default). The watch only COLLECTS the code and
             // sends it; the phone verifies + persists nothing here beyond this required flag.
@@ -1550,7 +1552,7 @@ module AppState {
             // relaunch / background service honors the last phone-synced value. FAIL-CLOSED: `mode` adopts
             // only one of the frozen tokens ("silent"|"vibrate"|"audible") — an absent/garbage value keeps
             // the safe "vibrate" default (vibration-only, nothing audible, nothing DND-piercing).
-            // SETTINGS-ONLY (C3/C5) — never a dose input; alert-surface only.
+            // SETTINGS-ONLY — never a dose input; alert-surface only.
             var aim = data["alertIntensityMode"];
             if (aim instanceof Lang.String && containsStr(ALERT_MODES, aim as Lang.String)) {
                 if (!alertIntensityMode.equals(aim)) { Storage.setValue("alertIntensityMode", aim); }
@@ -1566,11 +1568,11 @@ module AppState {
                 if (alertCriticalOverridesDnd != acod) { Storage.setValue("alertCriticalOverridesDnd", acod); }
                 alertCriticalOverridesDnd = acod;
             }
-            // B2 (S1 + O3): the pump's controller identity + Control-IQ runtime on/off, for the LOCAL
+            // The pump's controller identity + Control-IQ runtime on/off, for the LOCAL
             // auto-correction disclosure. FROZEN token set (CONTROLLER_VARIANTS = the schema
             // `controllerVariant` enum) — an unknown/garbage variant is ignored (keeps the last / safe
             // "none"). controlIQEnabled is strict-guarded like the other capability booleans. Display-
-            // only: nothing here feeds a dose (C3), so no persistence is needed.
+            // only: nothing here feeds a dose, so no persistence is needed.
             var cvr = data["controllerVariant"];
             if (cvr instanceof Lang.String && containsStr(CONTROLLER_VARIANTS, cvr as Lang.String)) { controllerVariant = cvr; }
             var ciqe = data["controlIQEnabled"];
@@ -1676,7 +1678,7 @@ module AppState {
             if (bm != null && (bm.equals("units") || bm.equals("carbs"))) { defaultMode = bm; }
             var bi = fltRange(data["bolusIncrement"], 0.01, 5.0); if (bi != null) { stepU = bi; }
             var ci = numRange(data["carbIncrement"], 1, 100); if (ci != null) { stepC = ci; }
-            // 19-03 (G-M1/T-19-10): change-detected — screenOrder/defaultScreen/detailsOrder/
+            // Change-detected — screenOrder/defaultScreen/detailsOrder/
             // watchChartRanges are sent on every reply the phone has them configured, so writing
             // unconditionally re-wrote the same flash cell on every poll even when the layout never
             // changed. Lang.Array has no built-in structural equality (sameArray() above); scalars use
@@ -1732,7 +1734,7 @@ module AppState {
             if (pf == null) { pf = numRange(data["glucosePlotFloor"], 1, 1000); }
             var pc = numRange(data["glucosePlotCeilingSmall"], 1, 1000);
             if (pc == null) { pc = numRange(data["glucosePlotCeiling"], 1, 1000); }
-            // 19-03 (G-M1/T-19-10): change-detected — plotFloor/plotCeiling are recomputed and re-sent on
+            // Change-detected — plotFloor/plotCeiling are recomputed and re-sent on
             // every reply even when the resolved bounds are identical to last time.
             if (pf != null && pc != null) {
                 var priorPlotFloor = plotFloor;
@@ -1747,18 +1749,18 @@ module AppState {
                 if (priorPlotFloor != plotFloor) { Storage.setValue("plotFloor", plotFloor); }
                 if (priorPlotCeiling != plotCeiling) { Storage.setValue("plotCeiling", plotCeiling); }
             }
-            // 19-03 (G-M1/T-19-10): change-detected, same reasoning as the settings keys above.
+            // Change-detected, same reasoning as the settings keys above.
             var cdisp = data["garminComplicationDisplay"];
             if (cdisp instanceof Lang.String && ((cdisp as Lang.String).equals("numericColor") || (cdisp as Lang.String).equals("stringTrend"))) {
                 if (!complicationDisplay.equals(cdisp)) { Storage.setValue("complicationDisplay", cdisp); }
                 complicationDisplay = cdisp;
             }
-            // P15 E4b: the clock screen's analog-vs-digital choice is now PHONE-DRIVEN, replacing the old
+            // The clock screen's analog-vs-digital choice is PHONE-DRIVEN, replacing the old
             // on-watch tap toggle. Persist under the SAME "clockAnalog" Storage key ClockView.analog()
             // reads, so a cold launch keeps the last phone-pushed value. Strict guard (mirrors
             // remotesReadOnly / garminBolusEnabled): a non-boolean is ignored, leaving the last persisted
             // value (or ClockView's digital default when never set) untouched.
-            // 19-03 (G-M1/T-19-10): change-detected against the CURRENT persisted value (this field has
+            // Change-detected against the CURRENT persisted value (this field has
             // no in-memory AppState mirror — ClockView reads Storage directly — so the "before" value is
             // read back rather than compared against a field).
             var ca = data["clockAnalog"];
@@ -1774,13 +1776,13 @@ module AppState {
             // persisted; an absent/unrecognized token is ignored, keeping the last persisted value —
             // which fails closed to "mgdl" on a fresh install / older phone build that never sends it.
             // The canonical glucose/isf/targetBg Numbers are never touched here — only the
-            // label this token selects. 19-03 (G-M1/T-19-10): change-detected, same reasoning as above.
+            // label this token selects. Change-detected, same reasoning as above.
             var gu = data["glucoseDisplayUnit"];
             if (gu instanceof Lang.String && isValidUnitToken(gu as Lang.String)) {
                 if (!glucoseUnit.equals(gu)) { Storage.setValue("glucoseDisplayUnit", gu); }
                 glucoseUnit = gu;
             }
-            // VA-07: after EVERY field above is parsed, recompute the bolus eligibility fingerprint. When
+            // After EVERY field above is parsed, recompute the bolus eligibility fingerprint. When
             // it changes from the last-seen one, bump the generation — any armed confirm whose snapshot
             // (armedEligibilityGen) predates the bump is now stale and is torn down / refused at send.
             // The first statusRead only establishes the baseline (_prevEligibilityFp == null ⇒ no bump).
@@ -1789,16 +1791,16 @@ module AppState {
             _prevEligibilityFp = fp;
         } else if (kind.equals("bolusStatus")) {
             var rid = strCap(data["requestId"], 64);
-            // GA-09: only adopt a recognized status token, and cap the message length.
+            // Only adopt a recognized status token, and cap the message length.
             var st = data["status"];
             var incoming = (st instanceof Lang.String && containsStr(STATUS_TOKENS, st as Lang.String)) ? st as Lang.String : null;
-            // CX-G-01 (wrist half): clear the durable tombstone on an AUTHORITATIVELY RESOLVED echo for
+            // Clear the durable tombstone on an AUTHORITATIVELY RESOLVED echo for
             // its requestId, independent of pendingRequestId/status — onBack's clearInFlight() may have
             // already wiped those locally WITHOUT touching the tombstone (see its own comment), so
             // gating the clear on pendingRequestId (which a back-out nulls) would leave a tombstone
             // stuck forever once a matching late echo can no longer be recognized. A non-terminal echo
-            // (delivering/cancelling) must NOT clear it — the outcome is still unknown. 14-CR-01
-            // (BLOCKER): nor must an "unknown" echo (FB-02 indeterminate) — that is the ambiguous-outcome
+            // (delivering/cancelling) must NOT clear it — the outcome is still unknown.
+            // Nor must an "unknown" echo (indeterminate) — that is the ambiguous-outcome
             // case this tombstone exists to protect, so this gate deliberately uses
             // isAuthoritativelyResolved(), NOT isTerminalStatus() (which treats "unknown" as terminal for
             // an unrelated purpose below).
@@ -1807,7 +1809,7 @@ module AppState {
                 clearUnresolvedTombstone();
             }
             if (pendingRequestId != null && rid != null && rid.equals(pendingRequestId)) {
-                // VA-15: never regress an authoritative TERMINAL outcome (delivered/cancelled/failed/unknown)
+                // Never regress an authoritative TERMINAL outcome (delivered/cancelled/failed/unknown)
                 // to a late duplicate NON-terminal token (delivering/cancelling) that arrives with the SAME
                 // requestId — a delayed/retransmitted echo must not overwrite the real result. A later
                 // TERMINAL may still replace a terminal (e.g. delivered → cancelled-partial). Mirrors
@@ -1824,8 +1826,8 @@ module AppState {
                 }
             }
         } else if (kind.equals("dismissAck")) {
-            // CX-G-08 (14-09) — the SOLE authenticated remover of a wearer-initiated Garmin dismiss.
-            // handleDismissAck is CX-G-11-guarded (malformed/mismatched/expired ⇒ safe no-op).
+            // The SOLE authenticated remover of a wearer-initiated Garmin dismiss.
+            // handleDismissAck is guarded (malformed/mismatched/expired ⇒ safe no-op).
             handleDismissAck(strCap(data["requestId"], 64), data["alertId"], data["alertKind"]);
         }
     }
@@ -1839,7 +1841,7 @@ module AppState {
     function numOrNull(v) as Lang.Number? { return isNum(v) ? v.toNumber() : null; }
     function flt(v) as Lang.Float? { return isNum(v) ? v.toFloat() : null; }
 
-    // GA-09: inbound-payload validation. A malformed / hostile phone message must not poison global
+    // Inbound-payload validation. A malformed / hostile phone message must not poison global
     // state — every physiological field is bounds- and finiteness-checked, strings are length-capped,
     // and nested arrays are size-capped with per-element validation. A rejected field returns null so
     // the caller KEEPS the last good value rather than adopting garbage.
@@ -1866,7 +1868,7 @@ module AppState {
         var s = v as Lang.String;
         return (s.length() > max) ? s.substring(0, max) : s;
     }
-    // 19-03 (G-M1/T-19-10): shallow element-wise equality for the settings-key change-detection below
+    // Shallow element-wise equality for the settings-key change-detection below
     // (screenOrder/detailsOrder/watchChartRanges are Arrays of Strings/Numbers). Lang.Array has no
     // built-in structural equals() (it inherits Object's reference equality), so a change-detect guard
     // needs its own compare; `==` is the same value-equality idiom this file already uses for boxed
@@ -1898,7 +1900,7 @@ module AppState {
         }
         return out;
     }
-    // E5: keep the newest ≤288 (mg/dL, epoch) PAIRS where BOTH the reading is finite in [0,600] AND
+    // Keep the newest ≤288 (mg/dL, epoch) PAIRS where BOTH the reading is finite in [0,600] AND
     // the epoch is a finite Number > 0. Sanitizing as PAIRS (never independently) is the whole point:
     // an out-of-range reading drops its epoch too, so a surviving reading can never shift onto the
     // wrong timestamp. Callers pass equal-length raw arrays. Returns [historyOut, epochsOut], always
@@ -1940,14 +1942,14 @@ module AppState {
         return out;
     }
 
-    // G-L1 (19-04): a conservative safety margin well under Toybox.Background.exit's documented ~8 KB
+    // A conservative safety margin well under Toybox.Background.exit's documented ~8 KB
     // ExitDataSizeLimitException threshold — absorbs the unknown per-entry background-data
     // serialization overhead (the SDK does not document its on-wire encoding), leaving headroom for
     // future exit-data growth alongside the alerts list.
     (:background)
     const SAFE_EXIT_BUDGET_BYTES = 6000;
 
-    // G-L1: a conservative OVERESTIMATE of one {id,kind,title} alert dict's Background.exit serialized
+    // A conservative OVERESTIMATE of one {id,kind,title} alert dict's Background.exit serialized
     // size — the numeric id/kind (small ints) plus the title string (generously assumed up to 2
     // bytes/char for non-ASCII) plus dict/key-name framing overhead (~40 bytes for the three key
     // names). Deliberately pessimistic since the SDK never documents its background-data encoding.
@@ -1958,7 +1960,7 @@ module AppState {
         return 60 + (titleLen * 2);
     }
 
-    // G-L1: the byte-budget-safe subset of `arr` (an alerts array) to forward across
+    // The byte-budget-safe subset of `arr` (an alerts array) to forward across
     // Background.exit's documented ~8 KB ExitDataSizeLimitException boundary. PURE — never mutates
     // `arr` — and preserves the caller's existing most-serious-first ordering (the phone already sends
     // `alerts` in that order; sanitizeAlerts/notifyNewAlerts rely on it), so the kept subset is always
@@ -1989,7 +1991,7 @@ module AppState {
     // The pure, phone-synced watch alert gate.
     // Frozen severity-tier token set (least→most salient). The phone classifies each alert's
     // typed kind into one of these and puts it on the wire as the per-alert `severity`; the watch never
-    // invents its own severity. Kept small + frozen (never a raw enum on the wire — Pitfall 6).
+    // invents its own severity. Kept small + frozen (never a raw enum on the wire).
     (:background)
     const ALERT_TIERS = ["info", "high", "critical"];
     (:background)
@@ -2102,7 +2104,7 @@ module AppState {
     // OS) in Silent mode, contradicting the "phone is the sole authoritative alerting surface" choice.
     // This extends the Silent guarantee to the background: Silent + override-off ⇒ surface NOTHING (the
     // phone alerts); Silent + override-on ⇒ surface ONLY the critical tier (the opt-in wrist fallback);
-    // "vibrate"/"audible" ⇒ always surface (the CX-G-06 closed-app safety net is intact). Unknown severity
+    // "vibrate"/"audible" ⇒ always surface (the closed-app safety net is intact). Unknown severity
     // is already classified to "critical" by alertSeverityTier, so it surfaces exactly where critical does.
     (:background)
     function shouldSurfaceInBackground(tier as Lang.String, mode as Lang.String,
@@ -2113,7 +2115,7 @@ module AppState {
         return true;
     }
 
-    // 14-10 (D1) — the raw-snapshot proof-of-absence oracle's OWN identity parser. Deliberately NOT
+    // The raw-snapshot proof-of-absence oracle's OWN identity parser. Deliberately NOT
     // sanitizeAlerts (which DROPS any item whose `title` is not a Lang.String) — a raw item with a valid
     // (id,kind) but a malformed/absent title must still count as PRESENT (title-agnostic), or a bad
     // title on the wire would falsely remove a still-pump-active wearer dismiss. Only a missing/non-
@@ -2132,10 +2134,10 @@ module AppState {
         return out;
     }
 
-    // VA-14 (pure): drop exactly the (id, kind) alert from the active list, leaving every other alert
-    // (and their order) untouched. NO LONGER called on a DISPATCHED dismiss (see CX-G-08 below) — kept
-    // for any future authenticated-ack path that would need a real local removal. Extracted verbatim
-    // from the old inline loop in AlertConfirmDelegate so it's unit-testable.
+    // Pure: drop exactly the (id, kind) alert from the active list, leaving every other alert
+    // (and their order) untouched. NO LONGER called on a DISPATCHED dismiss (see the two-lane dismiss
+    // state below) — kept for any future authenticated-ack path that would need a real local removal.
+    // Extracted verbatim from the old inline loop in AlertConfirmDelegate so it's unit-testable.
     (:background)
     function removeAlert(id, kind) as Void {
         var kept = [];
@@ -2146,7 +2148,7 @@ module AppState {
         alerts = kept;
     }
 
-    // CX-G-08 (statusRead-reconcile, owner decision — see OWNER-DECISIONS.md Plan 14-08): identities
+    // The statusRead-reconcile lane: identities
     // whose dismiss was DISPATCHED to the phone (RemoteComm.send returned true) but not yet PROVEN
     // absent by an authoritative statusRead reply. There is no correlated dismiss-ack path today (no
     // retained request id, no ack state machine in handle()), so AlertConfirmDelegate.onResponse no
@@ -2190,22 +2192,22 @@ module AppState {
     }
 
     // ========================================================================================
-    // CX-G-08 (14-09) — authenticated dismiss-ack: TWO-LANE durable state.
+    // Authenticated dismiss-ack: TWO-LANE durable state.
     //
     // Mirrors the phone's `GarminDismissReceiptStore` lifecycle exactly (see that type's own doc
     // comment): Lane 1 (RETRY/PENDING, {requestId, generation, createdAt}, per identity) has a named
-    // TTL WELL under the pump's 30-min re-nag — MAY expire/prune, capped; pruning removes NO alert
-    // (M1/HIGH-C). Lane 2 (DISPLAY provisional, {id, kind, title}, per identity) is retained until an
+    // TTL WELL under the pump's 30-min re-nag — MAY expire/prune, capped; pruning removes NO alert.
+    // Lane 2 (DISPLAY provisional, {id, kind, title}, per identity) is retained until an
     // authenticated dismissAck removes it — NEVER TTL-pruned, NEVER evicted on cap overflow (eviction =
-    // fail-open). Both persisted (Application.Storage) so they survive a relaunch (HIGH-B); overlaid
-    // onto the statusRead alerts replace in handle() when `supportsDismissAck` is true (H1).
+    // fail-open). Both persisted (Application.Storage) so they survive a relaunch; overlaid
+    // onto the statusRead alerts replace in handle() when `supportsDismissAck` is true.
     (:background)
     const KEY_DISMISS_PENDING = "dismissPending";           // identity -> {requestId, generation, createdAt}
     (:background)
     const KEY_DISMISS_PROVISIONAL = "dismissProvisional";   // identity -> {id, kind, title}
     (:background)
     const KEY_SUPPORTS_DISMISS_ACK = "supportsDismissAck";
-    // 14-10 (D1) — mirrors KEY_SUPPORTS_DISMISS_ACK exactly, for the raw-snapshot backstop's capability.
+    // Mirrors KEY_SUPPORTS_DISMISS_ACK exactly, for the raw-snapshot backstop's capability.
     (:background)
     const KEY_SUPPORTS_RAW_ALERT_SNAPSHOT = "supportsRawAlertSnapshot";
     // 10 minutes — WELL under the pump's 30-min re-nag (snoozeWindow, TandemBackend.swift) and matching
@@ -2225,7 +2227,7 @@ module AppState {
         return kind.toString() + "-" + id.toString();
     }
 
-    // L2: look up an active alert's title by identity, for the DISPLAY provisional snapshot —
+    // Look up an active alert's title by identity, for the DISPLAY provisional snapshot —
     // AlertConfirmDelegate only holds `_id`/`_kind`, never the title.
     function alertTitleFor(id, kind) as Lang.String {
         for (var i = 0; i < alerts.size(); i += 1) {
@@ -2248,7 +2250,7 @@ module AppState {
         var prior = dismissPending[ident];
         var generation = (prior instanceof Lang.Dictionary && prior["generation"] instanceof Lang.Number)
             ? (prior["generation"] as Lang.Number) + 1 : 1;
-        // 19-03 (G-M1): ROUTINE mint (a wearer dismiss-confirm) — see RemoteComm.newRoutineRequestId().
+        // ROUTINE mint (a wearer dismiss-confirm) — see RemoteComm.newRoutineRequestId().
         var reqId = RemoteComm.newRoutineRequestId();
         dismissPending[ident] = { "requestId" => reqId, "generation" => generation, "createdAt" => Time.now().value() };
         capDismissPending();
@@ -2259,7 +2261,7 @@ module AppState {
     }
 
     // Bounded cap on the RETRY lane ONLY (oldest createdAt pruned) — the DISPLAY lane
-    // (dismissProvisional) is NEVER capped/evicted (M1/HIGH-C: eviction of a wearer-dismissed
+    // (dismissProvisional) is NEVER capped/evicted (eviction of a wearer-dismissed
     // provisional would be fail-open).
     function capDismissPending() as Void {
         var keys = dismissPending.keys();
@@ -2319,9 +2321,9 @@ module AppState {
         }
         var sda = Storage.getValue(KEY_SUPPORTS_DISMISS_ACK);
         if (sda instanceof Lang.Boolean) { supportsDismissAck = sda; }
-        // 14-10 (D1) — mirrors the supportsDismissAck restore exactly, so a cold relaunch resumes on the
-        // raw-snapshot tier (last-known) rather than defaulting false and falling through to the 14-08
-        // fallback on the first post-relaunch reply.
+        // Mirrors the supportsDismissAck restore exactly, so a cold relaunch resumes on the
+        // raw-snapshot tier (last-known) rather than defaulting false and falling through to the
+        // statusRead-reconcile fallback on the first post-relaunch reply.
         var sra = Storage.getValue(KEY_SUPPORTS_RAW_ALERT_SNAPSHOT);
         if (sra instanceof Lang.Boolean) { supportsRawAlertSnapshot = sra; }
     }
@@ -2329,7 +2331,7 @@ module AppState {
     // Clock-rollback / future-timestamp discipline (mirrors the phone's GarminDismissReceiptStore
     // exactly): a future `createdAt` or a negative elapsed treats the RETRY entry as expired/invalid —
     // it stops accepting acks + retries. The DISPLAY provisional (a SEPARATE map) is never touched by
-    // this check either way (M1/HIGH-C: expiry is never a remover).
+    // this check either way (expiry is never a remover).
     (:background)
     function dismissRetryExpired(entry as Lang.Dictionary, now as Lang.Number) as Lang.Boolean {
         var created = entry["createdAt"];
@@ -2365,12 +2367,12 @@ module AppState {
         return out;
     }
 
-    // The `dismissAck` handle() branch (CX-G-11 guarded): removes the alert ONLY when the incoming
+    // The `dismissAck` handle() branch (guarded): removes the alert ONLY when the incoming
     // requestId matches the retained retry entry for the ack's (alertId, alertKind) identity AND that
     // entry is unexpired. A mismatched requestId, a mismatched identity (the ack's alertId/alertKind
     // simply won't resolve to the entry that owns the matching requestId), an expired entry, or a
-    // malformed ack (missing/non-Number/non-String fields) all safely no-op — never a false removal
-    // (T-14-26). On success calls the PRESERVED `removeAlert` and clears BOTH persisted lanes for that
+    // malformed ack (missing/non-Number/non-String fields) all safely no-op — never a false removal.
+    // On success calls the PRESERVED `removeAlert` and clears BOTH persisted lanes for that
     // identity (a later re-occurrence mints a fresh entry via beginDismiss).
     (:background)
     function handleDismissAck(rid, aid, akind) as Void {
@@ -2380,7 +2382,7 @@ module AppState {
         if (!(entry instanceof Lang.Dictionary)) { return; }
         var storedReqId = entry["requestId"];
         if (!(storedReqId instanceof Lang.String) || !(storedReqId as Lang.String).equals(rid)) { return; }
-        if (dismissRetryExpired(entry, Time.now().value())) { return; }   // HIGH-C: expiry is never a remover
+        if (dismissRetryExpired(entry, Time.now().value())) { return; }   // expiry is never a remover
         removeAlert(aid, akind);
         dismissPending.remove(ident);
         dismissProvisional.remove(ident);
@@ -2388,13 +2390,13 @@ module AppState {
         saveDismissProvisional();
     }
 
-    // H1/HIGH-B/L1: re-add any retained-but-unacked DISPLAY provisional NOT present in the
+    // Re-add any retained-but-unacked DISPLAY provisional NOT present in the
     // just-replaced `alerts` snapshot, so a filtered statusRead can never silently drop a
     // wearer-dismissed-but-unacked alert — called from handle() ONLY when `supportsDismissAck` is true
-    // (ack-mode; the capability-absent/false branch runs the 14-08 `reconcileDismissSent()` fallback
+    // (ack-mode; the capability-absent/false branch runs the `reconcileDismissSent()` fallback
     // instead and must NOT overlay, or a stale provisional would defeat that fallback's filtered-
     // absence removal). Force-marks each overlaid identity 'seen' (KEY_SEEN_ALERTS) so re-overlaying it
-    // on every subsequent statusRead never re-triggers a notify/vibrate (L1) — the wearer already knows.
+    // on every subsequent statusRead never re-triggers a notify/vibrate — the wearer already knows.
     (:background)
     function overlayUnackedDismissProvisionals() as Void {
         var active = activeAlertIdentities();
@@ -2417,11 +2419,11 @@ module AppState {
         }
     }
 
-    // 14-10 (D1) — the raw-snapshot tier's remover: for each wearer `dismissProvisional` identity ABSENT
+    // The raw-snapshot tier's remover: for each wearer `dismissProvisional` identity ABSENT
     // from `rawIdents` (a PRESENT rawAlerts snapshot's parsed identity set — the caller only invokes this
     // when rawAlerts was present; an absent rawAlerts skips this call entirely, fail-closed), the pump has
     // proven the alert cleared — remove it from the display (the PRESERVED `removeAlert`) and clear ALL
-    // of its bookkeeping across every dismiss-tracking lane (retry, provisional, and the 14-08 dismiss-
+    // of its bookkeeping across every dismiss-tracking lane (retry, provisional, and the dismiss-
     // sent lane too, so a later capability flip doesn't resurrect stale state for this identity). An
     // identity STILL present in rawIdents is left untouched here — `overlayUnackedDismissProvisionals()`
     // (always called right after this, by the caller) is what keeps it visible-but-quiet.
@@ -2452,7 +2454,7 @@ module AppState {
         }
     }
 
-    // CX-G-08 count bound (the "50-vs-4 mismatch"): sanitizeAlerts stores up to 50 alerts, but
+    // Count bound (the "50-vs-4 mismatch"): sanitizeAlerts stores up to 50 alerts, but
     // FaBolusApp.mc's own doc comment on notifyNewAlerts already claimed the actively-surfaced
     // (vibrate + pushed Confirmation) count was bounded by AlertsListView.MAX_ROWS == 4 — nothing in
     // code enforced that, so a burst of >4 simultaneously-new alerts could stack up to 50 Confirmation
@@ -2470,7 +2472,7 @@ module AppState {
         return out;
     }
 
-    // VA-13 (pure): the active alerts whose identity is NOT in `seen` — i.e. genuinely new since the last
+    // Pure: the active alerts whose identity is NOT in `seen` — i.e. genuinely new since the last
     // notify — preserving the list's most-serious-first order (the phone sends `alerts` most-serious
     // first). FaBolusApp.notifyNewAlerts surfaces EACH of these (the old code surfaced only the first but
     // marked ALL seen, so a 2nd simultaneous new alert was suppressed forever). Bounded by sanitizeAlerts.
@@ -2484,7 +2486,7 @@ module AppState {
         return out;
     }
 
-    // VA-13 (pure): every currently-active alert identity (most-serious-first order). notifyNewAlerts
+    // Pure: every currently-active alert identity (most-serious-first order). notifyNewAlerts
     // rewrites the persisted seen-set to exactly this after surfacing — so a cleared alert drops out and
     // re-notifies if it re-fires, and newAlertsSince(activeAlertIdentities()) is empty (nothing left new).
     (:background)
@@ -2498,7 +2500,7 @@ module AppState {
 
     // The set of alert identities the wearer has already been notified about, persisted (as an Array of
     // identity strings) so it survives background↔foreground transitions and a cold launch — a NEW
-    // alert is one whose identity isn't in this set. GA: a plain count comparison missed an alarm that
+    // alert is one whose identity isn't in this set. A plain count comparison missed an alarm that
     // replaced another at the same count and re-fired on every reshuffle; identity tracking fixes both.
     (:background)
     const KEY_SEEN_ALERTS = "seenAlerts";
@@ -2512,14 +2514,14 @@ module AppState {
         Storage.setValue(KEY_SEEN_ALERTS, seen);
     }
 
-    // CX-G-10 (pure): the seen-set to persist after one notifyNewAlerts() batch. `presented` is exactly
+    // Pure: the seen-set to persist after one notifyNewAlerts() batch. `presented` is exactly
     // the identities whose Ui.pushView actually ran this batch (see FaBolusApp.pushAlertConfirm's
     // explicit failure model) — NOT every active identity, and NOT every "new" identity (the old,
     // buggy `saveSeenAlerts(activeAlertIdentities())` did both, marking an alert seen even when its
     // Confirmation never reached the wearer, or when the push-count bound left it for a later batch).
     // Result = (previously-seen ∩ still-active) ∪ presented — restricted to ACTIVE identities so a
-    // cleared/reconciled alert still drops out of the seen-set (preserving VA-13/CX-G-07's "a cleared
-    // alert re-notifies if it re-fires"), while never adding an identity that wasn't actually presented.
+    // cleared/reconciled alert still drops out of the seen-set (preserving the "a cleared
+    // alert re-notifies if it re-fires" rule), while never adding an identity that wasn't actually presented.
     function reconciledSeenAlerts(presented as Lang.Array) as Lang.Array {
         var active = activeAlertIdentities();
         var prevSeen = loadSeenAlerts();
@@ -2531,8 +2533,8 @@ module AppState {
         return out;
     }
 
-    // CX-G-06 (13-07): the set of alert identities already surfaced as a BACKGROUND system notification
-    // (Toybox.Notifications.showNotification(), called from BgServiceDelegate — see 13-CXG06-FEASIBILITY.md).
+    // The set of alert identities already surfaced as a BACKGROUND system notification
+    // (Toybox.Notifications.showNotification(), called from BgServiceDelegate).
     // Tracked SEPARATELY from KEY_SEEN_ALERTS (the foreground vibrate+confirm dedup set, above) so the
     // background notification is a purely ADDITIVE early signal: it never marks an alert "seen" for the
     // foreground path, so the in-app confirm-to-clear flow the wearer sees once they open the app still
@@ -2549,9 +2551,9 @@ module AppState {
         Storage.setValue(KEY_BG_NOTIFIED_ALERTS, seen);
     }
 
-    // CX-G-06 / 13-HG-01 (pure, no side effect): the active alerts not yet surfaced as a background
-    // notification. Deliberately does NOT write bgNotifiedAlerts itself — 13-HG-01 (codex HIGH) found
-    // that the old newBackgroundAlertsToNotify() rewrote the bg-notified set to activeAlertIdentities()
+    // Pure, no side effect: the active alerts not yet surfaced as a background
+    // notification. Deliberately does NOT write bgNotifiedAlerts itself —
+    // the old newBackgroundAlertsToNotify() rewrote the bg-notified set to activeAlertIdentities()
     // BEFORE BgServiceDelegate.surfaceNewAlertsInBackground() had even attempted
     // Notifications.showNotification() for any of them, so a single throw there both permanently marked
     // every active alert "already notified" (no self-heal) AND aborted Background.exit() for the whole
@@ -2562,13 +2564,13 @@ module AppState {
         return newAlertsSince(loadBgNotifiedAlerts());
     }
 
-    // 13-HG-01 (pure): the bg-notified set to persist after one surfaceNewAlertsInBackground() pass.
+    // Pure: the bg-notified set to persist after one surfaceNewAlertsInBackground() pass.
     // `presented` is exactly the identities whose Notifications.showNotification() call actually
     // returned without throwing (BgService.mc's own per-item try/catch) — NOT every active identity, and
     // NOT every pending identity. Mirrors reconciledSeenAlerts()'s identical fix for the foreground
-    // seen-set (CX-G-10): result = (previously-notified ∩ still-active) ∪ presented, restricted to
-    // ACTIVE identities so a cleared/reconciled alert still drops out of the set (preserving VA-13/
-    // CX-G-07's "a cleared alert re-notifies if it re-fires"), while never adding an identity that wasn't
+    // seen-set: result = (previously-notified ∩ still-active) ∪ presented, restricted to
+    // ACTIVE identities so a cleared/reconciled alert still drops out of the set (preserving the
+    // "a cleared alert re-notifies if it re-fires" rule), while never adding an identity that wasn't
     // actually posted.
     (:background)
     function reconciledBgNotifiedAlerts(presented as Lang.Array) as Lang.Array {
