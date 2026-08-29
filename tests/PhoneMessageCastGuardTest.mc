@@ -1,8 +1,8 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// CX-G-11 (V-Audit): FaBolusApp.handlePhoneData (extracted from onPhoneMessage — see tests/
-// StatusReplyTest.mc's CX-G-03 header for why the extraction was needed: Comm.PhoneAppMessage has no
+// FaBolusApp.handlePhoneData (extracted from onPhoneMessage — see tests/
+// StatusReplyTest.mc's header for why the extraction was needed: Comm.PhoneAppMessage has no
 // test-constructible instance) read the inbound `type` field as `(type as Lang.String)` after only a
 // `type != null` null-check — a non-null, non-String `type` (a malformed/hostile wire dict) hit an
 // UNGUARDED cast and would crash the phone-message handler (a watch-side denial-of-service). The exact

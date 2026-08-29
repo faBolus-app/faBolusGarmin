@@ -1,19 +1,19 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// CX-G-10 (14-08): FaBolusApp.notifyNewAlerts() used to persist "seen" for EVERY active identity
+// FaBolusApp.notifyNewAlerts() used to persist "seen" for EVERY active identity
 // BEFORE the vibrate/pushView loop ran (AppState.saveSeenAlerts(AppState.activeAlertIdentities())) —
 // so a partial-loop failure (a pushView that throws/can't run for one of several new alerts) could
 // suppress an alert that never actually reached the wearer. This file pins the fix: 'seen' is now
 // committed PER successfully-presented alert (AppState.reconciledSeenAlerts), driven by an explicit
-// Ui.pushView failure model (pushAlertConfirm()). It also pins the CX-G-08 companion count bound
+// Ui.pushView failure model (pushAlertConfirm()). It also pins the companion push-count bound
 // (AppState.capAlertPushes/MAX_ALERT_PUSHES) end-to-end through the real notifyNewAlerts() call.
 //
 // notifyNewAlerts()/pushAlertConfirm() are non-private specifically so this file can exercise the REAL
-// production method (mirrors handlePhoneData's own CX-G-03 rationale) — a FaBolusApp subclass overrides
+// production method (mirrors handlePhoneData's own rationale) — a FaBolusApp subclass overrides
 // pushAlertConfirm() to simulate a per-identity pushView failure without a live view stack (mirrors
 // tests/RelayResilienceTest.mc's ThrowingEatingRelay double-substitution pattern). FaBolusApp.mc is compiled into the
-// test binary wholesale (see test.jungle, CX-G-12).
+// test binary wholesale (see test.jungle).
 module SeenAlertsOrderingTest {
 
     // A FaBolusApp double whose pushAlertConfirm() fails (returns false, as if Ui.pushView threw) for
@@ -51,7 +51,7 @@ module SeenAlertsOrderingTest {
         return true;
     }
 
-    // NEGATIVE PATH (the core CX-G-10 fix): one failing pushView among several leaves THAT identity
+    // NEGATIVE PATH (the core fix): one failing pushView among several leaves THAT identity
     // unseen (it re-surfaces as "new" on the next check) while the ones that DID present are marked
     // seen and do not re-present.
     (:test)
@@ -104,7 +104,7 @@ module SeenAlertsOrderingTest {
         return true;
     }
 
-    // CX-G-08 count bound wired end-to-end: 6 simultaneously-new alerts ⇒ only the first
+    // The push-count bound wired end-to-end: 6 simultaneously-new alerts ⇒ only the first
     // AppState.MAX_ALERT_PUSHES (4) are pushed+seen THIS batch, matching AlertsListView.MAX_ROWS — the
     // remaining 2 stay new for the next call, never dropped.
     (:test)
@@ -122,8 +122,8 @@ module SeenAlertsOrderingTest {
         return true;
     }
 
-    // Cleared-alert-drops-out is preserved even under the new per-alert commit path (CX-G-07 twin, but
-    // exercised through the REAL notifyNewAlerts()/reconciledSeenAlerts() this time, not the mirror in
+    // Cleared-alert-drops-out is preserved even under the new per-alert commit path — the foreground
+    // twin, but exercised through the REAL notifyNewAlerts()/reconciledSeenAlerts() this time, not the mirror in
     // BgDedupResetTest.mc).
     (:test)
     function clearedAlertDropsFromSeenAndCanReFire(logger as Test.Logger) as Lang.Boolean {

@@ -64,7 +64,7 @@ class HoldDelegate extends Ui.BehaviorDelegate {
         return true;
     }
 
-    // If the user backs out mid-hold, stop the timer (then let the default pop happen). R2-02: also clear
+    // If the user backs out mid-hold, stop the timer (then let the default pop happen). Also clear
     // any in-flight bolus state so a back-out doesn't orphan a "delivering" status + pendingRequestId (the
     // phone owns the real delivery + its own (peer,requestId) ledger, so this never re-triggers/double-doses).
     function onBack() as Lang.Boolean { stopTimer(); AppState.clearInFlight(); return false; }
@@ -105,7 +105,7 @@ class HoldDelegate extends Ui.BehaviorDelegate {
             RemoteComm.send(RemoteComm.cancelBolus(AppState.pendingRequestId));
         }
         AppState.status = "cancelling";
-        // R2-02: re-stamp the outcome watchdog for the cancel — a cancel REQUEST isn't a confirmed
+        // Re-stamp the outcome watchdog for the cancel — a cancel REQUEST isn't a confirmed
         // cancellation, so it needs its own deadline to flip to "unknown" if no terminal echo arrives.
         AppState.outcomeSentEpoch = Time.now().value();
         Ui.requestUpdate();

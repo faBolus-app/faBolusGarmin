@@ -2,7 +2,7 @@ using Toybox.Lang;
 using Toybox.Test;
 using Toybox.Time;
 
-// R2-03: RemoteComm.phoneReachable() is the raw BLE link (System.getDeviceSettings().phoneConnected) —
+// RemoteComm.phoneReachable() is the raw BLE link (System.getDeviceSettings().phoneConnected) —
 // NOT faBolus-app liveness. The paired iPhone can have faBolus killed, leaving the Deliver button enabled
 // and sendBolusNow entering "delivering" into a void. The fix stamps `lastReplyEpoch` at the top of
 // handle() on every inbound reply and gates canBolus() on appLive() (a reply within CONNECTION_STALE_SEC;
@@ -127,7 +127,7 @@ module AppLivenessTest {
 
     // CX-G-09: sendBolusNow() re-checks appLive() at the FINAL send — a dose armed while the wrist
     // context was live, but whose confirm lands after the phone has gone stale (no reply within
-    // CONNECTION_STALE_SEC), must NOT transmit — even though nothing else about eligibility (the VA-07
+    // CONNECTION_STALE_SEC), must NOT transmit — even though nothing else about eligibility (the
     // gen, pump-allowed) ever changed, since no intervening statusRead ever arrived to catch it via the
     // gen-bump path. This is the "hard backstop" appLive()-at-send is for.
     (:test)

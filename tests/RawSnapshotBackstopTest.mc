@@ -3,11 +3,10 @@ using Toybox.Test;
 using Toybox.Time;
 using Toybox.Application.Storage;
 
-// Plan 14-10 (owner-authorized follow-up to 14-09 checkpoint #3's `raw-snapshot-backstop` option,
-// D1/D2/D3 — see faBolus-internal OWNER-DECISIONS.md "Plan 14-09"/"Plan 14-10"): the RAW pump-alert-
+// The RAW pump-alert-
 // snapshot proof-of-absence backstop for a pump that does NOT honor a remote dismiss (t:slim X2,
 // `supportsRemoteAlertDismiss == false`). This is the MIDDLE capability tier, inserted between the
-// 14-09 authenticated-ack tier (supportsDismissAck) and the 14-08 filtered-reconcile fallback
+// authenticated-ack tier (supportsDismissAck) and the filtered-reconcile fallback
 // (reconcileDismissSent) — `handle()`'s 2-way branch becomes 3-way, chosen by CAPABILITY alone, never by
 // whether `rawAlerts` happens to be present. Style mirrors tests/DismissAckTest.mc exactly (same
 // baseline/simulateRelaunch/wipeStorage idiom, same direct AppState.handle() driving).
@@ -131,7 +130,7 @@ module RawSnapshotBackstopTest {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
         AppState.beginDismiss(5, 1, "Auto-off");
-        AppState.markDismissSent(5, 1);   // the 14-08 bookkeeping AlertConfirmDelegate always sets too
+        AppState.markDismissSent(5, 1);   // the fallback's bookkeeping AlertConfirmDelegate always sets too
 
         AppState.handle(statusReadMsg([], false, true, [ alertDict(5, 1, "Auto-off") ]));
 
@@ -165,7 +164,7 @@ module RawSnapshotBackstopTest {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
         AppState.beginDismiss(5, 1, "Auto-off");
-        AppState.markDismissSent(5, 1);   // if this fires, the 14-08 fallback WOULD wrongly remove it
+        AppState.markDismissSent(5, 1);   // if this fires, the filtered-reconcile fallback WOULD wrongly remove it
 
         // supportsRawAlertSnapshot=true but the message carries NO rawAlerts key at all.
         AppState.handle(statusReadMsg([], false, true, null));
@@ -272,7 +271,7 @@ module RawSnapshotBackstopTest {
         return true;
     }
 
-    // Neither capability present ⇒ 14-08 fallback runs exactly as before (unchanged behavior).
+    // Neither capability present ⇒ the filtered-reconcile fallback runs exactly as before.
     (:test)
     function neitherCapabilityRunsThe1408FallbackUnchanged(logger as Test.Logger) as Lang.Boolean {
         baseline();
@@ -286,13 +285,13 @@ module RawSnapshotBackstopTest {
     }
 
     // supportsRawAlertSnapshot=true (dismissAck false/absent) selects the raw tier even when rawAlerts
-    // is absent — it must NOT silently fall through to the 14-08 fallback.
+    // is absent — it must NOT silently fall through to the filtered-reconcile fallback.
     (:test)
     function rawCapabilitySelectsRawTierEvenWithAbsentRawAlertsNeverThe1408Fallback(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
         AppState.beginDismiss(5, 1, "Auto-off");
-        AppState.markDismissSent(5, 1);   // if the 14-08 fallback ran, this WOULD get removed
+        AppState.markDismissSent(5, 1);   // if the filtered-reconcile fallback ran, this WOULD get removed
         AppState.handle(statusReadMsg([], false, true, null));
         Test.assertEqualMessage(AppState.alerts.size(), 1,
             "supportsRawAlertSnapshot=true selects the raw tier (keep-visible on absent rawAlerts), never the 14-08 fallback");
@@ -323,7 +322,7 @@ module RawSnapshotBackstopTest {
         AppState.beginDismiss(5, 1, "Auto-off");
         AppState.supportsRawAlertSnapshot = true;
         Storage.setValue(AppState.KEY_SUPPORTS_RAW_ALERT_SNAPSHOT, true);
-        AppState.markDismissSent(5, 1);   // if the 14-08 fallback ran post-relaunch, this WOULD get removed
+        AppState.markDismissSent(5, 1);   // if the fallback ran post-relaunch, this WOULD get removed
 
         simulateRelaunch();
         Test.assertMessage(AppState.supportsRawAlertSnapshot, "loadPrefs restores the persisted raw-snapshot capability");
@@ -331,14 +330,14 @@ module RawSnapshotBackstopTest {
 
         // The FIRST post-relaunch statusRead: a FILTERED absence (local-snooze-contaminated) that also
         // carries the capability but OMITS rawAlerts (not-yet-polled window) — must keep it visible, not
-        // fall through to the 14-08 fallback.
+        // fall through to the filtered-reconcile fallback.
         AppState.handle(statusReadMsg([], null, true, null));
         Test.assertEqualMessage(AppState.alerts.size(), 1,
             "relaunch: the raw tier (not the 14-08 fallback) reconciles the first post-relaunch reply");
         return true;
     }
 
-    // === 14-09 UNCHANGED ==========================================================================
+    // === ACK MODE UNCHANGED =======================================================================
 
     // An ack-mode (supportsDismissAck=true) sequence behaves exactly as DismissAckTest.mc expects,
     // driven through THIS test file too (belt-and-suspenders that the 3-way branch didn't disturb it).

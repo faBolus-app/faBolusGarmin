@@ -10,7 +10,7 @@ using Toybox.Test;
 module HoldTeardownTest {
 
     // Restore the safe, bolus-enabled baseline (read-only off, Garmin bolusing on, nothing in flight) so
-    // each case starts deterministically regardless of test order / prior state. VA-07: also SYNC the
+    // each case starts deterministically regardless of test order / prior state. Also SYNC the
     // eligibility generations (armBolus() snapshots the current gen) so the new stale-arm dimension is
     // neutral here — these cases exercise the POLICY dimension of mustTeardownArmedBolus(); the eligibility
     // dimension is pinned in ArmedDoseGenTest. Without this sync a prior test's statusRead could leave

@@ -1,7 +1,7 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// R2-19: the foreground poll was a fixed 15s repeating timer with no outstanding-gate / deadline /
+// The foreground poll was a fixed 15s repeating timer with no outstanding-gate / deadline /
 // backoff / jitter — queue + radio churn when the app is dead or the link flaps. The fix converts it to
 // a self-rescheduling one-shot with an outstanding-gate, exponential backoff, and jitter. Only the pure
 // backoff step lives in AppState (`pollBaseDelayMs`); the jitter, the outstanding-gate, and the reschedule

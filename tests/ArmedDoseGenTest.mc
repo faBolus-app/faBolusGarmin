@@ -2,7 +2,7 @@ using Toybox.Lang;
 using Toybox.Test;
 using Toybox.Time;
 
-// VA-07: an armed Garmin dose freezes `deliverUnits` at compose and used to survive an intervening
+// An armed Garmin dose freezes `deliverUnits` at compose and used to survive an intervening
 // therapy/policy change (a second bolus could then be accepted by the host once its in-flight mutex
 // cleared). The fix stamps an eligibility GENERATION at arm (armBolus, from BolusEntryDelegate.
 // captureDose) and bumps `bolusEligibilityGen` whenever the eligibility fingerprint changes on a
@@ -20,7 +20,7 @@ module ArmedDoseGenTest {
         return d;
     }
 
-    // Reset ALL shared state VA-07 reads so cases are order-independent regardless of prior tests: the
+    // Reset ALL shared state the eligibility-gen path reads so cases are order-independent: the
     // in-flight/delivery vars, the eligibility generations + last-seen fingerprint, and a safe,
     // bolus-eligible set of inputs (read-only off, Garmin bolusing on, pump allowed via the connection
     // string, no passcode, no known last bolus).
@@ -40,7 +40,7 @@ module ArmedDoseGenTest {
         AppState.bolusPasscodeRequired = false;
         AppState.connection = "Connected";
         AppState.lastBolus = -1.0;
-        // CX-G-09 (Task 2 of this same plan): keep this baseline forward-compatible with the liveness +
+        // CX-G-09: keep this baseline forward-compatible with the liveness +
         // elapsed-time-since-arm re-checks landing in sendBolusNow/armBolus — a fresh reply + a zeroed
         // arm-anchor mean every EXISTING case here (none of which are about liveness/elapsed-time) keeps
         // its original pass/fail shape.

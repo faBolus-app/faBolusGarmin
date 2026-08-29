@@ -1,12 +1,12 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// VA-13 + VA-14 (V-Audit) + CX-G-08 (14-08): the pure alert-list helpers factored out of
-// FaBolusApp.notifyNewAlerts and AlertConfirmDelegate. VA-13: newAlertsSince()/activeAlertIdentities()
+// The pure alert-list helpers factored out of
+// FaBolusApp.notifyNewAlerts and AlertConfirmDelegate. newAlertsSince()/activeAlertIdentities()
 // let the notifier surface EVERY new alert (the old code surfaced only the first but marked ALL seen,
-// suppressing a 2nd simultaneous new alert forever). VA-14: removeAlert() drops an exact (id, kind)
-// match (no longer called on a bare dispatch — see CX-G-08 below). CX-G-08 (statusRead-reconcile, owner
-// decision — OWNER-DECISIONS.md Plan 14-08): markDismissSent()/isDismissSent()/reconcileDismissSent()
+// suppressing a 2nd simultaneous new alert forever). removeAlert() drops an exact (id, kind)
+// match (no longer called on a bare dispatch — see the statusRead-reconcile note below).
+// statusRead-reconcile: markDismissSent()/isDismissSent()/reconcileDismissSent()
 // replace the old optimistic local removal — a dispatched-but-unproven dismiss no longer suppresses the
 // alert; only a fresh authoritative statusRead (simulated here by reassigning AppState.alerts) proves it
 // absent. Also pins the corrected push-count bound (capAlertPushes/MAX_ALERT_PUSHES, the "50-vs-4"
@@ -19,7 +19,7 @@ module AlertHelpersTest {
                  { "id" => 3, "kind" => 4, "title" => "B" } ];
     }
 
-    // VA-13: two never-seen alerts ⇒ both returned, most-serious-first; then after marking the active
+    // Two never-seen alerts ⇒ both returned, most-serious-first; then after marking the active
     // set seen, newAlertsSince over the persisted seen-set is empty (nothing left new).
     (:test)
     function newAlertsSinceReturnsBothThenEmpty(logger as Test.Logger) as Lang.Boolean {
@@ -37,7 +37,7 @@ module AlertHelpersTest {
         return true;
     }
 
-    // VA-13: activeAlertIdentities returns every active identity in order.
+    // activeAlertIdentities returns every active identity in order.
     (:test)
     function activeIdentitiesInOrder(logger as Test.Logger) as Lang.Boolean {
         AppState.alerts = twoAlerts();
@@ -48,7 +48,7 @@ module AlertHelpersTest {
         return true;
     }
 
-    // VA-13: one already-seen, one new ⇒ only the new one is returned.
+    // One already-seen, one new ⇒ only the new one is returned.
     (:test)
     function newAlertsSinceFiltersSeen(logger as Test.Logger) as Lang.Boolean {
         AppState.alerts = twoAlerts();
@@ -58,7 +58,7 @@ module AlertHelpersTest {
         return true;
     }
 
-    // VA-14: removeAlert drops exactly the (id, kind) match and leaves the rest.
+    // removeAlert drops exactly the (id, kind) match and leaves the rest.
     (:test)
     function removeAlertDropsExactMatch(logger as Test.Logger) as Lang.Boolean {
         AppState.alerts = twoAlerts();
@@ -69,7 +69,7 @@ module AlertHelpersTest {
         return true;
     }
 
-    // VA-14: a non-matching (id, kind) leaves the list unchanged.
+    // A non-matching (id, kind) leaves the list unchanged.
     (:test)
     function removeAlertNonMatchUnchanged(logger as Test.Logger) as Lang.Boolean {
         AppState.alerts = twoAlerts();
@@ -81,9 +81,9 @@ module AlertHelpersTest {
         return true;
     }
 
-    // CX-G-08 (statusRead-reconcile): a dispatched dismiss is tracked as a PROVISIONAL flag — it must
+    // statusRead-reconcile: a dispatched dismiss is tracked as a PROVISIONAL flag — it must
     // NEVER mutate the active alerts list directly (that optimistic removal is exactly what the owner
-    // decided to stop doing; see AlertConfirmDelegate.mc + OWNER-DECISIONS.md Plan 14-08).
+    // decided to stop doing; see AlertConfirmDelegate.mc).
     (:test)
     function markDismissSentFlagsWithoutRemoving(logger as Test.Logger) as Lang.Boolean {
         AppState.alerts = twoAlerts();
@@ -122,7 +122,7 @@ module AlertHelpersTest {
         return true;
     }
 
-    // CX-G-08 count bound (the "50-vs-4 mismatch"): sanitizeAlerts stores up to 50 alerts, but a single
+    // The push-count bound (the "50-vs-4 mismatch"): sanitizeAlerts stores up to 50 alerts, but a single
     // notify batch may only actively surface (vibrate + push a Confirmation for) at most
     // AppState.MAX_ALERT_PUSHES — matching AlertsListView.MAX_ROWS's 4-row display cap, which
     // FaBolusApp.mc's own doc comment already claimed but nothing previously enforced.

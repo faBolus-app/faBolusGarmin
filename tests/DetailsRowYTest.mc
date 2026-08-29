@@ -1,7 +1,7 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// VA-32 (V-Audit): DetailsView lays its rows out across a vertical band by dividing it into `rowCount-1`
+// DetailsView lays its rows out across a vertical band by dividing it into `rowCount-1`
 // gaps. A phone-pushed detailsOrder of only opt-in CIQ ids can collapse the visible rows down to just the
 // always-appended alerts row (size 1) — `(bottom-top)/(rowCount-1)` would then divide by zero and hand a
 // NaN/inf y to drawText. DetailsView.rowY is the PURE helper the onUpdate guard is factored through; this

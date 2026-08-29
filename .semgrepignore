@@ -1,0 +1,11 @@
+# Semgrep's built-in default ignore list drops a lowercase `tests/` directory. This repo keeps its
+# Monkey C unit tests there, and the deslop ruleset is meant to scan them, so this file replaces the
+# default with one that does not hide them. Keep it in sync with what genuinely should not be scanned.
+.git/
+bin/
+build/
+*.iq
+*.prg
+*.png
+*.jpg
+*.svg

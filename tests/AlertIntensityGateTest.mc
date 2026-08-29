@@ -1,13 +1,13 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// Phase 20 (R1/R4/F3, D-01) — the phone-synced, fail-closed WATCH alert gate. These pin:
+// The phone-synced, fail-closed WATCH alert gate. These pin:
 //   • DEFAULT vibration-only for every severity (nothing audible, nothing DND-piercing unopted);
 //   • fail-closed parse/restore of the phone-owned setting (absent/garbage ⇒ "vibrate");
-//   • R1 audible tone+backlight only for opted-in severities that pass the DND gate;
-//   • F3 distinct per-severity haptic signatures;
-//   • R4 vibrateOn/doNotDisturb awareness + the opt-in critical-DND override;
-//   • the D-01 FULLY-SILENT guarantee (Silent + override-off ⇒ ZERO output for ANY tier incl. critical);
+//   • audible tone+backlight only for opted-in severities that pass the DND gate;
+//   • distinct per-severity haptic signatures;
+//   • vibrateOn/doNotDisturb awareness + the opt-in critical-DND override;
+//   • the FULLY-SILENT guarantee (Silent + override-off ⇒ ZERO output for ANY tier incl. critical);
 //   • the explicit-Silent-choice-wins rule (unknown⇒critical classification never resurrects Silent output).
 // The gate (AppState.alertActionFor) is PURE — no Attention/DeviceSettings — so it is fully unit-testable.
 // Style mirrors tests/AlertDismissCapTest.mc.
@@ -20,7 +20,7 @@ module AlertIntensityGateTest {
         return d;
     }
 
-    // Reset the three settings fields to their compile-time D-01 defaults for an isolated test.
+    // Reset the three settings fields to their compile-time defaults for an isolated test.
     function resetDefaults() as Void {
         AppState.alertIntensityMode = "vibrate";
         AppState.alertAudibleMinSeverity = "critical";
@@ -124,7 +124,7 @@ module AlertIntensityGateTest {
         return true;
     }
 
-    // ---- D-01 FULLY-SILENT GUARANTEE (the required safety test) -----------------------------------
+    // ---- FULLY-SILENT GUARANTEE (the required safety test) ----------------------------------------
     (:test)
     function fullySilentGuarantee(logger as Test.Logger) as Lang.Boolean {
         // Silent + override OFF ⇒ ZERO output for critical AND for an unknown-severity alert (which
@@ -140,7 +140,7 @@ module AlertIntensityGateTest {
         return true;
     }
 
-    // ---- D-01 Silent + opt-in ⇒ critical-only wrist vibration fallback (never a tone) ------------
+    // ---- Silent + opt-in ⇒ critical-only wrist vibration fallback (never a tone) -----------------
     (:test)
     function silentOptInGivesCriticalVibrateOnly(logger as Test.Logger) as Lang.Boolean {
         var crit = AppState.alertActionFor("critical", "silent", "critical", true, true, false);
@@ -169,7 +169,7 @@ module AlertIntensityGateTest {
         return true;
     }
 
-    // 20-REVIEW WR-01: the batch escalation tier must scan the FULL new-alert list, so a critical arriving
+    // The batch escalation tier must scan the FULL new-alert list, so a critical arriving
     // BEYOND the 4-row display cap still drives escalation. mostSevereTier takes the max over the whole
     // list; notifyNewAlerts now passes `newAlerts` (not the capped `toPush`).
     (:test)
@@ -186,9 +186,9 @@ module AlertIntensityGateTest {
         return true;
     }
 
-    // 20-REVIEW WR-02 (D-01): the CLOSED-app background surface honors Silent — Silent+override-off ⇒ NO
+    // The CLOSED-app background surface honors Silent — Silent+override-off ⇒ NO
     // background notification for ANY tier (incl. critical); Silent+override-on ⇒ ONLY critical surfaces;
-    // vibrate/audible ⇒ always surface (CX-G-06 safety net).
+    // vibrate/audible ⇒ always surface (the background-surface safety net).
     (:test)
     function backgroundSurfaceHonorsSilent(logger as Test.Logger) as Lang.Boolean {
         // Silent + override OFF ⇒ nothing surfaces, even critical.

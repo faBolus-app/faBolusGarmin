@@ -2,7 +2,7 @@ using Toybox.Lang;
 using Toybox.Test;
 using Toybox.Application.Storage;
 
-// 19-03 (G-M1): AppState.handle() used to persist "staleSec" UNCONDITIONALLY on every statusRead reply,
+// AppState.handle() used to persist "staleSec" UNCONDITIONALLY on every statusRead reply,
 // even when the reply OMITS glucoseStaleMinutes — clobbering the persisted staleness policy with the
 // compile-time default (or whatever the in-memory field happened to hold) and incurring a flash write on
 // every single poll regardless of whether the policy changed. This pins the fix: the write is now

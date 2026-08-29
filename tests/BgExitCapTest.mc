@@ -1,7 +1,7 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// G-L1 (19-04): BgService's Background.exit(AppState.alerts) forwards the compact alerts list across
+// BgService's Background.exit(AppState.alerts) forwards the compact alerts list across
 // the background-exit boundary — Toybox.Background.exit's own doc documents an
 // ExitDataSizeLimitException at ~8 KB (50 alerts x <=80-char titles approaches it). AppState.
 // alertsForBackgroundExit is the PURE, byte-budget-safe subset helper BgService.onPhoneMessage forwards

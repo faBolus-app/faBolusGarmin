@@ -1,20 +1,20 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// 13-04 (CX-G-12 prerequisite + C5-01/CX-G-05 + C5-02): FaBolusApp.mc/EatingRelay.mc are compiled into
+// FaBolusApp.mc/EatingRelay.mc are compiled into
 // the test binary (see test.jungle), so these exercise the REAL shipping pollTick loop and relay
 // transmit paths, not a stand-in.
 //
-// C5-01/CX-G-05 (Phase 22 retarget): a throw from the dismiss-retry resend loop's own fallible call
+// A throw from the dismiss-retry resend loop's own fallible call
 // (RemoteComm.dismissAlert(), inside FaBolusApp.pollTick's dismiss-retry try/catch) must never be
 // allowed to skip scheduleNextPoll() — since scheduleNextPoll() (owned by FaBolusApp) is the loop's
 // only re-arm path. Test 1 proves the guard lives at pollTick: scheduleNextPoll() runs even when
 // RemoteComm.dismissAlert() is forced to throw via the test-only RemoteComm.testDismissAlertThrows
-// seam. (Retargeted from the now-removed ambient-HR relay's injectable double — the ambient-HR relay
-// itself was removed in Phase 22 as a dead, unused signal; this test's invariant survives via the
-// retarget onto the dismiss-retry guard, the pollTick duty that remains.)
+// seam. (Retargeted from the now-removed ambient-HR relay's injectable double — that relay was
+// removed as a dead, unused signal; this test's invariant survives via the retarget onto the
+// dismiss-retry guard, the pollTick duty that remains.)
 //
-// C5-02: EatingRelay has its OWN timer lifecycle (beginBurst/endBurst), independent of the pollTick
+// EatingRelay has its OWN timer lifecycle (beginBurst/endBurst), independent of the pollTick
 // loop, so pollTick's guarantee doesn't cover it — its own Comm.transmit (in onWindow) needs an
 // independent guard. Test 2 proves a transmit throw doesn't strand/crash the relay (it stays running).
 //
@@ -34,7 +34,7 @@ module RelayResilienceTest {
         function transmitWindow(msg as Lang.Dictionary) as Void { throw new RelayTestException(); }
     }
 
-    // Test 1 (C5-01/CX-G-05, Phase-22 retarget): scheduleNextPoll() STILL runs when the dismiss-retry
+    // Test 1: scheduleNextPoll() STILL runs when the dismiss-retry
     // loop's RemoteComm.dismissAlert() call throws inside pollTick() — the one-shot foreground poll
     // loop is not permanently halted.
     (:test)
@@ -57,7 +57,7 @@ module RelayResilienceTest {
         return true;
     }
 
-    // Test 2 (C5-02): a transmit throw inside EatingRelay.onWindow() does not strand/crash the relay —
+    // Test 2: a transmit throw inside EatingRelay.onWindow() does not strand/crash the relay —
     // it stays running, i.e. its OWN (separate) timer lifecycle is not disturbed by the throw.
     (:test)
     function eatingRelayTransmitThrowDoesNotStrandItsTimer(logger as Test.Logger) as Lang.Boolean {

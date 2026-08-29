@@ -2,14 +2,14 @@ using Toybox.Lang;
 using Toybox.Test;
 using Toybox.Application.Storage;
 
-// VA-17 (V-Audit): RemoteComm.newRequestId() must be unique across a reboot / a background↔foreground
+// RemoteComm.newRequestId() must be unique across a reboot / a background↔foreground
 // process split / a System.getTimer() rollover. The core fix is a PERSISTED monotonic sequence
 // ("reqSeq" in Application.Storage): read the last value, advance it, and persist it BEFORE composing
 // the id. These pin (a) two successive ids differ and (b) the reboot invariant — a persisted seed of 5
 // yields the next counter segment 6 even though the in-process register resets on reboot. RemoteComm is
 // compiled into the test binary (test.jungle). Style mirrors tests/SentAtTest.mc.
 //
-// 19-03 (G-M1): newRequestId() is now specifically the DURABLE mint — the ONLY caller left is the
+// newRequestId() is now specifically the DURABLE mint — the ONLY caller left is the
 // dose-authorizing bolus/resume send (AppState.sendBolusNow). Every other (routine) hot-path mint
 // (statusRead/HR/dismissAlert) moved to RemoteComm.newRoutineRequestId(), which performs NO Storage
 // read/write — see tests/RoutineRequestIdTest.mc. This file's invariants (reboot persistence, "reqSeq"

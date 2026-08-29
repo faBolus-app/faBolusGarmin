@@ -1,7 +1,7 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// R2-15/VA-16 (V-Audit): the background service (BgService.onPhoneMessage) sent a statusRead and must
+// The background service (BgService.onPhoneMessage) sent a statusRead and must
 // publish + exit ONLY on the matching statusRead reply — a non-statusReply dict that lands first must be
 // IGNORED (return without exiting), not mistaken for the reply. AppState.isStatusReply(dict) is the pure
 // discriminator. AppState is compiled into the test binary (test.jungle). Style mirrors
@@ -36,7 +36,7 @@ module StatusReplyTest {
         return true;
     }
 
-    // R2-15 (V-Audit addendum): TRUE request-id correlation. The background service retains the requestId
+    // TRUE request-id correlation. The background service retains the requestId
     // it minted for its statusRead REQUEST; the phone now ECHOES that id in the reply
     // (faBolus AppModel.statusCommand(replyingTo:)). A reply is OURS iff it is a statusRead AND its echoed
     // requestId matches our minted id.
@@ -74,7 +74,7 @@ module StatusReplyTest {
         return true;
     }
 
-    // CX-G-03 (V-Audit): the FOREGROUND poll (FaBolusApp.pollTick + handlePhoneData) now correlates a
+    // The FOREGROUND poll (FaBolusApp.pollTick + handlePhoneData) now correlates a
     // statusRead reply against AppState.fgPollMintedReqId BEFORE calling AppState.handle() — mirroring
     // BgServiceDelegate exactly. These drive the REAL dispatch path (not just the pure helpers above),
     // since FaBolusApp.onPhoneMessage itself can't be exercised directly (Comm.PhoneAppMessage has no
@@ -111,7 +111,7 @@ module StatusReplyTest {
 
     // LEGACY FALLBACK: a reply with NO echoed requestId (older phone) is still accepted and clears
     // poll-outstanding — retained backward-compat, see AppState.isCorrelatedStatusReply's either-id-
-    // absent fallback and FaBolusApp.handlePhoneData's CX-G-03 comment for the rationale.
+    // absent fallback and FaBolusApp.handlePhoneData's own comment for the rationale.
     (:test)
     function fgLegacyNoReqIdReplyStillAccepted(logger as Test.Logger) as Lang.Boolean {
         var app = new FaBolusApp();

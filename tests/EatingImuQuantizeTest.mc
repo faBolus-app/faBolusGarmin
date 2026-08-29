@@ -1,11 +1,11 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// G-M3 (19-04): pins EatingRelay's compact int16 v2 `imu_window` envelope — the quantize/dequantize
+// Pins EatingRelay's compact int16 v2 `imu_window` envelope — the quantize/dequantize
 // round-trip resolution, the v2 envelope's shape/size vs. the old 900-Float v1 payload, and the
 // previously-no-op EatingCommListener.onError drop counter. The exact per-channel scale + envelope
-// keys (v/type/fs/n/ch/scale/t0/data) mirror 19-05's phone-side GarminImuWindowDecode.decodeV2
-// EXACTLY (19-04 depends_on: [19-05], which already ships that wire contract).
+// keys (v/type/fs/n/ch/scale/t0/data) mirror the phone-side GarminImuWindowDecode.decodeV2
+// EXACTLY (the phone already ships that wire contract).
 module EatingImuQuantizeTest {
 
     // A small synthetic window (n=2 samples, ch=6: ax,ay,az,gx,gy,gz), sample-major — same layout
