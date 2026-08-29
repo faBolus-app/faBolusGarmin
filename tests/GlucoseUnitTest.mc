@@ -1,7 +1,7 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// P-mmol (Phase 4 "mmol/L display-unit support", D-02): drift-guard pinning the Garmin hand-port
+// mmol/L display-unit support: drift-guard pinning the Garmin hand-port
 // (AppState.formatMgdl()/displayGlucose()/glucoseUnitLabel()/isfUnitLabel(), plus their pure
 // displayGlucoseForUnit()/glucoseUnitLabelForToken() siblings) against the SAME expected outputs the
 // canonical Swift funnel asserts (Packages/faBolusCore/Tests/faBolusCoreTests/GlucoseUnitTests.swift —
@@ -116,7 +116,7 @@ module GlucoseUnitTest {
 
     // handle() statusRead parse+persist: strict guard mirrors clockAnalog/garminComplicationDisplay
     // (ClockAnalogTest.mc style) — a recognized token is adopted+persisted; an absent/unrecognized
-    // token leaves the last value untouched (T-04-02 fail-closed-to-mgdl via the default + keep-last).
+    // token leaves the last value untouched (fail-closed-to-mgdl via the default + keep-last).
     (:test)
     function handleAdoptsValidTokenAndIgnoresGarbage(logger as Test.Logger) as Lang.Boolean {
         var prior = AppState.glucoseUnit;

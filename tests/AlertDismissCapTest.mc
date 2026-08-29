@@ -1,7 +1,7 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// P13 capability channel: the Garmin remote learns from the phone (schema `supportsRemoteAlertDismiss`)
+// Capability channel: the Garmin remote learns from the phone (schema `supportsRemoteAlertDismiss`)
 // whether a REMOTE alert dismissal actually clears on the pump (Mobi) or only snoozes locally (t:slim),
 // and labels its alert-dismiss confirmation "Clear" vs "Snooze" accordingly — matching the phone, so a
 // t:slim user isn't told an alert cleared on the pump when it only snoozed. These pin the parse (strict
@@ -50,7 +50,7 @@ module AlertDismissCapTest {
         return true;
     }
 
-    // CX-G-08 (statusRead-reconcile, owner decision — OWNER-DECISIONS.md Plan 14-08): a DISPATCHED
+    // statusRead-reconcile: a DISPATCHED
     // dismiss NEVER locally removes the alert — regardless of whether the action word is "Clear" (Mobi,
     // supportsRemoteAlertDismiss=true) or "Snooze" (t:slim, false). Only an authoritative statusRead
     // reply whose `alerts` no longer lists the identity (reconcileDismissSent(), pinned in

@@ -9,9 +9,10 @@ The canonical branch-governance document for all three code repos — **faBolus*
 This repo deliberately keeps **no full copy** — a single source of truth avoids drift. This file is the
 pointer. Read the canonical doc before opening a PR. In brief, as it applies here:
 
-- **Three branches** — `deprecated` (frozen pre-fix snapshot), `main` (CI-green baseline),
-  `experimental` (§1.2: default-off / threshold-firing / not-verifiable-against-the-pump work). See §1.2
-  for what belongs on `experimental` and §1.4 for the promotion criteria.
+- **Two branches** — `main` (CI-green baseline) and `experimental` (§1.2: default-off /
+  threshold-firing / not-verifiable-against-the-pump work). See §1.2 for what belongs on
+  `experimental` and §1.4 for the promotion criteria. There is no `deprecated` BRANCH on any remote;
+  the frozen pre-fix snapshot is the `deprecated/*` tag below.
 - **Lockstep (§1.3).** faBolusGarmin moves in lockstep with the app: a Garmin `main` release accompanies
   every app `main` release and holds the **same quality bar**. Garmin work does not lag behind and does
   **not ship separately**.

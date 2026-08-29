@@ -15,7 +15,7 @@ class HoldView extends Ui.View {
     // After a successful delivery, auto-return to the configured first screen (once).
     private var _homeTimer as Timer.Timer or Null = null;
     private var _returnScheduled as Lang.Boolean = false;
-    // R2-02: local outcome watchdog (a one-shot, mirroring _homeTimer) so a stuck "delivering…"/
+    // Local outcome watchdog (a one-shot, mirroring _homeTimer) so a stuck "delivering…"/
     // "cancelling…" flips to an honest "unknown" even if the FaBolusApp poll cadence is slow. Armed
     // while an outcome is pending; the decision itself lives in AppState.tickOutcomeWatchdog() (tested).
     private var _watchdogTimer as Timer.Timer or Null = null;
@@ -29,7 +29,7 @@ class HoldView extends Ui.View {
         if (_homeTimer != null) { _homeTimer.stop(); _homeTimer = null; }
     }
 
-    // R2-02: arm the one-shot watchdog (idempotent) just past the outcome deadline. checkOutcome()
+    // Arm the one-shot watchdog (idempotent) just past the outcome deadline. checkOutcome()
     // re-arms a short follow-up if the outcome is somehow still pending (clock edge).
     private function armWatchdog() as Void {
         if (_watchdogScheduled) { return; }
@@ -113,7 +113,7 @@ class HoldView extends Ui.View {
 
         if (AppState.status != null) {
             var s = AppState.status as Lang.String;
-            // R2-02: keep the local outcome watchdog armed while an outcome is pending; drop it once a
+            // Keep the local outcome watchdog armed while an outcome is pending; drop it once a
             // terminal status (delivered/cancelled/failed/unknown/outOfRange) is on screen.
             if (s.equals("delivering") || s.equals("cancelling")) { armWatchdog(); } else { stopWatchdog(); }
             var color = Gfx.COLOR_BLUE;
@@ -165,7 +165,7 @@ class HoldView extends Ui.View {
         // could still fire. Only reached pre-delivery (status == null); an in-flight bolus is untouched.
         if (disabledMidArm()) {
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            // VA-07: distinguish WHY the armed confirm was torn down. A policy flip (read-only / Garmin
+            // Distinguish WHY the armed confirm was torn down. A policy flip (read-only / Garmin
             // bolusing off) says "Bolusing off"; a therapy/eligibility change since arming (stale arm)
             // says "Status changed — re-confirm" so the wearer knows to re-enter, not that it's disabled.
             if (AppState.bolusPolicyDisabled()) {

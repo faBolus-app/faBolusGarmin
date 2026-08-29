@@ -31,7 +31,7 @@ module ComplicationLabelTest {
         return true;
     }
 
-    // C5-03 (V-Audit): shortLabelFor's `value` now renders via AppState.formatMgdl instead of a raw
+    // shortLabelFor's `value` now renders via AppState.formatMgdl instead of a raw
     // `.toString()`, so this text sub-surface honors the phone's selected unit. This test pins that
     // conversion actually happens (default "mgdl" is unchanged, byte-for-byte, by design — see
     // staleAndFreshLabels above, which never sets glucoseUnit and still expects "124"/"90"). Saves/
@@ -52,7 +52,7 @@ module ComplicationLabelTest {
         return true;
     }
 
-    // Phase 20 (F1, D-02): the four pump-status complication formatters. Each returns
+    // The four pump-status complication formatters. Each returns
     // { "value" => Numeric or null, "label" => String }, precision matching DetailsView (f2 = %.2f, n0 =
     // toString). Unknown reservoir/battery (-1 sentinel) render an honest "--" with a null numeric slot so
     // no misleading number is published; iob/basal are always real values (0.0 = none, NOT unknown).
@@ -101,7 +101,7 @@ module ComplicationLabelTest {
         return d;
     }
 
-    // Phase 20 (F1, D-02): the phone-selectable complication-slot set. Connect IQ caps an app at 4
+    // The phone-selectable complication-slot set. Connect IQ caps an app at 4
     // complications, so glucose (fixed) + three assignable slots; a phone-owned ordered list picks which
     // up-to-3 fields fill them. DEFAULT = IOB + reservoir + battery (glucose is the fixed id 0).
     (:test)

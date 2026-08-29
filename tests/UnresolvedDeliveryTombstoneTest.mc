@@ -3,17 +3,17 @@ using Toybox.Test;
 using Toybox.Time;
 using Toybox.Application.Storage;
 
-// CX-G-01 (wrist half): `pendingRequestId` (AppState.mc) is in-memory only and lost on a nav/restart/
+// Wrist half: `pendingRequestId` (AppState.mc) is in-memory only and lost on a nav/restart/
 // kill, so a cold relaunch could re-arm/re-send a dose whose phone-side outcome is still genuinely
-// unknown — the wrist side of the settled-echo-loss double-dose window (complements the phone-side guard
-// in Plan 01). The fix is a DURABLE tombstone {requestId, sentAt, doseKey} in Connect IQ
+// unknown — the wrist side of the settled-echo-loss double-dose window (the phone has its own guard).
+// The fix is a DURABLE tombstone {requestId, sentAt, doseKey} in Connect IQ
 // Application.Storage, written ONLY once dispatch to the phone might have occurred (dispatched==true),
 // consulted by reattemptBlocked() (so a fresh sendBolusNow after a relaunch is refused while unresolved),
 // and cleared only by an authoritative terminal echo (delivered/cancelled/failed) for the matching
 // requestId.
 //
-// codex HIGH: the OLD candidate design (arm the tombstone at pendingRequestId-set time, ~AppState.mc:919,
-// BEFORE the phoneReachable() check @921) would survive a synchronously-failed dispatch — nothing ever
+// A REFUTED alternative: arming the tombstone at pendingRequestId-set time, BEFORE the
+// phoneReachable() check, would survive a synchronously-failed dispatch — nothing ever
 // reached the phone, so no phone echo can ever arrive, and a durable tombstone there is an unrecoverable
 // PERMANENT lock. The fix gates the write on `dispatched==true` via a small extracted seam
 // (maybeWriteUnresolvedTombstone) specifically so this gate is unit-testable — `RemoteComm.sendBolus`'s
@@ -53,9 +53,9 @@ module UnresolvedDeliveryTombstoneTest {
         AppState.bolusPasscodeRequired = false;
         AppState.connection = "Connected";
         AppState.lastBolus = -1.0;
-        // CX-G-09 lands in Task 2 of this same plan and adds its own re-checks to sendBolusNow — keep
-        // this baseline forward-compatible (fresh liveness, in-window arm) so Task 1's cases aren't
-        // coupled to Task 2's landing order.
+        // sendBolusNow also carries liveness / elapsed-time-since-arm re-checks — keep this baseline
+        // forward-compatible (fresh liveness, in-window arm) so these cases, none of which are about
+        // liveness, keep their original pass/fail shape.
         AppState.lastReplyEpoch = Time.now().value();
         simulateRelaunch();   // clears in-memory tombstone fields + wipes any persisted leftover
     }
@@ -230,7 +230,7 @@ module UnresolvedDeliveryTombstoneTest {
         return true;
     }
 
-    // 14-CR-01 (BLOCKER regression): an "unknown" echo (R2-02's honest-timeout / the phone's FB-02
+    // Regression: an "unknown" echo (the outcome watchdog's honest timeout / the phone's
     // indeterminate) for the SAME requestId must NOT clear the tombstone either — it is the
     // ambiguous-outcome case the tombstone exists to protect. Before this fix, the clear site reused
     // isTerminalStatus() (which treats "unknown" as terminal), so this echo would have wrongly cleared

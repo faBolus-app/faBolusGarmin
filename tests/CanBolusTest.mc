@@ -109,7 +109,7 @@ module CanBolusTest {
         return true;
     }
 
-    // 17-09: MainView's disabled glance bolus button now surfaces AppState.bolusBlockLabel() beneath it,
+    // MainView's disabled glance bolus button now surfaces AppState.bolusBlockLabel() beneath it,
     // the same way BolusOnlyView already does. That presentation is only useful if the label is never
     // empty while the button is disabled — pin that invariant, including the ultimate "Unavailable"
     // fallback (host withholds the bolus with NO reason token, pump link up, not delivering), the one

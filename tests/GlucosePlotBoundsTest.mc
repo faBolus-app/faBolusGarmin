@@ -2,12 +2,12 @@ using Toybox.Lang;
 using Toybox.Test;
 using Toybox.Application.Storage;
 
-// Phase 09.13 "glucose plot height customization" (D-05/D-06/D-07/D-08/D-10, threat T-09.13-08):
+// Glucose plot height customization:
 // Garmin is in the SMALL-SCREEN group (same as the Apple Watch) — AppState.handle()'s statusRead
 // parse resolves the small-screen OVERRIDE (glucosePlotFloorSmall/CeilingSmall) first, falling back
 // to the shared/phone-scoped bounds (glucosePlotFloor/Ceiling) when no override is on the wire, and
 // persists the resolved pair to Storage so a cold launch keeps it. This module pins that parse +
-// persist contract, the floor<ceiling invariant enforcement, and the D-10 gridline
+// persist contract, the floor<ceiling invariant enforcement, and the gridline
 // (AppState.plotGridlines) within-domain guarantee. CgmView.mc (the actual draw code) is NOT compiled
 // into the test binary (see test.jungle) — the contract we pin here is the testable math AppState
 // exposes: plotFloor/plotCeiling themselves, and plotGridlines(). Style mirrors
@@ -47,7 +47,7 @@ module GlucosePlotBoundsTest {
     }
 
     // A statusRead carrying BOTH the shared bounds AND the small-screen override prefers the
-    // override (D-05/D-07) — Garmin must never fall back to the shared pair when an override exists.
+    // override — Garmin must never fall back to the shared pair when an override exists.
     (:test)
     function smallScreenOverridePreferredOverShared(logger as Test.Logger) as Lang.Boolean {
         resetToDefaults();
@@ -62,7 +62,7 @@ module GlucosePlotBoundsTest {
     }
 
     // An out-of-range value (outside numRange's [1,1000] guard) or a fully-absent pair leaves the
-    // last-persisted/default value untouched (legacy-safe, D-06) — never adopts a corrupt/garbage bound.
+    // last-persisted/default value untouched (legacy-safe) — never adopts a corrupt/garbage bound.
     (:test)
     function outOfRangeOrAbsentLeavesSafeDefault(logger as Test.Logger) as Lang.Boolean {
         resetToDefaults();
@@ -79,8 +79,8 @@ module GlucosePlotBoundsTest {
         return true;
     }
 
-    // A resolved pair that violates the floor<ceiling invariant (D-01 min-gap) is dropped to the
-    // compile-time defaults rather than applied — never a corrupt/inverted domain (T-09.13-08).
+    // A resolved pair that violates the floor<ceiling min-gap invariant is dropped to the
+    // compile-time defaults rather than applied — never a corrupt/inverted domain.
     (:test)
     function invertedPairDropsToDefaults(logger as Test.Logger) as Lang.Boolean {
         resetToDefaults();
@@ -92,7 +92,7 @@ module GlucosePlotBoundsTest {
         return true;
     }
 
-    // D-10: every computed gridline for a sample non-default combo (floor 50 / ceiling 400) falls
+    // Every computed gridline for a sample non-default combo (floor 50 / ceiling 400) falls
     // STRICTLY inside the domain — never at the floor or ceiling edge itself.
     (:test)
     function gridlinesFallStrictlyWithinDomainForSampleCombo(logger as Test.Logger) as Lang.Boolean {

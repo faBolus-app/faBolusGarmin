@@ -36,9 +36,9 @@ Fill in what applies; delete what doesn't. See CONTRIBUTING.md, AGENTS.md, and B
 
 ## Verification
 
-<!-- CI's Garmin coverage is only the schema-drift contract check + the SBOM check (the SDK/simulator
-     can't run in cloud CI — see .github/workflows/ci.yml). The build + unit suite is a LOCAL
-     gate; paste what you ran. -->
+<!-- CI's Garmin coverage is the schema-drift contract check, the SBOM check, and an advisory
+     Semgrep pass (the SDK/simulator can't run in cloud CI — see .github/workflows/ci.yml). The
+     build + unit suite is a LOCAL gate; paste what you ran. -->
 
 - [ ] `./scripts/build-and-test.sh` (compiles every jungle + runs the Monkey C unit suite in the sim)
 - [ ] `./scripts/check-schema-drift.sh` passes (with the sibling faBolus checkout)

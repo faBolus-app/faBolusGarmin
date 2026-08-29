@@ -1,7 +1,7 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// VA-15 (V-Audit addendum): once an authoritative TERMINAL bolus outcome (delivered/cancelled/failed/
+// Once an authoritative TERMINAL bolus outcome (delivered/cancelled/failed/
 // unknown) is recorded, a LATE duplicate NON-terminal echo (delivering/cancelling) arriving with the SAME
 // requestId must NOT regress it — a delayed/retransmitted bolusStatus echo used to overwrite the real
 // result unconditionally. A later TERMINAL may still replace a terminal (delivered → cancelled-partial).
@@ -60,7 +60,7 @@ module TerminalStatusGuardTest {
         return true;
     }
 
-    // 'unknown' (R2-02's honest timeout) is terminal too — a late delivering must not undo it.
+    // 'unknown' (the outcome watchdog's honest timeout) is terminal too — a late delivering must not undo it.
     (:test)
     function lateDeliveringDoesNotUndoUnknown(logger as Test.Logger) as Lang.Boolean {
         baseline();

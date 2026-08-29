@@ -1,7 +1,7 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// VA-12 (V-Audit): a bolus send that fails must surface as "failed" — not leave a stuck "delivering…".
+// A bolus send that fails must surface as "failed" — not leave a stuck "delivering…".
 // AppState.noteBolusSendFailed(reqId?) is the pure/guarded state transition called both by
 // RemoteComm.BolusCommListener.onError (async transport failure) and by sendBolusNow when the
 // synchronous dispatch reports false. These pin that it only ever fires on the CORRECT in-flight,
@@ -72,7 +72,7 @@ module BolusSendFailedTest {
         return true;
     }
 
-    // CX-G-04 (V-Audit): MainDelegate.pressBolusButton's CANCEL path must honor RemoteComm.send()'s Bool
+    // MainDelegate.pressBolusButton's CANCEL path must honor RemoteComm.send()'s Bool
     // exactly like the sibling bolus-send failure handling above — a failed dispatch (the phone
     // unreachable; System.getDeviceSettings().phoneConnected is NOT sim-controllable, so the sim/CI
     // default of "unreachable" gives us this branch deterministically — see tests/CanBolusTest.mc's

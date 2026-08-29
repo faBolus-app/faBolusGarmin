@@ -1,20 +1,20 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// 13-07 (CX-G-06): pins AppState.pendingBgNotifyAlerts() / AppState.reconciledBgNotifiedAlerts() — the
+// Pins AppState.pendingBgNotifyAlerts() / AppState.reconciledBgNotifiedAlerts() — the
 // pure dedup logic BgServiceDelegate.surfaceNewAlertsInBackground() (BgService.mc) wraps around
 // Toybox.Notifications.showNotification(), which has no test-harness double and so cannot be invoked
 // directly from this unit-test binary. This module therefore pins the SAME behavior BgDedupResetTest.mc
-// pins for the foreground seen-set (CX-G-07), but against the independent bgNotifiedAlerts set (see
+// pins for the foreground seen-set, but against the independent bgNotifiedAlerts set (see
 // AppState.mc's KEY_BG_NOTIFIED_ALERTS comment) — proving the two dedup sets are genuinely independent:
 // a background-notified alert does NOT get marked seen for the foreground path, and vice versa.
 //
-// 13-HG-01 (codex HIGH): prior to this fix, a single Notifications.showNotification() throw both
+// Prior to this fix, a single Notifications.showNotification() throw both
 // permanently dedup-suppressed every alert in the batch (the old newBackgroundAlertsToNotify()
 // persisted activeAlertIdentities() as "already notified" BEFORE any showNotification attempt) AND
 // escaped surfaceNewAlertsInBackground() unguarded, skipping the caller's own Background.exit(). The fix
 // splits that single function into pendingBgNotifyAlerts() (pure query, no write) and
-// reconciledBgNotifiedAlerts(presented) (pure reconcile, mirrors CX-G-10's reconciledSeenAlerts), with
+// reconciledBgNotifiedAlerts(presented) (pure reconcile, mirrors reconciledSeenAlerts), with
 // BgService.mc now trying each notification independently and persisting the dedup set only AFTER the
 // attempts, restricted to what actually posted. simulateFullSurfaceSuccess() below reproduces the OLD
 // function's exact behavior for tests 1-4 (every pending alert "successfully posts"); the new test 5
@@ -63,8 +63,8 @@ module BgCriticalSurfaceTest {
         Test.assertEqualMessage(surfaced.size(), 1, "a genuinely new alert takes the background surface path");
         Test.assertEqualMessage(surfaced[0]["title"], "Low reservoir", "the surfaced alert is the new one");
 
-        // Independence: the background surface never touches the foreground seen-set (CX-G-06 must not
-        // regress CX-G-07's own dedup contract, pinned separately by BgDedupResetTest.mc).
+        // Independence: the background surface never touches the foreground seen-set (it must not
+        // regress the foreground dedup contract, pinned separately by BgDedupResetTest.mc).
         Test.assertEqualMessage(AppState.loadSeenAlerts().size(), 0,
             "background surfacing does not mark anything seen for the foreground path");
         return true;
@@ -88,7 +88,7 @@ module BgCriticalSurfaceTest {
         return true;
     }
 
-    // Test 3 (CX-G-07 parity for the background path): after an alert clears (drops out of
+    // Test 3 (foreground-dedup parity for the background path): after an alert clears (drops out of
     // AppState.alerts) and later re-fires with the SAME identity, it surfaces again — mirroring the
     // foreground contract BgDedupResetTest.mc pins, so a cleared-then-recurring critical episode is
     // never permanently suppressed on the wrist.
@@ -111,7 +111,7 @@ module BgCriticalSurfaceTest {
     }
 
     // Test 4: a SECOND, distinct alert arriving alongside an already-notified one still surfaces on its
-    // own (mirrors VA-13's "surface EVERY genuinely-new alert" fix for the foreground path — a second
+    // own (mirrors the "surface EVERY genuinely-new alert" fix for the foreground path — a second
     // simultaneous new alert must not be swallowed by the first one's dedup rewrite).
     (:test)
     function secondDistinctAlertStillSurfaces(logger as Test.Logger) as Lang.Boolean {

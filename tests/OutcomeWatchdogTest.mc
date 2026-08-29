@@ -2,7 +2,7 @@ using Toybox.Lang;
 using Toybox.Test;
 using Toybox.Time;
 
-// R2-02: sendBolusNow sets status="delivering" + a pendingRequestId, but the only authoritative advance
+// sendBolusNow sets status="delivering" + a pendingRequestId, but the only authoritative advance
 // is a phone bolusStatus echo. A lost request / dead phone / a fast bolus between polls used to leave the
 // watch on "delivering…" forever. The fix stamps `outcomeSentEpoch` at send and a watchdog flips a stuck
 // delivering/cancelling to an honest "unknown" after OUTCOME_DEADLINE_SEC (never fabricating delivered/
@@ -19,7 +19,7 @@ module OutcomeWatchdogTest {
         AppState.pendingRequestId = null;
         AppState.sawPhoneBolusing = false;
         AppState.outcomeSentEpoch = 0;
-        // CX-G-01 (14-07): reattemptBlocked() (used by reattemptBlockedWhilePending below) also consults
+        // reattemptBlocked() (used by reattemptBlockedWhilePending below) also consults
         // the durable tombstone now — clear any leftover from another test file so this stays
         // order-independent.
         AppState.clearUnresolvedTombstone();
@@ -108,7 +108,7 @@ module OutcomeWatchdogTest {
         return true;
     }
 
-    // CX-G-04/C5-04: MainDelegate.pressBolusButton's cancel path, on a SUCCESSFUL RemoteComm.send()
+    // MainDelegate.pressBolusButton's cancel path, on a SUCCESSFUL RemoteComm.send()
     // dispatch, sets status="cancelling" AND re-stamps outcomeSentEpoch — matching
     // HoldDelegate.cancelDelivery exactly. RemoteComm.send() depends on
     // System.getDeviceSettings().phoneConnected, which is NOT sim-controllable (see

@@ -3,11 +3,10 @@ using Toybox.Test;
 using Toybox.Time;
 using Toybox.Application.Storage;
 
-// CX-G-08 (14-09, owner-adopted checkpoints #1/#2/#3/#5 — OWNER-DECISIONS.md Plan 14-09): the
-// authenticated dismiss-ack watch side — the two-lane durable state (AppState.dismissPending /
-// .dismissProvisional), the `dismissAck` handle() branch (AppState.handleDismissAck), the H1
+// The authenticated dismiss-ack watch side — the two-lane durable state (AppState.dismissPending /
+// .dismissProvisional), the `dismissAck` handle() branch (AppState.handleDismissAck), the
 // relaunch-safe capability persistence/parse-order (supportsDismissAck), and the capability-gated
-// cutover from the 14-08 filtered-statusRead fallback (reconcileDismissSent, still tested in
+// cutover from the filtered-statusRead fallback (reconcileDismissSent, still tested in
 // AlertHelpersTest.mc). AppState/FaBolusApp are compiled into the test binary (test.jungle). Style
 // mirrors tests/UnresolvedDeliveryTombstoneTest.mc (Storage-backed durability, "simulate a relaunch"
 // via loadPrefs()) and tests/AlertHelpersTest.mc (direct AppState.handle() driving).
@@ -88,7 +87,7 @@ module DismissAckTest {
         return true;
     }
 
-    // === NEGATIVE paths (T-14-26, CX-G-11) =======================================================
+    // === NEGATIVE paths ===========================================================================
 
     (:test)
     function noAckLeavesAlertStaying(logger as Test.Logger) as Lang.Boolean {
@@ -144,8 +143,9 @@ module DismissAckTest {
     // After persisting a pending+provisional AND supportsDismissAck=true, a simulated relaunch
     // restores the overlay AND the capability; the FIRST post-relaunch filtered statusRead (omits the
     // identity, carries supportsDismissAck=true) does NOT remove the alert — the capability is restored
-    // (last-known true) AND re-parsed from THIS message BEFORE the alerts-replace, so the 14-08
-    // fallback removal never fires. This is the exact regression test for H1's fail-open.
+    // (last-known true) AND re-parsed from THIS message BEFORE the alerts-replace, so the
+    // filtered-reconcile fallback removal never fires. This is the exact regression test for the
+    // relaunch fail-open.
     (:test)
     function h1RelaunchInAckModeSurvivesFirstFilteredStatusRead(logger as Test.Logger) as Lang.Boolean {
         baseline();
@@ -264,9 +264,9 @@ module DismissAckTest {
         return true;
     }
 
-    // === CAPABILITY GATE (MEDIUM-G / M2) =========================================================
+    // === CAPABILITY GATE ==========================================================================
 
-    // Absent supportsDismissAck (old phone) ⇒ the watch runs the 14-08 filtered-reconcile — a
+    // Absent supportsDismissAck (old phone) ⇒ the watch runs the filtered-reconcile fallback — a
     // dispatched-but-unproven dismiss whose alert is proven ABSENT by a filtered statusRead IS removed
     // (the fallback correctly clearing it), so a mixed-version rollout is never stuck.
     (:test)
@@ -274,7 +274,7 @@ module DismissAckTest {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
         AppState.beginDismiss(5, 1, "Auto-off");
-        AppState.markDismissSent(5, 1);   // the 14-08 mechanism's own bookkeeping (AlertConfirmDelegate always sets this)
+        AppState.markDismissSent(5, 1);   // the fallback's own bookkeeping (AlertConfirmDelegate always sets this)
 
         // A legacy host never sends supportsDismissAck at all (absent — no key on the wire).
         AppState.handle(statusReadMsg([], null));

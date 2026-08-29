@@ -1,7 +1,7 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// Phase 20 (R2, D-04): event-driven background push-wake. BgServiceDelegate.onPhoneAppMessage routes a
+// Event-driven background push-wake. BgServiceDelegate.onPhoneAppMessage routes a
 // phone-pushed status through the SAME correlate→handle→publish→surface path as onPhoneMessage. The system
 // callback can't be invoked from the unit binary (no PhoneAppMessage double), so these drive the extracted
 // PURE seam (AppState.isHandleablePush) + the state-refresh (AppState.handle) + the background-notification
