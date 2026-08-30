@@ -4,7 +4,9 @@ using Toybox.Test;
 // P15 §2.3 / G4: when the phone flips read-only ON or Garmin bolusing OFF, an already-armed HoldView
 // must tear its primed confirm down. The field-clearing is view-local (HoldView.disabledMidArm), but the
 // safety-critical DECISION — "must I tear this down right now?" — is a pure function on AppState, so it's
-// what we pin here (HoldView isn't compiled into the test binary; see test.jungle). These assert the two
+// what we pin here. (test.jungle takes source/app WHOLESALE — see its own header — so HoldView IS
+// compiled in; the reason to pin the pure decision is that disabledMidArm() reaches Ui, not absence.)
+// These assert the two
 // phone-pushed policy flags gate the teardown, and crucially that an IN-FLIGHT bolus is never torn down.
 // Style mirrors tests/CanBolusTest.mc. AppState is compiled into the test binary (test.jungle).
 module HoldTeardownTest {

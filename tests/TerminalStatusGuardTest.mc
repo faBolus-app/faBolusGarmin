@@ -6,7 +6,8 @@ using Toybox.Test;
 // requestId must NOT regress it — a delayed/retransmitted bolusStatus echo used to overwrite the real
 // result unconditionally. A later TERMINAL may still replace a terminal (delivered → cancelled-partial).
 // isTerminalStatus + the guard in handle()'s bolusStatus branch are pure AppState logic (the BgService /
-// HoldView that drive handle() aren't test-compiled — see test.jungle), so we pin those directly.
+// HoldView that drive handle() reach Ui and are not deterministically drivable headlessly — they ARE
+// test-compiled; test.jungle takes source/app wholesale, see its header), so we pin those directly.
 // Style mirrors tests/OutcomeWatchdogTest.mc. AppState is compiled into the test binary.
 module TerminalStatusGuardTest {
 

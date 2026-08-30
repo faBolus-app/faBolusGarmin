@@ -179,6 +179,29 @@ class HoldView extends Ui.View {
             return;
         }
 
+        // The send gate refused this confirm and NOTHING was transmitted — say which gate stopped it.
+        // Checked AFTER disabledMidArm() so the two conditions that already had their own notice keep it
+        // word for word; this branch is what the other four (phone not live / arm expired / pump refused /
+        // an outcome or a prior dispatch still unresolved) used to fall through, silently resetting the
+        // 1-2-3 tap progress to zero and repainting the ordinary confirm screen. From the wrist that read
+        // as a dead 3rd circle: taps 1 and 2 are local state, but only the 3rd reaches the send gate.
+        //
+        // The notice REPLACES the confirm controls deliberately, rather than letting the wearer re-tap.
+        // Re-tapping never re-arms (armBolus() runs once per confirm OPEN), so `armedAtEpoch` keeps ageing
+        // through a retry loop until armContextExpired() latches and the refusal becomes permanent for this
+        // screen. Backing out and re-entering is the only real recovery: it re-runs the canBolus() entry
+        // gate and takes a fresh arm. Every line here states the dose was NOT sent.
+        var refusal = AppState.lastSendRefusal;
+        if (refusal != null) {
+            var head = AppState.sendRefusalText(refusal as Lang.String);
+            var detail = AppState.sendRefusalDetail(refusal as Lang.String);
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.40, Gfx.FONT_SMALL, head, vc);
+            dc.drawText(cx, h * 0.54, Gfx.FONT_XTINY, detail, vc);
+            dc.drawText(cx, h * 0.80, Gfx.FONT_XTINY, "BACK to exit", vc);
+            return;
+        }
+
         // Dose, top.
         dc.setColor(0x8AB4FF, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.14, Gfx.FONT_SMALL, AppState.deliverUnits.format("%.2f") + " U", vc);
@@ -236,11 +259,12 @@ class HoldView extends Ui.View {
         // this path and the passcode path (PasscodeEntryView) send identically. This is the tap/hold
         // confirm, so no passcode is ever collected here → pass null.
         //
-        // The funnel returns false ONLY when the hard guard blocked the send (read-only or Garmin bolusing
-        // OFF pushed while this screen was armed): even a confirm that completed in the same frame as the
-        // disabling push must fire NOTHING — the host would refuse it anyway (AccessPolicy); the wrist
-        // doesn't even try. De-arm the view-local confirm state so the next redraw shows the disabled
-        // notice (disabledMidArm()). On true, status now owns the screen (delivering / outOfRange).
+        // The funnel returns false when ANY of its six hard guards blocked the send, having transmitted
+        // nothing and minted no requestId — a confirm that completed in the same frame as a disabling push
+        // must fire NOTHING; the host would refuse it anyway (AccessPolicy), and the wrist doesn't even
+        // try. De-arm the view-local confirm state; the funnel has recorded WHICH gate refused in
+        // AppState.lastSendRefusal, so the next redraw names it instead of leaving the wearer with a reset
+        // tap sequence and no reason. On true, status now owns the screen (delivering / outOfRange).
         if (!AppState.sendBolusNow(null)) {
             _progress = 0; btnArmed = false; btnProgress = 0.0;
         }

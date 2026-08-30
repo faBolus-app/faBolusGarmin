@@ -16,6 +16,9 @@ class BolusOnlyDelegate extends Ui.BehaviorDelegate {
             return true;
         }
         if (AppState.readOnly) { return true; }      // read-only blocks STARTING a bolus, not cancel
+        // Explain a durable unresolved-send lockout rather than swallowing the tap — mirrors
+        // MainDelegate.pressBolusButton (see its comment); must precede the canBolus() swallow.
+        if (AppState.hasUnresolvedTombstone()) { Nav.openUnresolvedSendLock(); return true; }
         if (!AppState.canBolus()) { return true; }   // inert when bolusing isn't possible
         Nav.openBolusEntry();   // resets + shows the G5 one-time notice on first use
         return true;

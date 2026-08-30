@@ -8,7 +8,8 @@ using Toybox.Time;
 // captureDose) and bumps `bolusEligibilityGen` whenever the eligibility fingerprint changes on a
 // statusRead — so a stale arm is torn down (mustTeardownArmedBolus) and refused at send (sendBolusNow),
 // with an independent pump-allowance re-check at send. The safety-critical DECISIONS are pure AppState
-// functions (the view/delegate wiring isn't in the test binary — see test.jungle), so we pin THOSE.
+// functions, so we pin THOSE — the view/delegate wiring IS test-compiled (test.jungle takes source/app
+// wholesale; see its header) but reaches Ui/RemoteComm and is not deterministically drivable headlessly.
 // Style mirrors tests/CanBolusTest.mc / tests/HoldTeardownTest.mc. AppState + RemoteComm are test-compiled.
 module ArmedDoseGenTest {
 

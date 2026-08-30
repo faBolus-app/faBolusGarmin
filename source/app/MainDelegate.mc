@@ -50,6 +50,11 @@ class MainDelegate extends Ui.BehaviorDelegate {
         }
         // Read-only (or a hidden button): don't open bolus entry.
         if (AppState.readOnly) { return true; }
+        // A durable unresolved-send tombstone is the ONE block that never clears on its own, so it is
+        // the one that must not be swallowed: EXPLAIN it instead. Checked before the canBolus() swallow
+        // below (canBolus() now includes this term, so otherwise it would fall into the silent branch and
+        // reproduce the same unexplained dead-button the wearer already reported on the confirm screen).
+        if (AppState.hasUnresolvedTombstone()) { Nav.openUnresolvedSendLock(); return true; }
         // Inert when bolusing isn't possible (phone unreachable or pump disconnected) — matches the
         // greyed button. Swallow the input so nothing opens.
         if (!AppState.canBolus()) { return true; }

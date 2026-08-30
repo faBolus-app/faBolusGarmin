@@ -100,6 +100,15 @@ module Nav {
         Ui.switchToView(pv, new PasscodeEntryDelegate(pv), Ui.SLIDE_LEFT);
     }
 
+    // Open the read-only disclosure for a bolus affordance locked out by a durable unresolved-send
+    // tombstone. A modal push on top of whatever screen launched it, so BACK/tap returns there —
+    // matching pushBolusEntry's stack semantics. Both bolus entry points route through here so the
+    // "explain, never silently swallow" behaviour lives in ONE place, exactly as openBolusEntry does
+    // for the G5 notice. Carries no unlock control: see UnresolvedSendView.
+    function openUnresolvedSendLock() as Void {
+        Ui.pushView(new UnresolvedSendView(), new UnresolvedSendDelegate(), Ui.SLIDE_LEFT);
+    }
+
     function indexOf(id as Lang.String) as Lang.Number {
         var order = AppState.screenOrder;
         for (var i = 0; i < order.size(); i += 1) {

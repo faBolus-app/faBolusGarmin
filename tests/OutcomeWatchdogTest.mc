@@ -8,7 +8,8 @@ using Toybox.Time;
 // delivering/cancelling to an honest "unknown" after OUTCOME_DEADLINE_SEC (never fabricating delivered/
 // cancelled, and KEEPING pendingRequestId so a late echo can still upgrade it). Back-out clears in-flight,
 // and a new send is refused while an outcome is pending. These are pure AppState decisions (the HoldView
-// timer / FaBolusApp poll that drive them aren't test-compiled — see test.jungle), so we pin THOSE.
+// timer / FaBolusApp poll that drive them are not deterministically drivable headlessly — they ARE
+// test-compiled; test.jungle takes source/app wholesale, see its header), so we pin THOSE.
 // Style mirrors tests/CanBolusTest.mc. AppState is compiled into the test binary.
 module OutcomeWatchdogTest {
 
