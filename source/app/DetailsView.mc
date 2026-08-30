@@ -155,7 +155,8 @@ class DetailsView extends Ui.View {
                     AppState.connection.equals("") ? "Pump status" : AppState.connection, vc);
 
         // Rows in the central band (0.20..0.84) so the round edges never clip the text. Which rows +
-        // order come from the phone (AppState.detailsOrder); the alerts summary is always appended.
+        // order come from the phone (AppState.detailsOrder); the alerts summary and the app version are
+        // always appended locally, in that order.
         var alertCount = AppState.alerts.size();
         var rows = [];
         var order = AppState.detailsOrder;
@@ -164,6 +165,12 @@ class DetailsView extends Ui.View {
             if (r != null) { rows.add(r); }
         }
         rows.add(alertCount > 0 ? ("Alerts: " + alertCount.toString()) : "No alerts");
+        // Which watch build is on the wrist. Appended LOCALLY and unconditionally, exactly like the
+        // alerts summary above and deliberately NOT a phone-pushed `detailsOrder` id: the app version is
+        // watch-local knowledge the phone has no business supplying (and could not supply correctly — it
+        // knows its OWN version, not which Garmin binary is installed). Always last, so it never pushes a
+        // therapy value off the screen.
+        rows.add(AppVersion.label());
         var top = 0.28, bottom = 0.80;
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
         for (var i = 0; i < rows.size(); i += 1) {

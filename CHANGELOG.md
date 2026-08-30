@@ -3,17 +3,77 @@
 All notable changes to **faBolusGarmin** are recorded here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-faBolusGarmin does not carry its own product version number: it moves in **lockstep** with the faBolus
-app (see [`BRANCHES.md`](BRANCHES.md) §1.3 and the canonical
+faBolusGarmin does not carry an **independent** product version: it moves in **lockstep** with the
+faBolus app (see [`BRANCHES.md`](BRANCHES.md) §1.3 and the canonical
 [`faBolus/BRANCHES.md`](https://github.com/faBolus-app/faBolus/blob/main/BRANCHES.md)). Releases here
 are therefore anchored to the shared **tags** — the immovable `deprecated/*` pre-round-3 snapshot and the
-**moving** `safe-baseline/*` last-known-good pointer — rather than to SemVer. The Connect IQ store
-listings (Official / Beta) are versioned independently by the store; that is not tracked here.
+**moving** `safe-baseline/*` last-known-good pointer — rather than to a SemVer line of its own. The
+Connect IQ store listings (Official / Beta) are versioned independently by the store; that is not tracked
+here.
+
+It does, however, carry a **runtime version stamp** so a build on the wrist can be identified while
+debugging — surfaced as the Details screen's `App:` row and defined in
+[`source/app/AppVersion.mc`](source/app/AppVersion.mc), the single runtime source of truth (Connect IQ
+manifests have no version attribute, so this is a source-level constant rather than a manifest field):
+
+- **`NAME`** intentionally **tracks faBolus's `MARKETING_VERSION` exactly**, preserving the §1.3 lockstep
+  above — it is *not* a Garmin-owned version number, and a Garmin-only SemVer line is deliberately still
+  not a thing. [`scripts/check-version-sync.sh`](scripts/check-version-sync.sh) fails when it drifts from
+  the app's `Config.xcconfig` (a version that can drift silently is worse than none, because it answers
+  "which build is this?" *wrongly*).
+- **`BUILD`** is **Garmin-local** and starts at `1`, incrementing per build/store upload. Because `NAME`
+  is pinned to the app, `BUILD` is the field that actually **distinguishes two watch builds** — that
+  distinguishing power is the whole point of the row, so bump it whenever two builds must be told apart.
+
+The row reads e.g. `App: 0.1.0 (1)`.
 
 This is a seeded/back-filled history: entries before the first CHANGELOG commit were reconstructed from
 the git log and the tag graph, so they are grouped and summarized rather than exhaustive.
 
 ## [Unreleased]
+
+### Fixed
+- **The 1-2-3 confirm's 3rd tap refused in silence.** `AppState.sendBolusNow()` refuses a send on **six**
+  conditions but returned a bare `Boolean`, and `HoldView` could explain only the **two** that
+  `mustTeardownArmedBolus()` covers. For the other four (`!appLive()`, `armContextExpired()`,
+  `!pumpBolusAllowed()`, `reattemptBlocked()`) `deliver()` reset the tap progress and the screen repainted
+  the ordinary three-grey-circle confirm with **no message** — and since only the 3rd tap crosses the send
+  gate, taps 1 and 2 always "worked" while tap 3 always "did nothing". The six guards now live in one pure
+  `bolusSendRefusal()` that `sendBolusNow()` consumes as its **single decision point** (so the gate and the
+  disclosure cannot drift), and the confirm screen names the reason. **No gate was loosened, reordered,
+  shortened or made to fail open.** Two structural aggravators found and documented: `eligibilityFingerprint()`'s
+  `live` token is a provable constant (evaluated only inside `handle()`, right after `lastReplyEpoch` is
+  stamped), so an `appLive()` lapse can never bump the generation; and `POLL_MAX_MS` (120 s) is **double**
+  `CONNECTION_STALE_SEC` (60 s), so at backoff level 3 `appLive()` is false for roughly half of wall-clock
+  even on a link answering every poll.
+- **A permanent, undisclosed bolus lockout.** A durable unresolved-send tombstone already made every send
+  fail at `reattemptBlocked()`, but `canBolus()` never consulted it — so the affordance **lied**: a fully
+  enabled Bolus button that opened entry, accepted a composed dose and 1-2-3, then refused, permanently and
+  across reboots. `canBolus()` now reflects the lock, `bolusBlockLabel()` names it ("Earlier dose
+  unresolved") **ahead of the transient reasons** that would mask it, and tapping the locked button opens a
+  plain-language disclosure (`UnresolvedSendView`) instead of swallowing the input. The tombstone term is
+  deliberately kept out of `eligibilityFingerprint()` (so it cannot tear down an armed confirm) and out of
+  `canCancel()` (cancelling an in-flight bolus is a safety action).
+
+### Added
+- **A user-reachable route out of an unresolved-send lockout**, and the watch half of its resolution.
+  `AppState.resolveUnresolvedSendLock(requestId)` releases the **lock** — never the *dose* — on the phone's
+  say-so after a human reconciled the dispatch against the pump's own history, matched on `requestId` so it
+  can never blanket-unlock; reachable over the wire as the new inbound `bolusLockResolved` message. A
+  requestId-matched **authoritative echo remains the preferred release** because it resolves the dose
+  itself, and a human release deliberately **retains** the requestId (durable audit record:
+  `lockResolvedReqId` / `lockResolvedAtEpoch`, plus `lockWasManuallyResolved()`) so a later real echo can
+  still supersede it. Nothing auto-clears: no timer, no age-out, and no clear on redraw/poll/`reset()`/
+  back-out. The unlock control is deliberately **not** on the watch — the watch cannot know whether insulin
+  was delivered, and the phone owns the pump link, the reconciliation ledger and the history the wearer must
+  consult. Copy claims neither that the dose *was* delivered nor that it was *not*; the honest state is
+  unknown.
+- **An `App:` row on the Details screen** (e.g. `App: 0.1.0 (1)`) so the build on the wrist can be
+  identified while debugging — see the version-scheme note at the top of this file,
+  [`source/app/AppVersion.mc`](source/app/AppVersion.mc) and
+  [`scripts/check-version-sync.sh`](scripts/check-version-sync.sh). Appended locally and unconditionally
+  like the alerts summary, deliberately **not** a phone-pushed `detailsOrder` id: the app version is
+  watch-local knowledge the phone cannot supply correctly.
 
 ### Changed
 - **Phase-2 narrowing (2026-08-20).** `main`'s shipping build target is narrowed to the **Garmin
