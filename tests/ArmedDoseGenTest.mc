@@ -40,7 +40,7 @@ module ArmedDoseGenTest {
         AppState.bolusPasscodeRequired = false;
         AppState.connection = "Connected";
         AppState.lastBolus = -1.0;
-        // CX-G-09: keep this baseline forward-compatible with the liveness +
+        // keep this baseline forward-compatible with the liveness +
         // elapsed-time-since-arm re-checks landing in sendBolusNow/armBolus — a fresh reply + a zeroed
         // arm-anchor mean every EXISTING case here (none of which are about liveness/elapsed-time) keeps
         // its original pass/fail shape.
@@ -128,7 +128,7 @@ module ArmedDoseGenTest {
         return true;
     }
 
-    // CX-G-09 (elapsed-time half): arm, then let the CURRENTLY-armed context age past
+    // Elapsed-time half: arm, then let the CURRENTLY-armed context age past
     // ARM_CONTEXT_STALE_SEC (simulated directly via armedAtEpoch, mirroring how AppLivenessTest
     // manipulates lastReplyEpoch directly). No intervening statusRead lands — gens still match — yet the
     // direct armContextExpired() re-check at sendBolusNow's final send must refuse it regardless.
@@ -142,7 +142,7 @@ module ArmedDoseGenTest {
         Test.assertMessage(AppState.armContextExpired(), "arm has now aged past the window");
         Test.assertMessage(AppState.armedEligibilityGen == AppState.bolusEligibilityGen,
             "gens still match — no intervening statusRead ever bumped them");
-        Test.assertMessage(!AppState.sendBolusNow(null), "expired arm context ⇒ send refused (CX-G-09)");
+        Test.assertMessage(!AppState.sendBolusNow(null), "expired arm context ⇒ send refused");
         return true;
     }
 
