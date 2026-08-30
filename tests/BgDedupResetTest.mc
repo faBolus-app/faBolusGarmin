@@ -44,7 +44,7 @@ module BgDedupResetTest {
         AppState.saveSeenAlerts([]);
     }
 
-    // Test 1 (the CX-G-07 case): after an episode clears (its identity leaves activeAlertIdentities) and
+    // Test 1: after an episode clears (its identity leaves activeAlertIdentities) and
     // it later re-fires, the re-fire is NOT suppressed by the seen-set — it notifies again.
     (:test)
     function clearedAlertReFiresAfterDrop(logger as Test.Logger) as Lang.Boolean {
@@ -62,7 +62,7 @@ module BgDedupResetTest {
         AppState.alerts = [ alert(1, 2, "Low reservoir") ];
         var reFired = notifyAndRewriteSeenSet();
         Test.assertEqualMessage(reFired.size(), 1,
-            "re-fire after a clear notifies again — not dedup-suppressed (CX-G-07)");
+            "re-fire after a clear notifies again — not dedup-suppressed");
         return true;
     }
 

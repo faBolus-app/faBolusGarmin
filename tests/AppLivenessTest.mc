@@ -125,7 +125,7 @@ module AppLivenessTest {
         AppState.clearUnresolvedTombstone();
     }
 
-    // CX-G-09: sendBolusNow() re-checks appLive() at the FINAL send — a dose armed while the wrist
+    // sendBolusNow() re-checks appLive() at the FINAL send — a dose armed while the wrist
     // context was live, but whose confirm lands after the phone has gone stale (no reply within
     // CONNECTION_STALE_SEC), must NOT transmit — even though nothing else about eligibility (the
     // gen, pump-allowed) ever changed, since no intervening statusRead ever arrived to catch it via the
@@ -143,7 +143,7 @@ module AppLivenessTest {
         Test.assertMessage(!AppState.appLive(), "liveness has lapsed since arm");
         Test.assertMessage(AppState.armedEligibilityGen == AppState.bolusEligibilityGen,
             "gen never bumped — only the direct appLive() re-check can catch this");
-        Test.assertMessage(!AppState.sendBolusNow(null), "stale liveness at final send ⇒ refused (CX-G-09)");
+        Test.assertMessage(!AppState.sendBolusNow(null), "stale liveness at final send ⇒ refused");
         return true;
     }
 

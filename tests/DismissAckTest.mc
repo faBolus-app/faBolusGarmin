@@ -163,7 +163,7 @@ module DismissAckTest {
         // exactly like a t:slim local-snooze or any absence) that ALSO carries supportsDismissAck=true.
         AppState.handle(statusReadMsg([], true));
 
-        Test.assertEqualMessage(AppState.alerts.size(), 1, "H1: the overlaid alert survives the first post-relaunch filtered statusRead");
+        Test.assertEqualMessage(AppState.alerts.size(), 1, "the overlaid alert survives the first post-relaunch filtered statusRead");
         return true;
     }
 
@@ -201,10 +201,10 @@ module DismissAckTest {
 
         Test.assertMessage(!AppState.containsStr(AppState.loadSeenAlerts(), "1-5"), "not yet seen before any overlay");
         AppState.handle(statusReadMsg([], true));
-        Test.assertMessage(AppState.containsStr(AppState.loadSeenAlerts(), "1-5"), "L1: overlaid identity force-marked seen");
+        Test.assertMessage(AppState.containsStr(AppState.loadSeenAlerts(), "1-5"), "overlaid identity force-marked seen");
         // newAlertsSince over the now-seen set must not re-surface it as "new" (no re-notify/vibrate).
         Test.assertMessage(AppState.newAlertsSince(AppState.loadSeenAlerts()).size() == 0,
-            "L1: the overlaid, now-seen identity never re-triggers a new-alert notify");
+            "the overlaid, now-seen identity never re-triggers a new-alert notify");
         return true;
     }
 
@@ -260,7 +260,7 @@ module DismissAckTest {
         AppState.dismissPending["1-5"] = entry;
         Test.assertEqualMessage(AppState.dueDismissRetries(now).size(), 0, "an expired entry stops being retried");
         Test.assertMessage(AppState.dismissProvisional.hasKey("1-5"),
-            "M1/HIGH-C: the DISPLAY provisional is untouched by the retry lane's own expiry");
+            "the DISPLAY provisional is untouched by the retry lane's own expiry");
         return true;
     }
 
@@ -280,7 +280,7 @@ module DismissAckTest {
         AppState.handle(statusReadMsg([], null));
 
         Test.assertEqualMessage(AppState.alerts.size(), 0,
-            "absent capability ⇒ the 14-08 fallback's filtered-absence removal fires (not stuck)");
+            "absent capability ⇒ the filtered-reconcile fallback's filtered-absence removal fires (not stuck)");
         return true;
     }
 
@@ -295,7 +295,7 @@ module DismissAckTest {
         AppState.handle(statusReadMsg([], false));
 
         Test.assertEqualMessage(AppState.alerts.size(), 0,
-            "false capability (t:slim) ⇒ the 14-08 fallback still clears the locally-snoozed alert");
+            "false capability (t:slim) ⇒ the filtered-reconcile fallback still clears the locally-snoozed alert");
         return true;
     }
 
@@ -310,7 +310,7 @@ module DismissAckTest {
 
         AppState.handle(statusReadMsg([], true));
         Test.assertEqualMessage(AppState.alerts.size(), 1,
-            "true capability ⇒ filtered-absence alone never removes the alert (T-14-25)");
+            "true capability ⇒ filtered-absence alone never removes the alert");
 
         AppState.handle(dismissAckMsg(reqId, 5, 1));
         Test.assertEqualMessage(AppState.alerts.size(), 0, "only the authenticated ack removes it");
