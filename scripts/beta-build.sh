@@ -52,6 +52,11 @@ DASHED=$(tr -d '[:space:]' < "$ID_FILE")     # 8-4-4-4-12, for the iPhone
 NODASH=$(echo "$DASHED" | tr -d '-')         # 32 hex, for the Garmin manifest
 
 # --- 2. Build the store .iq -----------------------------------------------------------------------
+# Stamp the build commit first, so the watch's Details "App:" row names the exact tree this .iq came
+# from. A store upload is where that matters most: it is the build you will later be asked to identify
+# from a device report, long after the tree has moved on. A trailing "+" in the line below means the
+# tree was dirty, so the hash alone does not describe what you are about to upload.
+./scripts/stamp-revision.sh
 sed "s/id=\"$BASE_ID\"/id=\"$NODASH\"/" manifest.xml > manifest-beta-local.xml
 sed "s#project.manifest = manifest.xml#project.manifest = manifest-beta-local.xml#" monkey.jungle > beta-local.jungle
 mkdir -p bin

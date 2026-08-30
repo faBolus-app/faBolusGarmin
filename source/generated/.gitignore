@@ -1,0 +1,10 @@
+# Everything in this directory is written by scripts/stamp-revision.sh before each compile and is
+# deliberately NOT committed. The stamp holds the build commit's short hash, and a commit's hash is a
+# function of its own contents, so a committed hash could only ever be a PREVIOUS commit's — permanently
+# stale, which is the exact failure the Details "App:" row was changed to avoid.
+#
+# This file is committed for two reasons beyond documenting that: it makes the directory exist in a fresh
+# clone (the three app jungles carry `source/generated` on sourcePath, and git cannot track an empty
+# directory), and it makes an accidental `git add` impossible without an explicit -f.
+*
+!.gitignore

@@ -36,7 +36,9 @@ Sibling repos: `../faBolus`, `../TandemKit`.
   `.github/workflows/ci.yml`. CI cannot build or run the Monkey C suite (no SDK/simulator in cloud
   CI), so the build + unit gate is LOCAL only. `monkeydo`'s exit code lies — the script parses
   `PASSED (…failed=0, errors=0)`.
-- **Sideload:** `monkeyc -f monkey.jungle -o bin/faBolus.prg -y developer_key.der -d venu3s`
+- **Sideload:** `./scripts/stamp-revision.sh && monkeyc -f monkey.jungle -o bin/faBolus.prg -y developer_key.der -d venu3s`
+  (the Details "App:" row's commit stamp is generated and git-ignored; skipping it fails the compile on
+  `Undefined symbol ':AppRevision'` rather than shipping a wrongly-stamped binary)
 - Store builds: [`docs/STORE-BUILDS.md`](docs/STORE-BUILDS.md) (Connect IQ SDK 9.2.0).
 
 ## Device floor

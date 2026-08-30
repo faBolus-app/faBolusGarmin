@@ -102,7 +102,9 @@ here in Monkey C (`RemoteComm.mc` / `AppState.mc`). If you change the contract:
   depth, not a second human confirmation). Dosing changes get extra review.
 
 ## Before a PR
-- Build the app:
-  `monkeyc -f monkey.jungle -o bin/faBolusGarmin.prg -y developer_key.der -d venu3s -w`.
+- Run the gate: `./scripts/build-and-test.sh` (stamps the build commit, compiles every jungle, runs the
+  unit suite). By hand it is `./scripts/stamp-revision.sh` then
+  `monkeyc -f monkey.jungle -o bin/faBolusGarmin.prg -y developer_key.der -d venu3s -w` — without the
+  stamp the app does not compile, by design (see README → "Build & test").
 - Run the unit tests in the CIQ simulator (README → "Build & test").
 - Note anything only compiled vs. tested on hardware.

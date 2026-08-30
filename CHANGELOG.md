@@ -21,11 +21,24 @@ manifests have no version attribute, so this is a source-level constant rather t
   not a thing. [`scripts/check-version-sync.sh`](scripts/check-version-sync.sh) fails when it drifts from
   the app's `Config.xcconfig` (a version that can drift silently is worse than none, because it answers
   "which build is this?" *wrongly*).
-- **`BUILD`** is **Garmin-local** and starts at `1`, incrementing per build/store upload. Because `NAME`
-  is pinned to the app, `BUILD` is the field that actually **distinguishes two watch builds** — that
-  distinguishing power is the whole point of the row, so bump it whenever two builds must be told apart.
+- **The build commit** is what actually **distinguishes two watch builds** of the same release (`NAME`
+  being pinned to the app, it cannot). It is **derived, never maintained**: the seven leading hex
+  characters of `HEAD`, written into the git-ignored `source/generated/AppRevision.mc` by
+  [`scripts/stamp-revision.sh`](scripts/stamp-revision.sh), which every build entry point runs before it
+  compiles. A trailing **`+`** means the build tree carried **uncommitted changes**, so the hash alone
+  would misdescribe it; outside a git checkout the stamp reads `unknown` rather than guessing.
 
-The row reads e.g. `App: 0.1.0 (1)`.
+The row reads e.g. `App: 0.1.0 · 6f60fa9`.
+
+Why derived rather than a hand-incremented counter: a counter is only as good as the discipline behind
+it, and the day somebody forgets to bump it **two different binaries claim the same version** — the row
+then answers "which build is this?" *wrongly*, which is worse than carrying no version and far harder to
+notice than a missing row. The mechanism removes the discipline requirement instead of documenting it:
+the stamp is regenerated per build, is **git-ignored** so it can never be committed at a frozen value
+(a commit's hash is a function of its own contents, so a *committed* hash could only ever be an earlier
+commit's — permanently stale), and its **absence is a compile error**, not a silently unstamped binary.
+`check-version-sync.sh` additionally fails if the stamp becomes tracked, if a revision constant reappears
+in committed source, or if the stamp on disk no longer describes the tree.
 
 This is a seeded/back-filled history: entries before the first CHANGELOG commit were reconstructed from
 the git log and the tag graph, so they are grouped and summarized rather than exhaustive.
@@ -68,12 +81,15 @@ the git log and the tag graph, so they are grouped and summarized rather than ex
   was delivered, and the phone owns the pump link, the reconciliation ledger and the history the wearer must
   consult. Copy claims neither that the dose *was* delivered nor that it was *not*; the honest state is
   unknown.
-- **An `App:` row on the Details screen** (e.g. `App: 0.1.0 (1)`) so the build on the wrist can be
+- **An `App:` row on the Details screen** (e.g. `App: 0.1.0 · 6f60fa9`) so the build on the wrist can be
   identified while debugging — see the version-scheme note at the top of this file,
-  [`source/app/AppVersion.mc`](source/app/AppVersion.mc) and
+  [`source/app/AppVersion.mc`](source/app/AppVersion.mc),
+  [`scripts/stamp-revision.sh`](scripts/stamp-revision.sh) and
   [`scripts/check-version-sync.sh`](scripts/check-version-sync.sh). Appended locally and unconditionally
   like the alerts summary, deliberately **not** a phone-pushed `detailsOrder` id: the app version is
-  watch-local knowledge the phone cannot supply correctly.
+  watch-local knowledge the phone cannot supply correctly. The release half of the row mirrors the app's
+  `MARKETING_VERSION`; the half that distinguishes two watch builds is the **build commit**, derived from
+  `git` at build time rather than a number anyone has to remember to increment.
 
 ### Changed
 - **Phase-2 narrowing (2026-08-20).** `main`'s shipping build target is narrowed to the **Garmin

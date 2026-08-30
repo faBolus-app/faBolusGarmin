@@ -27,6 +27,15 @@ KEY="$HOME/garmin_dev_key.der"
 
 ## Build both store packages (`-e -r` = export/release, all products in the manifest)
 
+Stamp the build commit first. It is what the watch's Details `App:` row shows, so it is how you identify
+this exact upload later from a device report — and the app does not compile without it (the stamp is
+generated and git-ignored; see [`scripts/stamp-revision.sh`](../scripts/stamp-revision.sh)). A trailing
+`+` in its output means the tree was dirty, so the hash alone does not describe what you are uploading.
+
+```sh
+./scripts/stamp-revision.sh
+```
+
 ```sh
 # OFFICIAL — upload as a new/updated version of the "faBolus" listing
 "$MONKEYC" -f official.jungle -o bin/faBolus-official.iq -y "$KEY" -e -r
