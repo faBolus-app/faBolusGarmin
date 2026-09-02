@@ -18,8 +18,6 @@
             <iq:uses-permission id="Communications"/>
             <iq:uses-permission id="ComplicationPublisher"/>
             <iq:uses-permission id="Background"/>
-            <!-- Raw accel+gyro streaming for the eating-detection relay (EatingSenseKit barrel). -->
-            <iq:uses-permission id="Sensor"/>
             <!-- CX-G-06 (13-07): Toybox.Notifications.showNotification(), called from BgServiceDelegate
                  so a critical pump alert is not silent on the wrist while the app is suspended/closed
                  (see 13-CXG06-FEASIBILITY.md). -->
@@ -28,9 +26,5 @@
         <iq:languages>
             <iq:language>eng</iq:language>
         </iq:languages>
-        <!-- Reusable wrist eating-sensing library; built from the faBolusNudge SDK. -->
-        <iq:barrels>
-            <iq:depends name="EatingSenseKit" version="1.0.0"/>
-        </iq:barrels>
     </iq:application>
 </iq:manifest>

@@ -29,10 +29,6 @@ using Toybox.Lang;
 // bg/glance call graph.)
 class FaBolusApp extends App.AppBase {
     private var _timer as Timer.Timer?;
-    // Null until the phone sends the corresponding toggle (handlePhoneData) — see initialize()
-    // below: NOT built eagerly, so a glance/background launch never pulls in EatingRelay
-    // (and its EatingSense barrel) at all.
-    private var _eating as EatingRelay?;   // wrist eating-sensing relay (phone-gated)
     // Self-rescheduling poll state. `_pollOutstanding` is true between sending a statusRead and its
     // reply arriving (statusRead replies aren't reqId-correlated, so "outstanding" is tracked by arrival —
     // cleared in onPhoneMessage); `_pollSentEpoch` is when the outstanding poll was sent (Unix sec);
@@ -60,15 +56,6 @@ class FaBolusApp extends App.AppBase {
     // _scheduleCount/scheduleCount() above).
     private var _pollGuardFailureCount as Lang.Number = 0;
 
-    // EatingRelay is deliberately NOT constructed here. It is phone-gated (only ever
-    // starts doing anything once the phone sends an "eating_sense" toggle — see handlePhoneData below),
-    // so building it eagerly at cold launch would pull the EatingSense barrel into EVERY launch context,
-    // including a glance/background launch that never receives a phone toggle at all. Deferred to first
-    // actual use in handlePhoneData's eating_sense branch (NOT onStart(): onStart() itself runs during a
-    // glance-mode "Background UI Update" launch per the SDK's own Glances lifecycle doc, so constructing
-    // there would just relocate the same problem). Every other use site (onStop) already null-guards, so
-    // a never-toggled relay simply stays null and inert — no behavior change for a phone that DOES send
-    // the toggle.
     function initialize() { AppBase.initialize(); }
 
     function onStart(state as Lang.Dictionary?) as Void {
@@ -100,7 +87,6 @@ class FaBolusApp extends App.AppBase {
 
     function onStop(state as Lang.Dictionary?) as Void {
         if (_timer != null) { _timer.stop(); }
-        if (_eating != null) { _eating.stop(); }
         _foreground = false;
     }
 
@@ -227,23 +213,6 @@ class FaBolusApp extends App.AppBase {
     // PhoneMessageCastGuardTest.mc can drive the real dispatch logic directly — Comm.PhoneAppMessage is a
     // system-delivered type with no test-constructible instance. Kept non-private, mirroring pollTick().
     function handlePhoneData(data as Lang.Dictionary) as Void {
-        // Phone toggles wrist eating-sensing (out-of-band, not a RemoteCommand). Advisory feature.
-        // Instanceof-guard `type` before the cast — a non-String value (malformed/hostile wire
-        // dict) used to hit an unguarded `as Lang.String` here and crash the handler. Mirrors
-        // BgService.mc's already-guarded pattern.
-        var type = data["type"];
-        if (type instanceof Lang.String && (type as Lang.String).equals("eating_sense")) {
-            // Lazily construct on the FIRST real toggle from the phone — a
-            // glance/background launch never reaches this line (it never receives a phone message), so
-            // the EatingSense barrel this pulls in stays out of those constrained images. The `as
-            // EatingRelay` cast (never null immediately after the assignment above) keeps typecheck -l3
-            // strict happy — a bare `_eating.stop()` on the nullable field type errors there even though
-            // it's unreachable-when-null at runtime.
-            if (_eating == null) { _eating = new EatingRelay(); }
-            var eating = _eating as EatingRelay;
-            if (data["on"] == true) { eating.start(); } else { eating.stop(); }
-            return;
-        }
         var kind = data["kind"];
         var isStatusReadReply = (kind instanceof Lang.String) && (kind as Lang.String).equals("statusRead");
         // Correlate a fg statusRead reply BEFORE any state mutation (AppState.handle() below
