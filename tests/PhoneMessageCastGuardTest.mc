@@ -3,15 +3,11 @@ using Toybox.Test;
 
 // FaBolusApp.handlePhoneData (extracted from onPhoneMessage — see tests/
 // StatusReplyTest.mc's header for why the extraction was needed: Comm.PhoneAppMessage has no
-// test-constructible instance) read the inbound `type` field as `(type as Lang.String)` after only a
-// `type != null` null-check — a non-null, non-String `type` (a malformed/hostile wire dict) hit an
-// UNGUARDED cast and would crash the phone-message handler (a watch-side denial-of-service). The exact
-// site: FaBolusApp.mc's onPhoneMessage (now handlePhoneData), the `type != null && (type as
-// Lang.String).equals("eating_sense")` check — confirmed via `grep -n "as
-// Lang\." source/app/FaBolusApp.mc` before editing (RESEARCH Open Question 1). Fixed by instanceof-
-// guarding before the cast, mirroring BgService.mc's already-guarded pattern. AppState.handle()'s own
-// `data["kind"] as Lang.String?` (a second, independent unguarded-cast site found via the same grep
-// sweep across AppState.mc) is fixed the same way, reusing the existing strCap() helper (GA-09).
+// test-constructible instance) reads the inbound `kind` field with an instanceof-guard before the
+// cast — a non-null, non-String `kind` (a malformed/hostile wire dict) used to hit an UNGUARDED cast
+// and would crash the phone-message handler (a watch-side denial-of-service). AppState.handle()'s own
+// `data["kind"] as Lang.String?` (a second, independent unguarded-cast site) is guarded the same way,
+// reusing the existing strCap() helper.
 // Style mirrors tests/RelayResilienceTest.mc (constructs a real `new FaBolusApp()`).
 module PhoneMessageCastGuardTest {
 
@@ -44,13 +40,16 @@ module PhoneMessageCastGuardTest {
         return true;
     }
 
-    // Positive path: a well-formed eating_sense toggle behaves exactly as before (no crash, and the
-    // instanceof guard does not reject a genuine String type).
+    // Positive path: a well-formed, non-statusRead `kind` (a bolusStatus echo) still applies — the
+    // instanceof guard does not reject a genuine String kind, and this branch bypasses the statusRead
+    // correlation gate entirely (mirrors tests/StatusReplyTest.mc's nonStatusReadReplyNeverGated).
     (:test)
-    function wellFormedEatingSenseToggleStillWorks(logger as Test.Logger) as Lang.Boolean {
+    function wellFormedBolusStatusStillApplied(logger as Test.Logger) as Lang.Boolean {
         var app = new FaBolusApp();
-        app.handlePhoneData({ "type" => "eating_sense", "on" => true });
-        app.handlePhoneData({ "type" => "eating_sense", "on" => false });
+        AppState.pendingRequestId = "rid-1";
+        AppState.status = "delivering";
+        app.handlePhoneData({ "kind" => "bolusStatus", "requestId" => "rid-1", "status" => "delivered" });
+        Test.assertEqualMessage(AppState.status, "delivered", "well-formed bolusStatus is still applied");
         return true;
     }
 

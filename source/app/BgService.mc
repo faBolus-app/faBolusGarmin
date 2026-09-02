@@ -68,8 +68,8 @@ class BgServiceDelegate extends System.ServiceDelegate {
         if (data instanceof Lang.Dictionary) {
             // This service sent a statusRead and must publish + exit ONLY on the CORRELATED
             // reply — the phone echoes our minted requestId, so we match on it (falling back to the kind
-            // discriminator for a legacy phone that doesn't echo). A non-reply dict (an eating_sense
-            // toggle, a stray bolusStatus echo, etc.) OR a reply carrying a DIFFERENT requestId is IGNORED —
+            // discriminator for a legacy phone that doesn't echo). A non-reply dict (a stray bolusStatus
+            // echo, etc.) OR a reply carrying a DIFFERENT requestId is IGNORED —
             // return WITHOUT exiting so the service stays alive for the real reply (the system still bounds
             // our total runtime). Exiting on it would drop the fresh read we're waiting for and republish stale.
             if (!AppState.isCorrelatedStatusReply(data as Lang.Dictionary, mintedReqId)) { return; }
@@ -137,7 +137,7 @@ class BgServiceDelegate extends System.ServiceDelegate {
 
     // Show a system notification for every alert AppState.pendingBgNotifyAlerts() reports as
     // not-yet-background-notified. Non-private (mirroring this codebase's existing test-only-seam
-    // convention, e.g. FaBolusApp.scheduleCount()/EatingRelay.isRunning()) so BgCriticalSurfaceTest.mc
+    // convention, e.g. FaBolusApp.scheduleCount()) so BgCriticalSurfaceTest.mc
     // could drive it directly if a future change makes that useful; today the pure dedup logic it wraps
     // (AppState.pendingBgNotifyAlerts() / AppState.reconciledBgNotifiedAlerts()) is what's actually unit-
     // tested, since Toybox.Notifications.showNotification() itself has no test-harness double. The

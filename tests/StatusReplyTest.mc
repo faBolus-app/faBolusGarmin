@@ -16,11 +16,11 @@ module StatusReplyTest {
         return true;
     }
 
-    // Out-of-band toggles, a stray bolusStatus echo, and an empty dict are NOT the reply.
+    // A dict with no `kind` at all, a stray bolusStatus echo, and an empty dict are NOT the reply.
     (:test)
     function nonStatusReadIsNotReply(logger as Test.Logger) as Lang.Boolean {
-        Test.assertMessage(!AppState.isStatusReply({ "type" => "eating_sense", "on" => true }),
-            "eating_sense toggle ⇒ false (no kind)");
+        Test.assertMessage(!AppState.isStatusReply({ "message" => "hi" }),
+            "a dict with no kind ⇒ false");
         Test.assertMessage(!AppState.isStatusReply({ "kind" => "bolusStatus", "requestId" => "x" }),
             "bolusStatus echo ⇒ false");
         Test.assertMessage(!AppState.isStatusReply({}),

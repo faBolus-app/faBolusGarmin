@@ -39,8 +39,8 @@ module BgPushWakeTest {
     function malformedPushIsNotHandleable(logger as Test.Logger) as Lang.Boolean {
         Test.assertMessage(!AppState.isHandleablePush(null, null), "NEGATIVE: null payload ⇒ not handleable");
         Test.assertMessage(!AppState.isHandleablePush("nope", null), "NEGATIVE: non-dict payload ⇒ not handleable");
-        Test.assertMessage(!AppState.isHandleablePush({ "type" => "eating_sense", "on" => true }, null),
-            "NEGATIVE: a non-statusRead toggle ⇒ not handleable (no early exit)");
+        Test.assertMessage(!AppState.isHandleablePush({ "message" => "hi" }, null),
+            "NEGATIVE: a dict with no kind ⇒ not handleable (no early exit)");
         Test.assertMessage(!AppState.isHandleablePush({}, null), "NEGATIVE: empty dict ⇒ not handleable");
         Test.assertMessage(!AppState.isHandleablePush({ "kind" => "bolusStatus" }, null),
             "NEGATIVE: a bolusStatus echo ⇒ not a handleable status push");
