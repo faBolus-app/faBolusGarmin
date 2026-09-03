@@ -17,5 +17,5 @@ shipping build needs is **license-gated and not vendored** into this repo:
 
 - the **Garmin Connect IQ SDK / Monkey C runtime** (Garmin-proprietary, EULA-gated).
 
-The **faBolus™** name is a trademark of Tia Geri — the MIT license covers the code, not the name or
+The **faBolus™** name is a trademark of Zev Granowitz — the MIT license covers the code, not the name or
 branding.

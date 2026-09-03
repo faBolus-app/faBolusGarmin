@@ -32,10 +32,11 @@ Sibling repos: `../faBolus`, `../TandemKit`.
 ## Build + test
 - **Local gate:** `./scripts/build-and-test.sh` compiles every jungle and runs the unit suite in the
   simulator. CI runs the schema-drift contract check, the SBOM / license-provenance check
-  (`scripts/check-sbom.sh`), and an advisory Semgrep pass over the shared deslop ruleset — see
-  `.github/workflows/ci.yml`. CI cannot build or run the Monkey C suite (no SDK/simulator in cloud
-  CI), so the build + unit gate is LOCAL only. `monkeydo`'s exit code lies — the script parses
-  `PASSED (…failed=0, errors=0)`.
+  (`scripts/check-sbom.sh`), and a Semgrep pass over the shared deslop ruleset — the report is
+  advisory, but the residue count is ratcheted: a second CI step fails if any residue rule rises
+  above its committed baseline (`.semgrep/baseline.json`) — see `.github/workflows/ci.yml`. CI
+  cannot build or run the Monkey C suite (no SDK/simulator in cloud CI), so the build + unit gate
+  is LOCAL only. `monkeydo`'s exit code lies — the script parses `PASSED (…failed=0, errors=0)`.
 - **Sideload:** `./scripts/stamp-revision.sh && monkeyc -f monkey.jungle -o bin/faBolus.prg -y developer_key.der -d venu3s`
   (the Details "App:" row's commit stamp is generated and git-ignored; skipping it fails the compile on
   `Undefined symbol ':AppRevision'` rather than shipping a wrongly-stamped binary)
@@ -53,8 +54,10 @@ explain why (confirm gesture, staleness, schema). Do not add phase/ticket IDs or
 engines as if they were on `main`.
 
 `semgrep --config <faBolus>/.semgrep/deslop.yml --metrics=off .` flags AI-process residue in the
-Monkey C sources and tests. The ruleset lives in the faBolus repo; CI fetches it by raw URL and runs
-it advisory-only. Scan `.`, not `source` — `tests/` and `datafield/` are in the globs too, and the
+Monkey C sources and tests. The ruleset lives in the faBolus repo; CI fetches it by raw URL. The
+report itself is advisory, but the residue count is ratcheted (a second CI step fails if any
+residue rule rises above its committed baseline). Scan `.`, not `source` — `tests/` and
+`datafield/` are in the globs too, and the
 committed `.semgrepignore` exists because semgrep's built-in default list drops a lowercase
 `tests/`. Triage by hand: a display-width budget ("runs 29-30+ chars") matches the ticket pattern and
 is a KEEP.

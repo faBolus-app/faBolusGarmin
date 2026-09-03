@@ -35,4 +35,4 @@ faBolus is experimental software, in active development, and is NOT FDA-cleared 
 
 faBolus is an independent, open-source project and is NOT affiliated with, endorsed by, or a product of Tandem Diabetes Care, Dexcom, or Garmin. "Tandem", "t:slim X2", "Mobi", "Dexcom", and "Garmin" are trademarks of their respective owners.
 
-faBolus™ is a trademark of Tia Geri. Open source at https://github.com/faBolus-app — documentation at https://fabolus.org/
+faBolus™ is a trademark of Zev Granowitz. Open source at https://github.com/faBolus-app — documentation at https://fabolus.org/

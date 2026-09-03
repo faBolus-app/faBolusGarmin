@@ -31,7 +31,7 @@ with a sibling first-party repo, not a third-party dependency.
 
 ## Trademarks
 
-Code is MIT (root `LICENSE`); the **faBolus™** name is a trademark of Tia Geri and is **not** licensed by
+Code is MIT (root `LICENSE`); the **faBolus™** name is a trademark of Zev Granowitz and is **not** licensed by
 it. Tandem, t:slim X2, Mobi, Dexcom, and Garmin are trademarks of their respective owners; faBolusGarmin
 is independent and unaffiliated. See [`../NOTICE.md`](../NOTICE.md) for the full attribution prose and
 [`../THIRD_PARTY.md`](../THIRD_PARTY.md) for the index.

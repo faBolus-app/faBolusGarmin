@@ -3,7 +3,8 @@
 faBolusGarmin is a **host- and pump-agnostic Garmin remote**. It speaks the JSON contract in
 [`faBolus`](https://github.com/faBolus-app/faBolus)'s `schema/command.schema.json`; any host that
 implements that contract can drive it. Contributions are welcome by **PR, not fork**. All work is
-for **experimental use only** (in development, not FDA-cleared).
+for **experimental use only** (in development, not FDA-cleared). The delivery disposition is
+**NO-GO for real insulin delivery** — keep it so.
 
 ## Branch model, versioning & lockstep (§1.3 / §1.4)
 Branch governance is centralized in [`BRANCHES.md`](BRANCHES.md) (a stub) →
