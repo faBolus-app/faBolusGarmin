@@ -9,7 +9,7 @@ using Toybox.Test;
 //   • rowCount==1 → the single row is centered at (top+bottom)/2, a FINITE y (no NaN/inf divide);
 //   • rowCount>=2 → evenly spaced: the endpoints land on top and bottom and the interior spacing is uniform.
 // DetailsView.mc is compiled into the test binary via test.jungle (it depends only on AppState + SDK
-// WatchUi/Graphics, no EatingSense barrel). Style mirrors tests/RangeColorTest.mc + tests/ResponsesTest.mc.
+// WatchUi/Graphics). Style mirrors tests/RangeColorTest.mc + tests/ResponsesTest.mc.
 module DetailsRowYTest {
 
     // FINITE iff |v| is below a large bound. This also catches NaN and +/-inf: NaN.abs() is NaN and

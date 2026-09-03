@@ -6,9 +6,8 @@ barrel dependency or a ported upstream lacks a row here (it is wired as a CI ste
 schema-drift contract check).
 
 faBolusGarmin is a **pure Monkey C app with no vendored third-party runtime source in the shipping
-build.** The only external things a shipping build needs — the Connect IQ SDK and the private
-`EatingSense.barrel` — are **license/credential-gated and are NOT vendored** into this repo (both are
-`.gitignore`d / installed out-of-band).
+build.** The only external thing a shipping build needs — the Connect IQ SDK — is
+**license-gated and is NOT vendored** into this repo (installed out-of-band).
 
 Format per row: component · version/revision · SPDX license · source · how faBolusGarmin uses it.
 
@@ -23,7 +22,6 @@ Format per row: component · version/revision · SPDX license · source · how f
 | Component | Version | License (SPDX) | Source | Usage |
 |---|---|---|---|---|
 | Garmin Connect IQ SDK / Monkey C runtime | 9.2.0 | LicenseRef-Garmin-Proprietary | Installed out-of-band (EULA-gated; no unattended installer) | Compiler (`monkeyc`), device runtime, simulator. Never committed. |
-| EatingSenseKit (`barrels/EatingSense.barrel`) | 1.0.0 | MIT (code) | Built from the private **faBolusNudge** SDK | Wrist eating-sensing barrel; streams the IMU window to the phone. Declared in `manifest.xml` / `manifest-official.xml` (`<iq:depends>`). **Uncommitted** (`.gitignore`: `barrels/*.barrel`) — a hard build prerequisite for the shipping jungles (see `WIP-REGISTER.md` item 6). |
 
 ## Contract dependency (not code we ship)
 

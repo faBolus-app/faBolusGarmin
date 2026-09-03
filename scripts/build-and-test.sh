@@ -16,14 +16,11 @@
 #
 # Why local, not CI
 # -----------------
-# Three independent walls, any one of which is decisive:
+# Two independent walls, either of which is decisive:
 #   1. The Connect IQ SDK is license-gated; its EULA does not permit committing or caching it in public
 #      CI, and it has no unattended installer. `monkeyc` cannot run in CI without it.
 #   2. `monkeydo` runs the unit tests inside the GUI simulator, which needs a display. GitHub runners
 #      are headless, so the unit tests cannot run there at all — a technical wall, not just licensing.
-#   3. The two SHIPPING jungles (monkey.jungle, official.jungle) require barrels/EatingSense.barrel,
-#      built from the private faBolusNudge SDK and git-ignored — the same credential wall that forces
-#      FABOLUS_NUDGE=0 on the iOS side. CI cannot produce it.
 # CI's Garmin coverage is therefore the CONTRACT: schema-drift against faBolus's command.schema.json
 # (see ci.yml), which needs no SDK. Compilation and unit tests are this script, run by a developer who
 # has the SDK. Faking a green Garmin build badge in CI would be worse than an honest, scoped gate.
@@ -64,8 +61,9 @@ else
 fi
 
 # --- compile matrix ---------------------------------------------------------
-# Barrel-free jungles → their hardware-validated device (venu3s is the common one; each carries its own
-# manifest). `-w` treats warnings as errors for the one that ships as a .iq resource (datafield).
+# Every jungle here is barrel-free → their hardware-validated device (venu3s is the common one; each
+# carries its own manifest). `-w` shows compiler warnings (SDK 9.2.0 has no "treat warnings as errors"
+# flag — it is `-w, --warn  Show compiler warnings` only).
 compile() {  # <jungle> <device> [extra args...]
   local j="$1" d="$2"; shift 2
   if "$MONKEYC" -f "$j.jungle" -o "$OUT/$j-$d.prg" -y "$KEY" -d "$d" "$@" >"$OUT/$j-$d.log" 2>&1; then
@@ -77,19 +75,13 @@ compile() {  # <jungle> <device> [extra args...]
 
 echo "== barrel-free jungles =="
 compile datafield  venu3s -w
-compile test       venu3s
+compile test       venu3s -w
+# venu3s is now the sole declared shipping device (main is narrowed to Venu 3S only). official.jungle
+# is not compiled here — it never has been; adding that step is a separate decision, not this one's.
+compile monkey     venu3s -w
 # NARROW-MAIN (2026-08-27): the paused direct-pump/direct-cgm BLE engines + their probe.jungle/
 # direct-cgm.jungle are removed from main (they live on dev/direct-ble + experimental), so this matrix
 # no longer compiles them here.
-
-echo "== shipping jungles (need barrels/EatingSense.barrel) =="
-if [ -f barrels/EatingSense.barrel ]; then
-  # venu3s is now the sole declared shipping device (main is narrowed to Venu 3S only).
-  compile monkey venu3s
-else
-  echo "  ⏭  skipped: barrels/EatingSense.barrel absent (private faBolusNudge SDK). This is expected"
-  echo "     off a dev machine that has the Nudge SDK; the shipping app cannot be built without it."
-fi
 
 # --- unit tests (simulator) -------------------------------------------------
 if [ "${1:-}" != "--no-tests" ]; then
