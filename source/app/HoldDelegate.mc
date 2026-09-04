@@ -3,7 +3,6 @@ using Toybox.Lang;
 using Toybox.System;
 using Toybox.Math;
 using Toybox.Timer;
-using Toybox.Time;
 
 // Confirm-screen input.
 //   • Touch (venu3s): tap the numbered circles 1 → 2 → 3 in order (the view enforces the order).
@@ -101,13 +100,6 @@ class HoldDelegate extends Ui.BehaviorDelegate {
         if (_timer != null) { _timer.stop(); _timer = null; }
     }
     private function cancelDelivery() as Void {
-        if (AppState.pendingRequestId != null) {
-            RemoteComm.send(RemoteComm.cancelBolus(AppState.pendingRequestId));
-        }
-        AppState.status = "cancelling";
-        // Re-stamp the outcome watchdog for the cancel — a cancel REQUEST isn't a confirmed
-        // cancellation, so it needs its own deadline to flip to "unknown" if no terminal echo arrives.
-        AppState.outcomeSentEpoch = Time.now().value();
-        Ui.requestUpdate();
+        AppState.cancelBolus();
     }
 }

@@ -1,7 +1,6 @@
 using Toybox.WatchUi as Ui;
 using Toybox.System;
 using Toybox.Lang;
-using Toybox.Time;
 
 // Glance input: tap the Bolus button (only) to open bolus entry. The top physical button
 // (SELECT) is also a shortcut. Tapping elsewhere on the glance does nothing.
@@ -25,27 +24,10 @@ class MainDelegate extends Ui.BehaviorDelegate {
         // Read-only must block STARTING a bolus, but NEVER block CANCELLING one already in
         // flight — cancel is a safety action. So check canCancel() BEFORE the read-only gate.
         if (AppState.canCancel()) {
-            // Honor RemoteComm.send()'s Bool — mirrors the sibling failed-transmit
-            // handling (AppState.sendBolusNow / noteBolusSendFailed). On a failed dispatch, do
-            // NOT flip to "cancelling" (that would look done and non-retryable — canCancel() itself
-            // doesn't consult `status`, only bolusing()+pendingRequestId, so leaving status untouched
-            // keeps the cancel retryable) and surface an error via `message`. On a successful dispatch,
-            // set "cancelling" AND re-stamp `outcomeSentEpoch` — copied verbatim from
-            // HoldDelegate.cancelDelivery — since a cancel REQUEST isn't a confirmed cancellation and
-            // needs its own watchdog deadline if no terminal echo arrives. Do NOT extend RemoteComm.mc's
-            // routine-caller send()-ignore exemption to this path.
-            var dispatched = RemoteComm.send(RemoteComm.cancelBolus(AppState.pendingRequestId as Lang.String));
-            if (dispatched) {
-                AppState.status = "cancelling";
-                AppState.outcomeSentEpoch = Time.now().value();
-            } else {
-                AppState.message = "Cancel failed — try again.";
-            }
-            // Transient toast for this NON-ack status feedback (additive — the persistent
-            // AppState.message error above is untouched, so BolusSendFailedTest still holds).
-            // The cancel Confirmation and any dose/alert-clear acknowledgment surface stay full Ui views.
-            Toast.show(Toast.cancelFeedback(dispatched));
-            Ui.requestUpdate();
+            // Honors RemoteComm.send()'s Bool via the shared AppState.cancelBolus() funnel — same
+            // behavior this block used to inline (see AppState.cancelBolus's own comment for the
+            // failed-vs-dispatched split); every delegate's cancel path now shares one implementation.
+            AppState.cancelBolus();
             return true;
         }
         // Read-only (or a hidden button): don't open bolus entry.
