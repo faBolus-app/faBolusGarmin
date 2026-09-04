@@ -48,7 +48,7 @@ module UnresolvedDeliveryTombstoneTest {
         AppState._prevEligibilityFp = null;
         AppState.readOnly = false;
         AppState.garminBolusEnabled = true;
-        AppState.hostCanBolus = null;
+        AppState.hostCanBolus = true;          // phone-authoritative allow
         AppState.hostBolusBlockReason = null;
         AppState.bolusPasscodeRequired = false;
         AppState.connection = "Connected";

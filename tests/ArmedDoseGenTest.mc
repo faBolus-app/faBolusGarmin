@@ -23,8 +23,8 @@ module ArmedDoseGenTest {
 
     // Reset ALL shared state the eligibility-gen path reads so cases are order-independent: the
     // in-flight/delivery vars, the eligibility generations + last-seen fingerprint, and a safe,
-    // bolus-eligible set of inputs (read-only off, Garmin bolusing on, pump allowed via the connection
-    // string, no passcode, no known last bolus).
+    // bolus-eligible set of inputs (read-only off, Garmin bolusing on, pump allowed via the
+    // phone-authoritative hostCanBolus flag, no passcode, no known last bolus).
     function baseline() as Void {
         AppState.status = null;
         AppState.message = null;
@@ -36,7 +36,7 @@ module ArmedDoseGenTest {
         AppState._prevEligibilityFp = null;
         AppState.readOnly = false;
         AppState.garminBolusEnabled = true;
-        AppState.hostCanBolus = null;          // derive pumpBolusAllowed() from the connection string
+        AppState.hostCanBolus = true;          // phone-authoritative allow
         AppState.hostBolusBlockReason = null;
         AppState.bolusPasscodeRequired = false;
         AppState.connection = "Connected";

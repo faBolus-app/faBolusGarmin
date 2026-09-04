@@ -158,9 +158,9 @@ module AppState {
 
     // The host's authoritative "may a remote start a bolus right now?" (schema `canBolus`),
     // plus its reason token (`bolusBlockReason`: "pumpNotLinked" | "bolusInFlight" | "accessDenied").
-    // null until the host sends them (older host) → pumpBolusAllowed() falls back to deriving from the
-    // connection string. Lets the START gate stop treating a substring match of the localized display
-    // string ("Delivering…") as load-bearing safety logic.
+    // null until the host sends them (older host) → pumpBolusAllowed() fails CLOSED. Lets the START
+    // gate stop treating a substring match of the localized display string ("Delivering…") as
+    // load-bearing safety logic.
     (:background)
     var hostCanBolus as Lang.Boolean or Null = null;
     (:background)
@@ -605,15 +605,15 @@ module AppState {
         return connection.find("Deliver") == 0;
     }
 
-    // Whether the PUMP side permits a new bolus — the host's authoritative flag when present (schema
-    // `canBolus`: pump linked AND not mid-delivery AND remotes not read-only), otherwise derived from
-    // the connection string. Excludes phone reachability (the Garmin's own local link), so it is
-    // deterministically unit-testable; canBolus() ANDs in reachability. This is what
-    // stops the START gate from depending on a substring match of the localized display string.
+    // Whether the PUMP side permits a new bolus — strictly the host's authoritative flag (schema
+    // `canBolus`: pump linked AND not mid-delivery AND remotes not read-only), and never derived from
+    // the connection string, so this can never return null and a caller's `if (pumpBolusAllowed())`
+    // can never throw. A watch that has not yet heard from a canBolus-capable host fails CLOSED.
+    // Excludes phone reachability (the Garmin's own local link), so it is deterministically
+    // unit-testable; canBolus() ANDs in reachability.
     (:background)
     function pumpBolusAllowed() as Lang.Boolean {
-        if (hostCanBolus != null) { return hostCanBolus; }
-        return pumpConnected() && !bolusing();
+        return hostCanBolus != null ? hostCanBolus : false;
     }
 
     // App-level liveness — the faBolus phone app has sent a reply within CONNECTION_STALE_SEC.

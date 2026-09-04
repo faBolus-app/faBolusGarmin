@@ -1,14 +1,15 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// P12 group D: the Garmin START-bolus gate now prefers the host's semantic `canBolus` flag (schema),
-// with the connection-string derivation only as a fallback for an older host — instead of treating a
-// substring match of the localized display string ("Delivering…") as load-bearing safety logic. These
-// pin: the parse of `canBolus` / `bolusBlockReason`, the host-flag-over-string precedence in
-// pumpBolusAllowed(), and the reason-token → display-text mapping. pumpBolusAllowed() deliberately
-// EXCLUDES phone reachability (System.getDeviceSettings().phoneConnected, not controllable in the
-// simulator), so it is deterministic; canBolus() ANDs reachability in on-device. Style mirrors
-// tests/HistoryEpochsTest.mc. AppState + RemoteComm are compiled into the test binary (test.jungle).
+// The Garmin START-bolus gate relies strictly on the host's semantic `canBolus` flag (schema) —
+// instead of treating a substring match of the localized display string ("Delivering…") as
+// load-bearing safety logic, and with no connection-string fallback at all: a host that has not yet
+// sent the flag fails CLOSED. These pin: the parse of `canBolus` / `bolusBlockReason`, the
+// fail-closed shape of pumpBolusAllowed(), and the reason-token → display-text mapping.
+// pumpBolusAllowed() deliberately EXCLUDES phone reachability
+// (System.getDeviceSettings().phoneConnected, not controllable in the simulator), so it is
+// deterministic; canBolus() ANDs reachability in on-device. Style mirrors tests/HistoryEpochsTest.mc.
+// AppState + RemoteComm are compiled into the test binary (test.jungle).
 module CanBolusTest {
 
     // A minimal statusRead envelope carrying `extra`'s keys (each test states only what it varies).
@@ -37,31 +38,34 @@ module CanBolusTest {
         return true;
     }
 
-    // Older host (never sends `canBolus`) → fall back to deriving from the connection string.
+    // Older host (never sends `canBolus`) → fails CLOSED regardless of the connection string. There is
+    // no string-derived fallback: an absent flag always means "not allowed", even when the string alone
+    // would otherwise read as connected/idle.
     (:test)
-    function fallsBackToStringWhenNoHostFlag(logger as Test.Logger) as Lang.Boolean {
+    function failsClosedWhenNoHostFlag(logger as Test.Logger) as Lang.Boolean {
         AppState.hostCanBolus = null;   // an older host that never sent the field
         AppState.handle(statusRead({ "message" => "Connected" }));
-        Test.assertMessage(AppState.pumpBolusAllowed(), "Connected + no host flag → allowed via string");
+        Test.assertMessage(!AppState.pumpBolusAllowed(), "Connected + no host flag → still blocked");
 
         AppState.hostCanBolus = null;
         AppState.handle(statusRead({ "message" => "Disconnected" }));
-        Test.assertMessage(!AppState.pumpBolusAllowed(), "Disconnected + no host flag → blocked via string");
+        Test.assertMessage(!AppState.pumpBolusAllowed(), "Disconnected + no host flag → blocked");
 
         AppState.hostCanBolus = null;
         AppState.handle(statusRead({ "message" => "Delivering…" }));
-        Test.assertMessage(!AppState.pumpBolusAllowed(), "in-flight + no host flag → blocked via string");
+        Test.assertMessage(!AppState.pumpBolusAllowed(), "in-flight + no host flag → blocked");
         return true;
     }
 
     // A non-boolean `canBolus` must be ignored (leaves the last value / stays null) — never crash or
-    // coerce. Guards the `instanceof Lang.Boolean` check in the parse.
+    // coerce. Guards the `instanceof Lang.Boolean` check in the parse. With the flag still null, the
+    // gate fails CLOSED — there is no string-derived fallback to fall into.
     (:test)
     function ignoresNonBooleanCanBolus(logger as Test.Logger) as Lang.Boolean {
         AppState.hostCanBolus = null;
         AppState.handle(statusRead({ "message" => "Connected", "canBolus" => "yes" }));
         Test.assertMessage(AppState.hostCanBolus == null, "string canBolus ignored (stays null)");
-        Test.assertMessage(AppState.pumpBolusAllowed(), "so it falls back to the string (Connected → allowed)");
+        Test.assertMessage(!AppState.pumpBolusAllowed(), "still null ⇒ blocked, no string fallback");
         return true;
     }
 
