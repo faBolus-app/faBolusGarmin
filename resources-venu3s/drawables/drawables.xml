@@ -1,0 +1,8 @@
+<drawables>
+    <!-- Per-device override: venu3s's launcherIcon dimension (Devices/venu3s/compiler.json)
+         is 70x70, not the base 40x40 in resources/drawables/. Without this override the SDK upscales
+         the 40x40 asset to fit, which is the defect this override fixes. Visually identical artwork
+         to the base icon, just rendered at venu3s's native size (see CONTRIBUTING.md's device-add
+         steps, item 3, and resources/drawables/drawables.xml's own note). -->
+    <bitmap id="LauncherIcon" filename="launcher_icon.png"/>
+</drawables>
