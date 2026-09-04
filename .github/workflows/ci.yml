@@ -106,8 +106,8 @@ jobs:
         run: |
           pipx install semgrep || pip install --user semgrep
           # No --error: semgrep exits 0 with findings by default, which is what "advisory" means here.
-          # Scan the repo, not just `source` — `tests/` and `datafield/` are in the ruleset's globs
-          # and were invisible while this scanned one directory. `.semgrepignore` is committed here
+          # Scan the repo, not just `source` — `tests/` is in the ruleset's globs too
+          # and was invisible while this scanned one directory. `.semgrepignore` is committed here
           # because semgrep's built-in default list silently drops a lowercase `tests/`.
           semgrep --config /tmp/deslop.yml --metrics=off .
       - name: Deslop residue ratchet

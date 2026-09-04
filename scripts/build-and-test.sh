@@ -74,7 +74,6 @@ compile() {  # <jungle> <device> [extra args...]
 }
 
 echo "== barrel-free jungles =="
-compile datafield  venu3s -w
 compile test       venu3s -w
 # venu3s is now the sole declared shipping device (main is narrowed to Venu 3S only). official.jungle
 # is not compiled here — it never has been; adding that step is a separate decision, not this one's.

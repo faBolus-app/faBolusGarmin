@@ -22,7 +22,7 @@ in this shared schema.
 ## Layout
 - `source/app/` — UI, bolus confirm, `RemoteComm` (phone-relay), `AppState`.
 - Jungles: `monkey.jungle` + `manifest.xml` (Beta), `official.jungle` + `manifest-official.xml`
-  (Official), `test.jungle`, `datafield.jungle`.
+  (Official), `test.jungle`.
 - **venu3s** is the sole `main` build target and the sole hardware-validated device. Other devices
   live on `dev/garmin-devices`.
 - `tests/` — Monkey C unit suite (run locally; CI has no SDK).
@@ -43,10 +43,12 @@ Sibling repos: `../faBolus`, `../TandemKit`.
 - Store builds: [`docs/STORE-BUILDS.md`](docs/STORE-BUILDS.md) (Connect IQ SDK 9.2.0).
 
 ## Device floor
-venu3s only on `main`. Fail gracefully on a capability a device cannot provide — never fabricate a
-value. That is distinct from honest-staleness `--` (a safety signal). The data field is a labelled
-placeholder because Connect IQ forbids a `datafield` from subscribing to the BG complication
-(`datafield/FaBolusDataField.mc`).
+venu3s only on `main`. Fail gracefully on a capability a device/display cannot provide — never
+fabricate a value. That is distinct from honest-staleness `--` (a safety signal). The BG
+complication's numeric `:value` slot is the standing example: it cannot render `--` at all, so
+`BgComplication.shortLabelFor` marks a stale reading with an explicit `" old"` suffix instead — an
+honest indicator of the platform limitation, never a bare dash that could pass for a fresh reading
+(`source/app/BgComplication.mc`).
 
 ## Conventions
 Match the phone's command semantics. Device input/UI differences go behind `DeviceProfile`. Comments
@@ -56,8 +58,8 @@ engines as if they were on `main`.
 `semgrep --config <faBolus>/.semgrep/deslop.yml --metrics=off .` flags AI-process residue in the
 Monkey C sources and tests. The ruleset lives in the faBolus repo; CI fetches it by raw URL. The
 report itself is advisory, but the residue count is ratcheted (a second CI step fails if any
-residue rule rises above its committed baseline). Scan `.`, not `source` — `tests/` and
-`datafield/` are in the globs too, and the
+residue rule rises above its committed baseline). Scan `.`, not `source` — `tests/` is in the globs
+too, and the
 committed `.semgrepignore` exists because semgrep's built-in default list drops a lowercase
 `tests/`. Triage by hand: a display-width budget ("runs 29-30+ chars") matches the ticket pattern and
 is a KEEP.

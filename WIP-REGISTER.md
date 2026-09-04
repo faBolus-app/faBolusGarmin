@@ -13,7 +13,6 @@ outright (see each surviving item's note below) — this register keeps only wha
 
 | # | Item | Evidence | Disp. | Note |
 |---|---|---|---|---|
-| 13 | `datafield/FaBolusDataField.mc:19-21` — `compute()` returns the literal `"--"` forever | Connect IQ forbids `ComplicationSubscriber` for `type=datafield` (`:7-12`); `manifest-datafield.xml` declares no permissions | **N** | **Permanently** blocked by the platform, not unfinished. Ships as a labelled placeholder; the fail-gracefully governance rule is written into `AGENTS.md`/`CONTRIBUTING.md`. |
 | 15 | Connect IQ **widget** app type "not built" | | **R** | Never started. |
 | 16 | Official Connect IQ listing dormant; the app defaults to Beta | `docs/STORE-BUILDS.md:15` | **R** | Standing hold. **Do not publish.** |
 | 17 | Only venu3s is hardware-validated | `store/connectiq-listing.md:31` | **F** | venu3s is also the **sole build target** on `main` — the published compatibility floor and the device *set* are identical (`AGENTS.md`/`CONTRIBUTING.md`/`BRANCHES.md`; the 5 non-venu3s devices removed from both shipping manifests, retained on `dev/garmin-devices`). |
@@ -39,7 +38,7 @@ manifest permissions. All are working as designed — **N**:
 ## Negative results
 
 - No `FIXME`, `HACK`, or `XXX` anywhere. The strict `TODO` hits still current: item 15's Connect IQ
-  widget app type note; the data-field TODO is unaffected by any removal.
+  widget app type note.
 - No skip/disable annotations in the Monkey C test suite — every `(:test)` function is active.
 - No `System.error` / throw-unsupported stubs; no unreferenced types.
 - Zero genuine commented-out code blocks over 5 lines in the current `main` tree.

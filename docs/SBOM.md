@@ -15,7 +15,7 @@ Format per row: component · version/revision · SPDX license · source · how f
 
 | Component | Version | License (SPDX) | Source | Usage |
 |---|---|---|---|---|
-| faBolusGarmin app | in-repo | MIT | `source/app/` (+ `datafield/`) | The Monkey C remote: UI, `RemoteComm` phone-relay send, `AppState`, BG complication. Covered by the root `LICENSE`. |
+| faBolusGarmin app | in-repo | MIT | `source/app/` | The Monkey C remote: UI, `RemoteComm` phone-relay send, `AppState`, BG complication. Covered by the root `LICENSE`. |
 
 ## Required to build/run, but NOT vendored (license/credential-gated)
 

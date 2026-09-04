@@ -50,10 +50,9 @@ one of *two* confirmations.
 - `source/app/RemoteComm` — phone-relay send behind one `send(cmd)` seam. Direct-to-pump is **not**
   in this tree (preservation branches only).
 
-Beyond the remote, the repo also builds two more Connect IQ surfaces from the same BG feed:
+Beyond the remote, the repo also builds one more Connect IQ surface from the same BG feed:
 - a **glance** (compact BG in the glance carousel) — built into the app (`FaBolusGlanceView`, reads
   the persisted reading directly).
-- a **BG data field** for activity screens on watches and Edge — `datafield/` + `datafield.jungle`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md#add-a-watch-face-or-another-connect-iq-app-type) for building
 and extending these. (A standalone watch-face app that consumed the complication previously lived on

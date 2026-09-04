@@ -73,15 +73,6 @@ It checks the two Garmin prerequisites first (the Connect IQ SDK and your signin
 - Upload the revealed `.iq` at the Connect IQ dashboard, then install it to your watch from the Garmin
   Connect IQ Store app.
 
-## Companion data field (a separate Connect IQ app, optional)
-This is its own store submission (one shared build — no beta/official split). (The standalone watch
-face that also used to build this way has been removed from `main` — it now lives only on the
-`experimental` branch.)
-
-```sh
-"$MONKEYC" -f datafield.jungle  -o bin/faBolusField.iq -y "$KEY" -e -r
-```
-
 ## Upload
 Connect IQ dashboard → each listing → upload the matching `.iq`. The **official** id is a *new*
 store app the first time (create the listing); the **beta** id updates the existing listing.

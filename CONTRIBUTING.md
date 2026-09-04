@@ -24,9 +24,10 @@ per-release history is in [`CHANGELOG.md`](CHANGELOG.md).
 - **Fail gracefully on unsupported hardware.** Where a device genuinely cannot provide a capability, the
   app must degrade to an explicit, honest state — never a fabricated value or silent misbehavior. This
   is separate from the deliberate honest-staleness `--` shown for a stale/absent reading (a safety
-  signal, which must be preserved). The data field is the standing example: Connect IQ forbids a
-  `datafield` app from subscribing to the BG complication, so it ships as a labelled placeholder rather
-  than pretending to have a reading (`datafield/FaBolusDataField.mc`).
+  signal, which must be preserved). The BG complication is the standing example: its numeric `:value`
+  slot cannot render `--` at all (a structural platform limit), so `BgComplication.shortLabelFor`
+  appends an explicit `" old"` marker to a stale reading instead of letting the frozen number pass for
+  current (`source/app/BgComplication.mc`).
 
 ## Keep it host-agnostic
 - The watch is a thin remote. Everything it sends/receives is the shared contract
@@ -76,14 +77,10 @@ sustained actions), and keep the touch and button flows in sync in `HoldView`/`H
 
 ## Add a watch face or another Connect IQ app type
 Each Connect IQ app type is a separate app (its own manifest + jungle), so the repo keeps them side
-by side (like `datafield.jungle` / `test.jungle`):
+by side (like `monkey.jungle` / `test.jungle`):
 - **Watch face** — removed from `main`; it lives only on the `experimental` branch as its own
   Connect IQ app (`watchface/` plus a dedicated manifest/jungle pair). Watches only — Edge has no
   watch face.
-- **Data field** — `datafield/` + `manifest-datafield.xml` + `datafield.jungle`
-  (`monkeyc -f datafield.jungle -o bin/faBolusField.iq -y <dev_key.der> -e -r -w`). A `SimpleDataField`
-  that shows BG on any run/ride activity screen — watches **and** Edge. Same public-complication feed
-  as the watch face (stubbed TODO in `datafield/FaBolusDataField.mc`), so it shows "--" until wired.
 - **Glance** — built into the remote app itself: `FaBolusApp.getGlanceView()` +
   `source/app/FaBolusGlanceView.mc`, both annotated `(:glance)`. Because it's the same app it reads
   the persisted BG (`bg`/`bgEpoch`) directly, so it shows a real reading with no extra wiring.
