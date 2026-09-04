@@ -199,12 +199,13 @@ class FaBolusApp extends App.AppBase {
         // mutates glucose/iob/carbRatio/etc.) — a mismatched-reqId reply is discarded here so it changes
         // NOTHING (not merely "clears _pollOutstanding late"), mirroring BgServiceDelegate.onPhoneMessage
         // exactly (reuses the SAME AppState.isCorrelatedStatusReply() the bg service uses — no second
-        // correlation implementation). RETAINED: isCorrelatedStatusReply's either-id-absent legacy
-        // fallback (a reply with no echoed requestId, or fgPollMintedReqId somehow unset, falls back to
-        // the kind discriminator) — kept because this fg path is advisory-display only (refreshes
-        // glucose/iob/etc.; it never delivers a dose, which is the ledgered phone-side path) and dropping
-        // it would break an older phone that doesn't echo requestId. Non-statusRead messages (a
-        // bolusStatus echo, etc.) are NEVER gated by this — they proceed to handle() exactly as before.
+        // correlation implementation). RETAINED: isCorrelatedStatusReply's either-id-absent fallback (a
+        // reply with no echoed requestId — the LIVE case on every proactive push, current phone or
+        // old, since a proactive push never carries a `replyingTo` — or fgPollMintedReqId somehow
+        // unset, falls back to the kind discriminator) — kept because this fg path is advisory-display
+        // only (refreshes glucose/iob/etc.; it never delivers a dose, which is the ledgered phone-side
+        // path). Non-statusRead messages (a bolusStatus echo, etc.) are NEVER gated by this — they
+        // proceed to handle() exactly as before.
         if (isStatusReadReply && !AppState.isCorrelatedStatusReply(data, AppState.fgPollMintedReqId)) {
             return;
         }

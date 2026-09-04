@@ -1519,17 +1519,18 @@ module AppState {
     }
 
     // Pure: TRUE request-id correlation for a statusRead reply. The watch mints a requestId for its
-    // statusRead REQUEST and retains it; the phone now ECHOES that id in its reply (faBolus
-    // AppModel.statusCommand(replyingTo:)). Accept a reply as OURS iff it is a statusRead (kind) AND its
-    // echoed requestId matches the one we minted. A reply with NO requestId is a legacy phone that doesn't
-    // echo → fall back to the kind discrimination only (backward-compatible). A mismatching requestId is a
-    // stale/other reply and is rejected. `mintedReqId == null` (we didn't retain one) also falls back to
-    // kind. Deterministic → unit-testable.
+    // statusRead REQUEST and retains it; the phone echoes that id in its reply to a POLLED request
+    // (faBolus AppModel.statusCommand(replyingTo:)). A PROACTIVE push (unprompted — a new CGM value or
+    // a critical alert) carries no `replyingTo` and so has no requestId on every phone build, current
+    // or old — this is the LIVE acceptance path for every proactive push, not a legacy-only fallback —
+    // so this falls back to the kind discrimination whenever `rid == null` (no requestId on the
+    // message) or `mintedReqId == null` (we didn't retain one). A mismatching requestId on an actual
+    // reply is a stale/other reply and is rejected. Deterministic → unit-testable.
     (:background)
     function isCorrelatedStatusReply(dict as Lang.Dictionary, mintedReqId as Lang.String?) as Lang.Boolean {
         if (!isStatusReply(dict)) { return false; }
         var rid = strCap(dict["requestId"], 64);
-        if (rid == null || mintedReqId == null) { return true; }   // legacy phone (no echo) / no retained id → kind fallback
+        if (rid == null || mintedReqId == null) { return true; }   // proactive push (no requestId) / no retained id → kind fallback
         return rid.equals(mintedReqId);
     }
 
@@ -2563,11 +2564,12 @@ module AppState {
 
     // Re-add any retained-but-unacked DISPLAY provisional NOT present in the
     // just-replaced `alerts` snapshot, so a filtered statusRead can never silently drop a
-    // wearer-dismissed-but-unacked alert — called from handle() ONLY when `supportsDismissAck` is true
-    // (ack-mode; the capability-absent/false branch runs the `reconcileDismissSent()` fallback
-    // instead and must NOT overlay, or a stale provisional would defeat that fallback's filtered-
-    // absence removal). Force-marks each overlaid identity 'seen' (KEY_SEEN_ALERTS) so re-overlaying it
-    // on every subsequent statusRead never re-triggers a notify/vibrate — the wearer already knows.
+    // wearer-dismissed-but-unacked alert — called from handle() in the ack-mode branch
+    // (`supportsDismissAck` true) AND the raw-snapshot branch (`supportsRawAlertSnapshot` true, after
+    // pruning); the third, fallback branch runs `reconcileDismissSent()` instead and must NOT overlay,
+    // or a stale provisional would defeat that fallback's filtered-absence removal. Force-marks each
+    // overlaid identity 'seen' (KEY_SEEN_ALERTS) so re-overlaying it on every subsequent statusRead
+    // never re-triggers a notify/vibrate — the wearer already knows.
     (:background)
     function overlayUnackedDismissProvisionals() as Void {
         var active = activeAlertIdentities();
