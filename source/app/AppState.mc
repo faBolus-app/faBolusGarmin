@@ -197,35 +197,23 @@ module AppState {
     var alertCriticalOverridesDnd as Lang.Boolean = false;
 
     // The pump's automated-controller identity + its Control-IQ runtime on/off, pushed on
-    // the statusRead reply so the watch can reconstruct the auto-correction DISCLOSURE locally (no prose
-    // crosses the wire). Both mirror faBolusCore (ControllerVariant / PumpSnapshot.controlIQEnabled).
+    // the statusRead reply. Both mirror faBolusCore (ControllerVariant / PumpSnapshot.controlIQEnabled).
     // `controllerVariant` is a FROZEN token (schema `controllerVariant` enum): "none" / "controlIQ" /
     // "controlIQPro" — never invent others. DISPLAY-ONLY: neither ever gates, changes, or delays a bolus
-    // — nothing here feeds a dose. Safe legacy default ("none" / false) ⇒ render nothing controller-
-    // specific. Not persisted (matches the nearby display-only capability fields, e.g.
-    // supportsRemoteAlertDismiss): a cold launch shows nothing controller-specific until the first push.
+    // — nothing here feeds a dose. `controlIQEnabled` gates whether the ciqZone details row renders
+    // (DetailsView.mc); `controllerVariant` has no renderer of its own. Not persisted (matches the
+    // nearby display-only capability fields, e.g. supportsRemoteAlertDismiss).
     (:background)
     var controllerVariant as Lang.String = "none";
     (:background)
     var controlIQEnabled as Lang.Boolean = false;
 
     // The pump's live Sleep/Exercise activity mode (0 normal / 1 sleep / 2 exercise), on the shared
-    // statusRead reply (RemoteCommand.controlIQMode) so this Garmin can gate its own activity-mode
-    // row locally. Same display-only, not-persisted treatment as controllerVariant/controlIQEnabled
-    // just above (a capability-like fact that changes rarely enough that a cold launch showing nothing
-    // Sleep/Exercise-specific until the first push is acceptable, matching those two fields'
-    // documented reasoning). DISPLAY-ONLY: never gates, changes, or delays a bolus.
+    // statusRead reply (RemoteCommand.controlIQMode). Same display-only, not-persisted treatment as
+    // controllerVariant/controlIQEnabled just above; the watch has no renderer for this value.
+    // DISPLAY-ONLY: never gates, changes, or delays a bolus.
     (:background)
     var controlIQMode as Lang.Number = 0;
-    // The already-decoded exercise countdown (op-179), a RAW remaining-seconds DURATION — NOT an
-    // epoch: this device counts down LOCALLY against ITS OWN receipt time for animation only,
-    // re-anchored on every statusRead, never trusted as absolute past that point. UNLIKE
-    // controllerVariant/controlIQEnabled above, this DOES need to survive a restart between phone
-    // syncs (mirrors lockoutUntilEpochSec's own persistence exactly, same reasoning — it changes far
-    // more often than the display-only capability fields). `null` ⇒ the timer fact renders ABSENT —
-    // never a stale/negative countdown (fail-closed).
-    (:background)
-    var exerciseTimeRemainingSec as Lang.Number? = null;
 
     // The pump's live Control-IQ action zone, a FROZEN wire token (schema `ciqZone`:
     // "increases"/"decreases"/"maintains"/"stops"/"delivers" — Tandem's own zone words, (c) Tandem,
@@ -266,24 +254,12 @@ module AppState {
     (:background)
     var ciqLastCouldNotDeliverEpochSec as Lang.Number? = null;
 
-    // The immutable SOURCE epoch (Unix seconds, raw — NOT an age) of the instant Control-IQ's
-    // automatic correction becomes available again. UNLIKE `lastAutoCorrectionEpochSec` above (a
-    // monotonic historical marker that never un-happens), this is a DERIVED instant the phone
-    // recomputes fresh on every statusRead — so it is always fully authoritative (assign/clear, never
-    // "ignore if invalid, keep last"), mirroring `ciqZone`'s unconditional guard, NOT
-    // `lastAutoCorrectionEpochSec`'s monotonic one. Persisted (survives a restart between phone
-    // syncs, matches `ciqZone`'s own persistence). `null` ⇒ the bar/numeral renders ABSENT (never a
-    // frozen 0%/100% bar, never a negative countdown). DISPLAY-ONLY: never gates, changes, or delays
-    // a bolus.
-    (:background)
-    var lockoutUntilEpochSec as Lang.Number? = null;
-
     // The pump's configured max-basal delivery limit, mirrored from the phone's `maxBasalUnitsPerHour`.
-    // Like `lockoutUntilEpochSec` above, the phone relays its CURRENT knowledge every statusRead
+    // Like `ciqZone` above, the phone relays its CURRENT knowledge every statusRead
     // (never "unread ⇒ omit the key", `<= 0` means unread on the wire), so this is always fully
     // authoritative (assign/clear, never "ignore if invalid, keep last") — a stale max surviving past
     // the moment it actually cleared would misrepresent the pump's real configured limit. Persisted
-    // (survives a restart between phone syncs, matches `lockoutUntilEpochSec`'s own persistence).
+    // (survives a restart between phone syncs, matches `ciqZone`'s own persistence).
     // `null` ⇒ the "% of configured max basal" text row renders ABSENT (fail-closed: hidden, never
     // "0%"/"--"). DISPLAY-ONLY: never gates, changes, or delays a bolus.
     (:background)
@@ -374,16 +350,6 @@ module AppState {
         if (lac0 instanceof Lang.Number && lac0 > 0) { lastAutoCorrectionEpochSec = lac0; }
         var cncd0 = Storage.getValue("ciqLastCouldNotDeliverEpochSec");
         if (cncd0 instanceof Lang.Number && cncd0 > 0) { ciqLastCouldNotDeliverEpochSec = cncd0; }
-        // Restore the persisted lockout-until epoch the same guarded way, so
-        // a cold launch before the first statusRead shows the last-known instant rather than nothing.
-        // A corrupt/absent value keeps the safe default (null ⇒ bar/numeral absent).
-        var lue0 = Storage.getValue("lockoutUntilEpochSec");
-        if (lue0 instanceof Lang.Number && lue0 > 0) { lockoutUntilEpochSec = lue0; }
-        // Restore the persisted exercise countdown the same guarded way, so
-        // a cold launch before the first statusRead shows the last-known duration rather than
-        // nothing. A corrupt/absent/non-positive value keeps the safe default (null ⇒ timer absent).
-        var etrs0 = Storage.getValue("exerciseTimeRemainingSec");
-        if (etrs0 instanceof Lang.Number && etrs0 > 0) { exerciseTimeRemainingSec = etrs0; }
         // Restore the persisted configured max-basal limit the same guarded
         // way, so a cold launch before the first statusRead shows the last-known value rather than
         // nothing. A corrupt/absent/non-positive value keeps the safe default (null ⇒ row absent).
@@ -1821,21 +1787,6 @@ module AppState {
             // controllerVariant/controlIQEnabled's own not-persisted reasoning).
             var ciqm = numRange(data["controlIQMode"], 0, 2);
             if (ciqm != null) { controlIQMode = ciqm; }
-            // The already-decoded exercise countdown, raw remaining-seconds (NOT an epoch) — the phone
-            // relays its CURRENT knowledge every statusRead (nil unless
-            // genuinely in Exercise right now), so this is always fully authoritative (assign/clear,
-            // mirrors lockoutUntilEpochSec's unconditional guard), never "ignore if invalid, keep
-            // last" — a stale timer must never survive past the moment the pump's own mode changed.
-            // Persisted (mirrors lockoutUntilEpochSec's own persistence) so a restart between syncs
-            // still shows the last-known countdown rather than nothing.
-            var etrs = numRange(data["exerciseTimeRemainingSec"], 0, 24 * 60 * 60);
-            if (etrs != null && etrs > 0) {
-                exerciseTimeRemainingSec = etrs;
-                Storage.setValue("exerciseTimeRemainingSec", exerciseTimeRemainingSec);
-            } else {
-                exerciseTimeRemainingSec = null;
-                Storage.deleteValue("exerciseTimeRemainingSec");
-            }
             // Fail-closed: UNLIKE controllerVariant/controlIQEnabled
             // above (where absent only ever means "legacy host" and the last-known value stays safe to
             // keep), `ciqZone` can legitimately clear on a MODERN host too — CIQ turns off, or the raw
@@ -1887,19 +1838,7 @@ module AppState {
                 ciqLastCouldNotDeliverEpochSec = cncd;
                 Storage.setValue("ciqLastCouldNotDeliverEpochSec", ciqLastCouldNotDeliverEpochSec);
             }
-            // Fail-closed: UNLIKE lastAutoCorrectionEpochSec/
-            // ciqLastCouldNotDeliverEpochSec just above, this is a DERIVED instant the phone
-            // recomputes fresh every statusRead — so it is always fully authoritative (assign/clear,
-            // mirrors ciqZone's unconditional guard), never "ignore if invalid, keep last".
-            var lue = data["lockoutUntilEpochSec"];
-            if (lue instanceof Lang.Number && lue > 0) {
-                lockoutUntilEpochSec = lue;
-                Storage.setValue("lockoutUntilEpochSec", lockoutUntilEpochSec);
-            } else {
-                lockoutUntilEpochSec = null;
-                Storage.deleteValue("lockoutUntilEpochSec");
-            }
-            // Fail-closed: mirrors lockoutUntilEpochSec's unconditional
+            // Fail-closed: mirrors ciqZone's unconditional
             // assign-or-clear exactly — the phone relays its CURRENT knowledge every statusRead (`<= 0`
             // means unread on the wire, same convention as PumpSnapshot.maxBasalUnitsPerHour==0), so a
             // stale max must never survive past the moment it actually cleared.
