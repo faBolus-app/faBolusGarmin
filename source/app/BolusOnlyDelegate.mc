@@ -10,9 +10,7 @@ class BolusOnlyDelegate extends Ui.BehaviorDelegate {
     private function pressBolusButton() as Lang.Boolean {
         // GA-02: cancelling an in-flight bolus must work even in read-only (check it BEFORE the gate).
         if (AppState.canCancel()) {
-            RemoteComm.send(RemoteComm.cancelBolus(AppState.pendingRequestId as Lang.String));
-            AppState.status = "cancelling";
-            Ui.requestUpdate();
+            AppState.cancelBolus();
             return true;
         }
         if (AppState.readOnly) { return true; }      // read-only blocks STARTING a bolus, not cancel

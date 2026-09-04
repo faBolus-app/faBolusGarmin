@@ -4,6 +4,7 @@ using Toybox.Math;
 using Toybox.Time;
 using Toybox.System;
 using Toybox.Application.Storage;
+using Toybox.WatchUi as Ui;
 
 // Shared app state for the faBolus Garmin remote. Glance data comes from the phone
 // (statusRead reply); carbs→units is computed locally from the pump's calculator settings so
@@ -820,6 +821,31 @@ module AppState {
     function canCancel() as Lang.Boolean {
         return bolusing() && pendingRequestId != null;
     }
+
+    // Canonical cancel funnel for all three delegate call sites (glance, bolus-only screen, hold
+    // screen). NOT background-annotated — it shows a toast and requests a UI redraw, neither of which
+    // is available from the background service. A tap with nothing pending is a true no-op: it must not
+    // flip status or push the outcome watchdog deadline out, so bail before touching either. Otherwise
+    // honor RemoteComm.send()'s dispatch result exactly like the original bolus send does: on a failed
+    // dispatch leave status alone (canCancel() only consults bolusing()+pendingRequestId, never status,
+    // so a failed cancel stays retryable) and surface an error via message; on a successful dispatch mark
+    // "cancelling" and re-stamp the watchdog deadline, since a cancel REQUEST is not yet a confirmed
+    // cancellation and needs its own deadline if no terminal echo arrives. Always show the transient toast
+    // and request a redraw so the wearer gets honest feedback either way.
+    function cancelBolus() as Lang.Boolean {
+        if (pendingRequestId == null) { return false; }
+        var dispatched = RemoteComm.send(RemoteComm.cancelBolus(pendingRequestId as Lang.String));
+        if (dispatched) {
+            status = "cancelling";
+            outcomeSentEpoch = Time.now().value();
+        } else {
+            message = "Cancel failed — try again.";
+        }
+        Toast.show(Toast.cancelFeedback(dispatched));
+        Ui.requestUpdate();
+        return dispatched;
+    }
+
     // Show the number whenever we have one — a stale reading is shown but marked (grayed + age
     // called out), never hidden. "--" only when there's no reading at all. Unit-aware:
     // renders in the active glucoseUnit via the pure displayGlucoseForUnit() funnel below.
