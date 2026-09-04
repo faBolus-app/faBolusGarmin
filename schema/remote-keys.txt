@@ -32,7 +32,6 @@ status
 message
 trend
 bgMgdl
-glucoseAgeSec
 glucoseEpochSec
 history
 historyEpochs

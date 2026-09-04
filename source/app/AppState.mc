@@ -1606,9 +1606,9 @@ module AppState {
             var lb = fltRange(data["lastBolusUnits"], 0.0, 100.0); if (lb != null && !deliveringNow) { lastBolus = lb; }
             // Prefer the phone's IMMUTABLE source epoch: an age is computed when
             // the phone composes the message, so by the time it lands here it already understates the
-            // reading's true age. Fall back to the age only for a host too old to send an epoch.
+            // reading's true age. The phone can never emit an age without an epoch, so no fallback exists.
             //
-            // A reading with NEITHER an epoch nor an age has an UNKNOWN age, and unknown must mean
+            // A reading with no epoch has an UNKNOWN age, and unknown must mean
             // stale. It previously meant "now" — a value labelled "1 minute old"
             // that was in fact hours stale, and which then passed `!glucoseStale()` and fed the
             // correction term at `computeUnits()`. Leaving `readingEpoch` untouched makes such a value
@@ -1616,14 +1616,11 @@ module AppState {
             // (`PumpSnapshot.isGlucoseStale`: no date ⇒ stale). Losing the arrow on an unknown-age
             // reading is the correct trade: showing less beats showing something inferred.
             var ep = data["glucoseEpochSec"];
-            var ag = fltRange(data["glucoseAgeSec"], 0.0, 86400.0);
             if (ep instanceof Lang.Number && ep > 0) {
                 // Clamp a future stamp (phone/watch clock skew) to "now" so it can never read as
                 // fresher than fresh — a negative age would render as permanently current.
                 var nowSec = Time.now().value();
                 readingEpoch = (ep > nowSec) ? nowSec : ep;
-            } else if (ag != null) {
-                readingEpoch = Time.now().value() - ag.toNumber();
             }
             // Staleness policy from the phone: glucoseStaleMinutes (>0), glucoseHideDelayMinutes
             // (0 = hide when stale, absent = never hide).
