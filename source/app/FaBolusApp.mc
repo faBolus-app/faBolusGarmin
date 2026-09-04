@@ -45,11 +45,6 @@ class FaBolusApp extends App.AppBase {
     // onStart → onBackgroundData → getInitialView), so onBackgroundData only vibrates/pushes once this
     // is true; otherwise the alert stays "unseen" and the next foreground statusRead surfaces it.
     private var _foreground as Lang.Boolean = false;
-    // Observable count of inbound phoneAppMessage delivery errors (see
-    // Communications.registerForPhoneAppMessageErrors, registered in onStart below) — purely additive
-    // observability, no change to the message-handling flow. Test-only-seam style (mirrors
-    // _scheduleCount/scheduleCount() above).
-    private var _phoneMsgErrorCount as Lang.Number = 0;
     // Observable count of pollTick's own empty-catch guards firing — the dismiss-retry
     // resend loop transmits through a call that could throw, and its catch used to swallow that throw
     // with zero observability into a persistent transmit failure. Test-only-seam style (mirrors
@@ -60,13 +55,6 @@ class FaBolusApp extends App.AppBase {
 
     function onStart(state as Lang.Dictionary?) as Void {
         Comm.registerForPhoneAppMessages(method(:onPhoneMessage));
-        // Register for inbound delivery errors where the device/firmware supports it
-        // (API Level 6.0.0 — NOT on venu3s per the SDK's own doc/Toybox/Communications.html "Supported
-        // Devices" list for registerForPhoneAppMessageErrors, hence the `has` capability guard, exactly
-        // the SDK's own documented idiom). Purely additive observability; no change to onPhoneMessage.
-        if (Comm has :registerForPhoneAppMessageErrors) {
-            Comm.registerForPhoneAppMessageErrors(method(:onPhoneMessageError));
-        }
         AppState.loadPersisted();            // show last-known BG instantly (no "--" flash)
         AppState.loadPrefs();                // restore configured screen order + default screen
         BgComplication.publish(null, null, 0);  // re-publish last-known reading to the complication
@@ -76,14 +64,6 @@ class FaBolusApp extends App.AppBase {
         pollTick();
         registerBackground();
     }
-
-    // Records an inbound phoneAppMessage delivery error for observability. Never throws, never
-    // alters message handling — the foreground poll loop (pollTick/scheduleNextPoll) already recovers
-    // from a missed/failed reply via its own outstanding-gate + backoff, independent of this counter.
-    function onPhoneMessageError(err as Comm.PhoneAppMessageError) as Void { _phoneMsgErrorCount += 1; }
-
-    // Test-observable inbound-error count (mirrors scheduleCount()'s seam style).
-    function phoneMsgErrorCount() as Lang.Number { return _phoneMsgErrorCount; }
 
     function onStop(state as Lang.Dictionary?) as Void {
         if (_timer != null) { _timer.stop(); }

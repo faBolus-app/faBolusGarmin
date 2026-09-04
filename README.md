@@ -41,8 +41,8 @@ one of *two* confirmations.
   bolus), **glucose-only** (no button), **clock** (analog/digital + glucose, tap to switch, no button),
   **bolus-only** (just the button), **history**, **alerts** — plus the bolus/confirm modal flow, the
   complication, `TrendArrow`, `AppState`, and the `Nav` carousel. Entry: `FaBolusApp`.
-- `source/app/DeviceProfile.mc` — the device seam. Screens read it (`isTouch()`, `isButtons()`,
-  `hasComplications()`) and adapt at runtime:
+- `source/app/DeviceProfile.mc` — the device seam. Screens read it (`isTouch()`, `isButtons()`)
+  and adapt at runtime:
   - **Touch** devices: tap the controls; confirm by tapping **1 → 2 → 3**.
   - **Button** devices: **UP/DOWN** adjust the dose, **MENU** switches Units/Carbs, **START**
     delivers; confirm is a deliberate **two-button hold** (hold UP to arm, then hold START to

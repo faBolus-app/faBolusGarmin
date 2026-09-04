@@ -395,9 +395,6 @@ module AppState {
             var trid = strCap(tomb["requestId"], 64);
             if (trid != null) {
                 unresolvedTombstoneReqId = trid;
-                var tsa = tomb["sentAt"];
-                unresolvedTombstoneSentAt = (tsa instanceof Lang.Number) ? tsa : 0;
-                unresolvedTombstoneDoseKey = strCap(tomb["doseKey"], 64);
             }
         }
         // Restore the lock-release audit record too, so "this lock was released by a human, not by a
@@ -891,7 +888,6 @@ module AppState {
 
     // Delivery
     var deliverUnits as Lang.Float = 0.0; // captured when entering the hold screen
-    var holdProgress as Lang.Float = 0.0; // 0..1 for the hold-to-deliver ring
     (:background)
     var pendingRequestId as Lang.String? = null;
     (:background)
@@ -912,7 +908,7 @@ module AppState {
     // inherits the previous screen's notice. DISPLAY-ONLY: nothing reads this to decide whether to send.
     var lastSendRefusal as Lang.String? = null;
 
-    // A DURABLE unresolved-delivery tombstone {requestId, sentAt, doseKey},
+    // A DURABLE unresolved-delivery tombstone keyed on `requestId`,
     // persisted to Application.Storage — UNLIKE `pendingRequestId` above, which is in-memory only and
     // lost on a nav/restart/kill. Written ONLY once dispatch to the phone might have occurred (i.e.
     // AFTER RemoteComm.sendBolus returns dispatched==true in sendBolusNow, via
@@ -925,16 +921,12 @@ module AppState {
     // authoritative terminal echo (delivered/cancelled/failed) for the MATCHING requestId — see
     // handle()'s bolusStatus branch, which checks this independently of pendingRequestId (onBack's
     // clearInFlight() below wipes pendingRequestId/status locally WITHOUT touching the tombstone, so a
-    // back-out before the echo lands must not orphan it). `doseKey` is diagnostic content-identity
-    // metadata only — requestId is the sole correlation key used to block a re-send / clear on echo.
+    // back-out before the echo lands must not orphan it). requestId is the sole correlation key used to
+    // block a re-send / clear on echo.
     (:background)
     const KEY_UNRESOLVED_TOMBSTONE = "unresolvedTombstone";
     (:background)
     var unresolvedTombstoneReqId as Lang.String? = null;
-    (:background)
-    var unresolvedTombstoneSentAt as Lang.Number = 0;
-    (:background)
-    var unresolvedTombstoneDoseKey as Lang.String? = null;
 
     function hasUnresolvedTombstone() as Lang.Boolean {
         return unresolvedTombstoneReqId != null;
@@ -950,16 +942,12 @@ module AppState {
 
     function persistUnresolvedTombstone(reqId as Lang.String, sentAt as Lang.Number, doseKey as Lang.String) as Void {
         unresolvedTombstoneReqId = reqId;
-        unresolvedTombstoneSentAt = sentAt;
-        unresolvedTombstoneDoseKey = doseKey;
         Storage.setValue(KEY_UNRESOLVED_TOMBSTONE, { "requestId" => reqId, "sentAt" => sentAt, "doseKey" => doseKey });
     }
 
     (:background)
     function clearUnresolvedTombstone() as Void {
         unresolvedTombstoneReqId = null;
-        unresolvedTombstoneSentAt = 0;
-        unresolvedTombstoneDoseKey = null;
         Storage.deleteValue(KEY_UNRESOLVED_TOMBSTONE);
     }
 
@@ -2023,8 +2011,6 @@ module AppState {
     function isNum(v) as Lang.Boolean {
         return v instanceof Lang.Number || v instanceof Lang.Float || v instanceof Lang.Double;
     }
-    function numOrNull(v) as Lang.Number? { return isNum(v) ? v.toNumber() : null; }
-    function flt(v) as Lang.Float? { return isNum(v) ? v.toFloat() : null; }
 
     // Inbound-payload validation. A malformed / hostile phone message must not poison global
     // state — every physiological field is bounds- and finiteness-checked, strings are length-capped,

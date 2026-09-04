@@ -15,10 +15,6 @@ class BgServiceDelegate extends System.ServiceDelegate {
     // The requestId minted for THIS service's statusRead request, retained so onPhoneMessage can
     // accept ONLY the correlated reply (the phone echoes it back). Same instance handles both callbacks.
     var mintedReqId as Lang.String? = null;
-    // Observable count of inbound phoneAppMessage delivery errors — this is a SEPARATE
-    // process from FaBolusApp, so it gets its own counter (mirrors FaBolusApp._phoneMsgErrorCount's
-    // seam style). Purely additive observability; no change to onTemporalEvent/onPhoneMessage.
-    var phoneMsgErrorCount as Lang.Number = 0;
 
     function initialize() { ServiceDelegate.initialize(); }
 
@@ -42,12 +38,6 @@ class BgServiceDelegate extends System.ServiceDelegate {
             // Background.registerForPhoneAppMessageEvent (onPhoneAppMessage below), which doesn't
             // depend on the service's own bounded runtime.
             Comm.registerForPhoneAppMessages(method(:onPhoneMessage));
-            // Register for inbound delivery errors where the device/firmware supports it (see
-            // FaBolusApp.onStart's matching registration + comment for the `has` capability-guard
-            // rationale — API Level 6.0.0, not on venu3s).
-            if (Comm has :registerForPhoneAppMessageErrors) {
-                Comm.registerForPhoneAppMessageErrors(method(:onPhoneMessageError));
-            }
             try {
                 // Retain the minted id so we accept ONLY the phone's correlated reply (it echoes it).
                 // ROUTINE mint (fires every ~5-min temporal event) — see
@@ -129,11 +119,6 @@ class BgServiceDelegate extends System.ServiceDelegate {
         BgComplication.publishFromState();
         surfaceNewAlertsInBackground();
     }
-
-    // Records an inbound phoneAppMessage delivery error for observability. Never throws, never
-    // alters message handling — onTemporalEvent's try/catch already exits the service on any failure
-    // to send/hear back, independent of this counter.
-    function onPhoneMessageError(err as Comm.PhoneAppMessageError) as Void { phoneMsgErrorCount += 1; }
 
     // Show a system notification for every alert AppState.pendingBgNotifyAlerts() reports as
     // not-yet-background-notified. Non-private (mirroring this codebase's existing test-only-seam

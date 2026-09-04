@@ -65,8 +65,6 @@ module UnresolvedDeliveryTombstoneTest {
     // FaBolusApp.onStart() makes — to reload whatever (if anything) is durably persisted.
     function simulateRelaunch() as Void {
         AppState.unresolvedTombstoneReqId = null;
-        AppState.unresolvedTombstoneSentAt = 0;
-        AppState.unresolvedTombstoneDoseKey = null;
         AppState.pendingRequestId = null;
         AppState.status = null;
     }
@@ -130,8 +128,6 @@ module UnresolvedDeliveryTombstoneTest {
         AppState.maybeWriteUnresolvedTombstone(true, "req-dispatched-1", sentAt, "units:1.00");
         Test.assertMessage(AppState.hasUnresolvedTombstone(), "dispatched==true ⇒ in-memory tombstone set");
         Test.assertEqualMessage(AppState.unresolvedTombstoneReqId, "req-dispatched-1", "requestId recorded");
-        Test.assertEqualMessage(AppState.unresolvedTombstoneSentAt, sentAt, "sentAt recorded");
-        Test.assertEqualMessage(AppState.unresolvedTombstoneDoseKey, "units:1.00", "doseKey recorded");
         var persisted = Storage.getValue(AppState.KEY_UNRESOLVED_TOMBSTONE);
         Test.assertMessage(persisted instanceof Lang.Dictionary, "persisted to Storage as a dictionary");
         var persistedDict = persisted as Lang.Dictionary;

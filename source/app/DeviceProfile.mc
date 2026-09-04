@@ -16,9 +16,4 @@ module DeviceProfile {
     }
 
     function isButtons() as Lang.Boolean { return !isTouch(); }
-
-    // Watch-face complications exist only on watches. Cycling computers (Edge) have no watch face,
-    // so the BG complication (and its background refresh) is a no-op there. Note the complication
-    // *resource* is also excluded for such devices in monkey.jungle.
-    function hasComplications() as Lang.Boolean { return (Toybox has :Complications); }
 }
