@@ -1439,14 +1439,8 @@ module AppState {
     //   • below target: apply (fromBG + fromIOB) if it keeps the total positive, else floor total at 0
     // The old code floored the *correction* at 0 before combining, which dropped every below-target
     // reduction and over-recommended. Units mode is a manual fixed dose (no correction / IOB).
-    // The oracle's BolusCalcUnits.doublePrecision — BigDecimal.setScale(2, HALF_UP): round to two
-    // decimals, ties AWAY from zero (so it matches faBolusCore/BolusMath.dp on every component). Monkey C's
-    // Math.round is not HALF_UP for negatives, so we floor(|v|*100 + 0.5) and re-apply the sign.
-    function dp2(v as Lang.Float) as Lang.Float {
-        if (v >= 0.0) { return Math.floor(v * 100.0 + 0.5) / 100.0; }
-        return -(Math.floor(-v * 100.0 + 0.5) / 100.0);
-    }
-
+    // Two-decimal HALF_UP rounding lives in BolusCalculator.dp2 (ties away from zero, matching
+    // faBolusCore/BolusMath.dp).
     function computeUnits() as Lang.Float {
         var total;
         if (mode.equals("units")) {
@@ -1472,15 +1466,15 @@ module AppState {
         // oracle-backed host does. Combining unrounded components then rounding only the total drifted
         // by one 0.05 U pump increment on ~1.5% of inputs, and the host's 0.10 U tolerance accepted it,
         // so the delivered dose could differ from the number shown on the hold screen.
-        var fromCarbs = dp2(carbsValue.toFloat() / carbRatio);
+        var fromCarbs = BolusCalculator.dp2(carbsValue.toFloat() / carbRatio);
         var fromBG = 0.0;
         // A stale BG is dropped from the correction (carbs-only) UNLESS the wearer
         // made the explicit, per-attempt "include" choice this compose (includeStaleBg) — never sticky,
         // never default. Fresh always corrects. Keeps the wrist preview in lockstep with bgForBolus().
         if (isf > 0 && glucose != null && (!glucoseStale() || includeStaleBg)) {
-            fromBG = dp2((glucose - targetBg).toFloat() / isf.toFloat());   // signed
+            fromBG = BolusCalculator.dp2((glucose - targetBg).toFloat() / isf.toFloat());   // signed
         }
-        var fromIOB = (iob > 0.0) ? dp2(-iob) : 0.0;
+        var fromIOB = (iob > 0.0) ? BolusCalculator.dp2(-iob) : 0.0;
         var total = fromCarbs;
         if (fromBG >= 0.0) {                        // at or above target
             var corr = fromBG + fromIOB;
@@ -1490,7 +1484,7 @@ module AppState {
             if (total + corr > 0.0) { total += corr; }
             else { total = 0.0; }                   // would go negative → floor the total at 0
         }
-        return dp2(total);                           // oracle dp() on the combined total too
+        return BolusCalculator.dp2(total);                           // oracle dp() on the combined total too
     }
 
     function valueLabel() as Lang.String {
