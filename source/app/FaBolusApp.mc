@@ -248,23 +248,23 @@ class FaBolusApp extends App.AppBase {
             // to 50 Confirmation views). Anything beyond the bound is simply left "new" — it is picked
             // up by the NEXT notifyNewAlerts() call, never dropped.
             var toPush = AppState.capAlertPushes(newAlerts);
-            // The watch alert output is driven by the phone-synced,
-            // fail-closed alert-intensity gate (AppState.alertActionFor) — NOT a hardcoded vibrate. Resolve
-            // the batch's most-severe tier + the device's vibrateOn/doNotDisturb state, then vibrate/tone/
-            // backlight ONLY as the gate permits. DEFAULT is vibration-only for every tier; nothing audible
-            // and nothing pierces DND unless the user opted in on the phone. FULLY-SILENT guarantee: in
-            // Silent mode + critical-override-off the gate returns zero output for every tier including
-            // critical — there is no code path here that forces vibrate/tone (the phone is authoritative).
-            // Compute the escalation tier over the FULL new-alert set, NOT the display-
+            // The watch alert output is driven by the PHONE-RESOLVED watch intent
+            // (AppState.effectiveWatchIntent over the per-category map) mapped onto the wrist ladder — NOT
+            // a hardcoded vibrate and no longer the watch's own intensity policy. Resolve the batch's
+            // effective intent + the device's vibrateOn/doNotDisturb state, then vibrate/tone/backlight
+            // ONLY as the gate permits. FAIL-SAFE: an absent/malformed intent map (a legacy host) resolves
+            // to "alert" (vibrate), never silence — the phone can quiet the wrist only by sending an
+            // explicit "off"/"quiet". The wrist honors DND on every rung (no breakthrough concept), so it
+            // stays quiet under DND while the phone remains the authoritative alerting surface.
+            // Compute the haptic-feel tier over the FULL new-alert set, NOT the display-
             // capped `toPush` — a critical arriving beyond MAX_ALERT_PUSHES must still drive the batch's
-            // (single) haptic/tone escalation, never be downgraded because it fell past the 4-row cap.
+            // (single) haptic feel, never be downgraded because it fell past the 4-row cap.
             var tier = AppState.mostSevereTier(newAlerts);
             var ds = System.getDeviceSettings();
             var vibrateOn = (ds has :vibrateOn) ? ds.vibrateOn : true;        // permissive if unreadable
             var dnd = (ds has :doNotDisturb) ? ds.doNotDisturb : false;       // not-in-DND if unreadable
-            var action = AppState.alertActionFor(tier, AppState.alertIntensityMode,
-                                                 AppState.alertAudibleMinSeverity,
-                                                 AppState.alertCriticalOverridesDnd, vibrateOn, dnd);
+            var intent = AppState.effectiveWatchIntent(AppState.watchNotificationIntents);
+            var action = AppState.watchActionForIntent(intent, vibrateOn, dnd, tier);
             // Vibrate ONCE for the batch (severity-encoded pattern), then push a Confirmation for EACH
             // alert in the capped set. Push LEAST-serious first (iterate the most-serious-first list in
             // reverse) so the most-serious confirmation ends on TOP of the view stack — the one the wearer

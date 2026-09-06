@@ -1,16 +1,18 @@
 using Toybox.Lang;
 using Toybox.Test;
 
-// The phone-synced, fail-closed WATCH alert gate. These pin:
-//   • DEFAULT vibration-only for every severity (nothing audible, nothing DND-piercing unopted);
-//   • fail-closed parse/restore of the phone-owned setting (absent/garbage ⇒ "vibrate");
-//   • audible tone+backlight only for opted-in severities that pass the DND gate;
-//   • distinct per-severity haptic signatures;
-//   • vibrateOn/doNotDisturb awareness + the opt-in critical-DND override;
-//   • the FULLY-SILENT guarantee (Silent + override-off ⇒ ZERO output for ANY tier incl. critical);
-//   • the explicit-Silent-choice-wins rule (unknown⇒critical classification never resurrects Silent output).
-// The gate (AppState.alertActionFor) is PURE — no Attention/DeviceSettings — so it is fully unit-testable.
-// Style mirrors tests/AlertDismissCapTest.mc.
+// The phone-RESOLVED watch-intent gate. The watch no longer runs its own intensity policy — it maps the
+// phone-resolved per-category intent map onto the wrist ladder. These pin:
+//   • the effective-intent reduction: loudest recognized intent across the relayed categories;
+//   • FAIL-SAFE (the required safety test): an absent/empty/malformed intent map resolves to "alert"
+//     (the vibrating rung), never silence — an old phone that omits the field can never quiet the wrist;
+//   • an explicit, recognized "off"/"quiet" for every category is honored;
+//   • the wrist ladder maps off⇒nothing, quiet⇒visual-only, alert⇒vibrate, urgent⇒vibrate+tone;
+//   • EVERY rung honors DND/vibrateOn (no breakthrough rung — the wrist never pierces DND);
+//   • distinct per-severity haptic signatures (the feel is orthogonal to the on/off gate);
+//   • fail-closed parse/restore of the phone-owned intent map (absent/garbage ⇒ last/fail-safe).
+// The gate (AppState.effectiveWatchIntent / watchActionForIntent) is PURE — no Attention/DeviceSettings —
+// so it is fully unit-testable. Style mirrors tests/AlertDismissCapTest.mc.
 module AlertIntensityGateTest {
 
     function statusRead(extra as Lang.Dictionary) as Lang.Dictionary {
@@ -27,17 +29,62 @@ module AlertIntensityGateTest {
         AppState.alertCriticalOverridesDnd = false;
     }
 
-    // ---- DEFAULT: vibration-only for every tier -------------------------------------------------
+    // ---- CX FAIL-SAFE (the required safety test): absent/empty/malformed intent map ⇒ "alert" ----
     (:test)
-    function defaultIsVibrationOnlyEveryTier(logger as Test.Logger) as Lang.Boolean {
-        resetDefaults();
-        var tiers = ["info", "high", "critical"];
-        for (var i = 0; i < tiers.size(); i += 1) {
-            var a = AppState.alertActionFor(tiers[i], "vibrate", "critical", false, true, false);
-            Test.assertMessage(a["vibrate"], "default vibrates (" + tiers[i] + ")");
-            Test.assertMessage(!a["tone"], "default no tone (" + tiers[i] + ")");
-            Test.assertMessage(!a["backlight"], "default no backlight (" + tiers[i] + ")");
-        }
+    function absentOrMalformedIntentFailsSafeToVibrate(logger as Test.Logger) as Lang.Boolean {
+        // Absent field (a legacy host that never sent watchNotificationIntents) ⇒ "alert" (vibrate).
+        Test.assertEqualMessage(AppState.effectiveWatchIntent(null), "alert", "absent map ⇒ fail safe to alert");
+        // Empty map ⇒ "alert" (vibrate) — never silence.
+        Test.assertEqualMessage(AppState.effectiveWatchIntent({}), "alert", "empty map ⇒ fail safe to alert");
+        // A malformed/unrecognized token contributes at the "alert" rank, never below it.
+        Test.assertEqualMessage(AppState.effectiveWatchIntent({ "a" => "bogus" }), "alert",
+            "unrecognized token ⇒ fail safe to alert");
+        Test.assertEqualMessage(AppState.effectiveWatchIntent({ "a" => "off", "b" => "bogus" }), "alert",
+            "one malformed among explicit-off still fails safe to alert (never silenced by garbage)");
+        // A non-string value cannot be a token — sanitizeWatchIntents drops it; an all-dropped map is empty
+        // and fails safe to alert.
+        Test.assertEqualMessage(
+            AppState.effectiveWatchIntent(AppState.sanitizeWatchIntents({ "a" => 7 })), "alert",
+            "non-string value dropped ⇒ empty ⇒ fail safe to alert");
+        // And the fail-safe intent maps to a real vibrate on a device not in DND.
+        var act = AppState.watchActionForIntent("alert", true, false, "critical");
+        Test.assertMessage(act["vibrate"] && !act["tone"], "fail-safe alert ⇒ vibrate (no tone)");
+        return true;
+    }
+
+    // ---- effective intent = LOUDEST recognized across the relayed categories --------------------
+    (:test)
+    function effectiveIntentIsLoudestAcrossCategories(logger as Test.Logger) as Lang.Boolean {
+        // An explicit, recognized "off" for EVERY category is honored (user's own choice).
+        Test.assertEqualMessage(AppState.effectiveWatchIntent({ "a" => "off", "b" => "off" }), "off",
+            "all-off is honored (an explicit choice, not a fail-safe)");
+        // All "quiet" ⇒ quiet (visual only).
+        Test.assertEqualMessage(AppState.effectiveWatchIntent({ "a" => "quiet", "b" => "quiet" }), "quiet",
+            "all-quiet ⇒ quiet");
+        // Mixed ⇒ the loudest recognized rung wins (fail toward the wearer).
+        Test.assertEqualMessage(AppState.effectiveWatchIntent({ "a" => "off", "b" => "quiet", "c" => "alert" }),
+            "alert", "off<quiet<alert ⇒ loudest is alert");
+        Test.assertEqualMessage(AppState.effectiveWatchIntent({ "a" => "alert", "b" => "urgent" }),
+            "urgent", "urgent outranks alert");
+        return true;
+    }
+
+    // ---- the wrist ladder: off/quiet/alert/urgent ⇒ nothing/visual/vibrate/vibrate+tone ---------
+    (:test)
+    function watchLadderMapsIntentToAnnunciation(logger as Test.Logger) as Lang.Boolean {
+        // off ⇒ nothing.
+        var off = AppState.watchActionForIntent("off", true, false, "critical");
+        Test.assertMessage(!off["vibrate"] && !off["tone"] && !off["backlight"], "off ⇒ nothing");
+        // quiet ⇒ visual only (no vibrate, no tone).
+        var quiet = AppState.watchActionForIntent("quiet", true, false, "critical");
+        Test.assertMessage(!quiet["vibrate"] && !quiet["tone"] && !quiet["backlight"], "quiet ⇒ visual only");
+        // alert ⇒ vibrate, no tone.
+        var alert = AppState.watchActionForIntent("alert", true, false, "high");
+        Test.assertMessage(alert["vibrate"] && !alert["tone"], "alert ⇒ vibrate (no tone)");
+        Test.assertEqualMessage(alert["vibeProfileKey"], "high", "vibe feel key carried through");
+        // urgent ⇒ vibrate + tone (defensive rung).
+        var urgent = AppState.watchActionForIntent("urgent", true, false, "critical");
+        Test.assertMessage(urgent["vibrate"] && urgent["tone"] && urgent["backlight"], "urgent ⇒ vibrate+tone");
         return true;
     }
 
@@ -72,32 +119,18 @@ module AlertIntensityGateTest {
         return true;
     }
 
-    // ---- R4: DND honored by default (nothing pierces DND unopted) --------------------------------
+    // ---- DND honored on every rung (no breakthrough — the wrist never pierces DND) ---------------
     (:test)
-    function dndHonoredByDefault(logger as Test.Logger) as Lang.Boolean {
-        // Critical alert, DND on, override OFF ⇒ no vibrate.
-        var a = AppState.alertActionFor("critical", "vibrate", "critical", false, false, true);
-        Test.assertMessage(!a["vibrate"], "critical honors DND when override off");
-        Test.assertMessage(!a["tone"], "no tone under DND");
-        // Routine alert with vibrateOn=false ⇒ no vibrate.
-        var b = AppState.alertActionFor("high", "vibrate", "critical", false, false, false);
-        Test.assertMessage(!b["vibrate"], "routine honors vibrateOn=off");
-        return true;
-    }
-
-    // ---- R1: audible tone+backlight only for opted-in severities passing the DND gate -----------
-    (:test)
-    function audibleOnlyForOptedInSeverity(logger as Test.Logger) as Lang.Boolean {
-        // audible + tier >= floor + DND gate passes ⇒ tone+backlight+vibrate.
-        var a = AppState.alertActionFor("critical", "audible", "critical", false, true, false);
-        Test.assertMessage(a["tone"] && a["backlight"] && a["vibrate"], "audible critical ⇒ tone+backlight");
-        // audible but tier < floor ⇒ stays vibration-only (routine quiet).
-        var b = AppState.alertActionFor("high", "audible", "critical", false, true, false);
-        Test.assertMessage(!b["tone"] && !b["backlight"], "below floor ⇒ no tone");
-        Test.assertMessage(b["vibrate"], "below floor still vibrates");
-        // audible but DND blocks a critical not opted to pierce ⇒ nothing at all.
-        var c = AppState.alertActionFor("critical", "audible", "critical", false, true, true);
-        Test.assertMessage(!c["tone"] && !c["backlight"] && !c["vibrate"], "DND blocks audible critical unopted");
+    function everyRungHonorsDnd(logger as Test.Logger) as Lang.Boolean {
+        // alert under DND ⇒ no vibrate.
+        var a = AppState.watchActionForIntent("alert", true, true, "critical");
+        Test.assertMessage(!a["vibrate"] && !a["tone"], "alert honors DND (no breakthrough rung)");
+        // alert with vibrateOn=false ⇒ no vibrate.
+        var b = AppState.watchActionForIntent("alert", false, false, "high");
+        Test.assertMessage(!b["vibrate"], "alert honors vibrateOn=off");
+        // even the defensive urgent rung honors DND (the wrist has no DND-pierce concept).
+        var c = AppState.watchActionForIntent("urgent", true, true, "critical");
+        Test.assertMessage(!c["vibrate"] && !c["tone"], "urgent honors DND too (no breakthrough)");
         return true;
     }
 
@@ -114,40 +147,16 @@ module AlertIntensityGateTest {
         return true;
     }
 
-    // ---- R4: opt-in critical DND override --------------------------------------------------------
+    // ---- unknown-severity feel classification stays highest-salience -----------------------------
     (:test)
-    function criticalOverridePiercesOnlyWhenOptedIn(logger as Test.Logger) as Lang.Boolean {
-        var off = AppState.alertActionFor("critical", "vibrate", "critical", false, true, true);
-        Test.assertMessage(!off["vibrate"], "override off ⇒ critical honors DND");
-        var on = AppState.alertActionFor("critical", "vibrate", "critical", true, true, true);
-        Test.assertMessage(on["vibrate"], "override on ⇒ critical pierces DND");
-        return true;
-    }
-
-    // ---- FULLY-SILENT GUARANTEE (the required safety test) ----------------------------------------
-    (:test)
-    function fullySilentGuarantee(logger as Test.Logger) as Lang.Boolean {
-        // Silent + override OFF ⇒ ZERO output for critical AND for an unknown-severity alert (which
-        // alertSeverityTier resolves to "critical"). There must be NO code path that forces output here.
-        var crit = AppState.alertActionFor("critical", "silent", "critical", false, true, false);
-        Test.assertMessage(!crit["vibrate"] && !crit["tone"] && !crit["backlight"],
-            "NEGATIVE: Silent+override-off ⇒ zero output for critical");
+    function unknownSeverityClassifiesToCriticalFeel(logger as Test.Logger) as Lang.Boolean {
+        // An alert with no `severity` classifies to "critical" for the haptic FEEL (highest salience). This
+        // never decides whether the wrist annunciates — that is the phone-resolved intent's job — it only
+        // picks the vibe pattern once the intent has permitted a vibrate.
         var unknownTier = AppState.alertSeverityTier({ "id" => 1, "kind" => 2, "title" => "x" });  // no severity
-        Test.assertEqualMessage(unknownTier, "critical", "unknown severity ⇒ classified critical");
-        var unk = AppState.alertActionFor(unknownTier, "silent", "critical", false, true, false);
-        Test.assertMessage(!unk["vibrate"] && !unk["tone"] && !unk["backlight"],
-            "NEGATIVE: Silent+override-off ⇒ zero output for unknown-severity alert");
-        return true;
-    }
-
-    // ---- Silent + opt-in ⇒ critical-only wrist vibration fallback (never a tone) -----------------
-    (:test)
-    function silentOptInGivesCriticalVibrateOnly(logger as Test.Logger) as Lang.Boolean {
-        var crit = AppState.alertActionFor("critical", "silent", "critical", true, true, false);
-        Test.assertMessage(crit["vibrate"], "Silent+override-on ⇒ critical vibrates");
-        Test.assertMessage(!crit["tone"] && !crit["backlight"], "Silent never plays a tone");
-        var routine = AppState.alertActionFor("high", "silent", "critical", true, true, false);
-        Test.assertMessage(!routine["vibrate"] && !routine["tone"], "Silent+override-on ⇒ non-critical stays silent");
+        Test.assertEqualMessage(unknownTier, "critical", "unknown severity ⇒ classified critical (feel)");
+        var act = AppState.watchActionForIntent("alert", true, false, unknownTier);
+        Test.assertEqualMessage(act["vibeProfileKey"], "critical", "unknown-severity feel drives the triple-long pattern");
         return true;
     }
 
