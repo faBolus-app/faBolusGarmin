@@ -175,20 +175,6 @@ module AppState {
     (:background)
     var bolusPasscodeRequired as Lang.Boolean = false;
 
-    // DEPRECATED phone-owned alert-intensity settings, no longer read by any watch code — superseded by the
-    // phone-resolved watchNotificationIntents map below. Retained only until the wire keys are dropped;
-    // nothing reads or gates on them. SETTINGS-ONLY: never a dose input.
-    (:background)
-    var alertIntensityMode as Lang.String = "vibrate";
-    (:background)
-    var alertAudibleMinSeverity as Lang.String = "critical";
-    // The "let critical alerts override Do Not Disturb / vibrateOn=off" opt-in. USER setting, turn-off-able,
-    // DEFAULT OFF: nothing pierces DND unless the user turns this on. In Silent mode + OFF the watch
-    // is FULLY silent for every alert including critical; + ON adds an opt-in critical-only vibration wrist
-    // fallback (never a tone).
-    (:background)
-    var alertCriticalOverridesDnd as Lang.Boolean = false;
-
     // The phone-RESOLVED per-category watch intent map, pushed on the statusRead reply and restored on
     // a cold launch / background service. Keys are opaque category identifiers; each value is an abstract
     // urgency token ("off" | "quiet" | "alert" | "urgent"). The phone resolves each category on the wrist
@@ -365,16 +351,6 @@ module AppState {
         // persisting matches garminBolusEnabled and avoids that transient.
         var bpr0 = Storage.getValue("bolusPasscodeRequired");
         if (bpr0 instanceof Lang.Boolean) { bolusPasscodeRequired = bpr0; }
-        // Restore the persisted alert-intensity setting the same guarded way,
-        // so a cold launch / background service honors the last phone-synced value instead of silently
-        // reverting to the vibration-only default until the next statusRead. Fail-closed guards mirror the
-        // handle() parse (mode must be a frozen token; floor must be a valid tier).
-        var aim0 = Storage.getValue("alertIntensityMode");
-        if (aim0 instanceof Lang.String && containsStr(ALERT_MODES, aim0 as Lang.String)) { alertIntensityMode = aim0; }
-        var aams0 = Storage.getValue("alertAudibleMinSeverity");
-        if (aams0 instanceof Lang.String && isValidSeverityTier(aams0 as Lang.String)) { alertAudibleMinSeverity = aams0; }
-        var acod0 = Storage.getValue("alertCriticalOverridesDnd");
-        if (acod0 instanceof Lang.Boolean) { alertCriticalOverridesDnd = acod0; }
         // Restore the persisted phone-resolved watch-intent map the same guarded way, so a cold launch /
         // background service honors the last phone-synced intents instead of reverting to the fail-safe
         // (vibrate) default until the next statusRead. Only a Dictionary is adopted; the resolver judges
@@ -1739,27 +1715,6 @@ module AppState {
                 if (bolusPasscodeRequired != bpr) { Storage.setValue("bolusPasscodeRequired", bpr); }
                 bolusPasscodeRequired = bpr;
             }
-            // The phone-owned alert-intensity setting (mode / audible floor /
-            // critical-DND-override). Persisted + change-detected exactly like garminBolusEnabled so a
-            // relaunch / background service honors the last phone-synced value. FAIL-CLOSED: `mode` adopts
-            // only one of the frozen tokens ("silent"|"vibrate"|"audible") — an absent/garbage value keeps
-            // the safe "vibrate" default (vibration-only, nothing audible, nothing DND-piercing).
-            // SETTINGS-ONLY — never a dose input; alert-surface only.
-            var aim = data["alertIntensityMode"];
-            if (aim instanceof Lang.String && containsStr(ALERT_MODES, aim as Lang.String)) {
-                if (!alertIntensityMode.equals(aim)) { Storage.setValue("alertIntensityMode", aim); }
-                alertIntensityMode = aim;
-            }
-            var aams = data["alertAudibleMinSeverity"];
-            if (aams instanceof Lang.String && isValidSeverityTier(aams as Lang.String)) {
-                if (!alertAudibleMinSeverity.equals(aams)) { Storage.setValue("alertAudibleMinSeverity", aams); }
-                alertAudibleMinSeverity = aams;
-            }
-            var acod = data["alertCriticalOverridesDnd"];
-            if (acod instanceof Lang.Boolean) {
-                if (alertCriticalOverridesDnd != acod) { Storage.setValue("alertCriticalOverridesDnd", acod); }
-                alertCriticalOverridesDnd = acod;
-            }
             // The phone-resolved per-category watch-intent map. Persisted + adopted so a relaunch /
             // background service honors the last phone-synced intents. Only a Dictionary is accepted (bounded
             // + string-typed by sanitizeWatchIntents); an absent/garbage value keeps the last map, and the
@@ -2169,14 +2124,11 @@ module AppState {
         return a["kind"].toString() + "-" + a["id"].toString();
     }
 
-    // The pure, phone-synced watch alert gate.
-    // Frozen severity-tier token set (least→most salient). The phone classifies each alert's
-    // typed kind into one of these and puts it on the wire as the per-alert `severity`; the watch never
-    // invents its own severity. Kept small + frozen (never a raw enum on the wire).
+    // Frozen severity-tier token set (least→most salient), driving the per-severity haptic FEEL. The phone
+    // classifies each alert's typed kind into one of these and puts it on the wire as the per-alert
+    // `severity`; the watch never invents its own severity. Kept small + frozen (never a raw enum on the wire).
     (:background)
     const ALERT_TIERS = ["info", "high", "critical"];
-    (:background)
-    const ALERT_MODES = ["silent", "vibrate", "audible"];
 
     (:background)
     function isValidSeverityTier(t as Lang.String) as Lang.Boolean {

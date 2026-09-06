@@ -22,13 +22,6 @@ module AlertIntensityGateTest {
         return d;
     }
 
-    // Reset the three settings fields to their compile-time defaults for an isolated test.
-    function resetDefaults() as Void {
-        AppState.alertIntensityMode = "vibrate";
-        AppState.alertAudibleMinSeverity = "critical";
-        AppState.alertCriticalOverridesDnd = false;
-    }
-
     // ---- CX FAIL-SAFE (the required safety test): absent/empty/malformed intent map ⇒ "alert" ----
     (:test)
     function absentOrMalformedIntentFailsSafeToVibrate(logger as Test.Logger) as Lang.Boolean {
@@ -88,34 +81,30 @@ module AlertIntensityGateTest {
         return true;
     }
 
-    // ---- Fail-closed parse + persisted-then-restored round-trip ----------------------------------
+    // ---- parse the intent map off statusRead, persist it, and restore it on a cold launch -------
     (:test)
-    function parseFailsClosedAndRoundTrips(logger as Test.Logger) as Lang.Boolean {
-        resetDefaults();
-        // Absent ⇒ keep defaults.
-        AppState.handle(statusRead({ "message" => "Connected" }));
-        Test.assertEqualMessage(AppState.alertIntensityMode, "vibrate", "absent ⇒ default vibrate");
-        Test.assertEqualMessage(AppState.alertAudibleMinSeverity, "critical", "absent ⇒ default floor");
-        Test.assertMessage(!AppState.alertCriticalOverridesDnd, "absent ⇒ override off");
+    function watchIntentsParseAndRoundTrip(logger as Test.Logger) as Lang.Boolean {
+        AppState.watchNotificationIntents = {};
+        // A valid map is adopted (string→string; unrecognized values are kept for the resolver to fail
+        // safe) AND persisted; loadPrefs restores it after a simulated cold launch.
+        AppState.handle(statusRead({ "watchNotificationIntents" =>
+            { "deliveryStopped" => "alert", "pumpRoutine" => "off", "glucoseAndControlIQ" => "quiet" } }));
+        Test.assertEqualMessage(AppState.watchNotificationIntents["deliveryStopped"], "alert", "valid map adopted");
+        Test.assertEqualMessage(AppState.watchNotificationIntents["pumpRoutine"], "off", "explicit off kept");
+        Test.assertEqualMessage(AppState.effectiveWatchIntent(AppState.watchNotificationIntents), "alert",
+            "loudest across the adopted map is alert");
 
-        // Malformed ⇒ ignored, keeps the safe default.
-        AppState.handle(statusRead({ "alertIntensityMode" => "bogus", "alertCriticalOverridesDnd" => "yes" }));
-        Test.assertEqualMessage(AppState.alertIntensityMode, "vibrate", "unrecognized mode ⇒ stays vibrate");
-        Test.assertMessage(!AppState.alertCriticalOverridesDnd, "non-boolean override ignored");
-
-        // Valid ⇒ adopted AND persisted; loadPrefs restores it after a simulated cold launch.
-        AppState.handle(statusRead({ "alertIntensityMode" => "audible",
-                                     "alertAudibleMinSeverity" => "high",
-                                     "alertCriticalOverridesDnd" => true }));
-        Test.assertEqualMessage(AppState.alertIntensityMode, "audible", "valid mode adopted");
-        Test.assertEqualMessage(AppState.alertAudibleMinSeverity, "high", "valid floor adopted");
-        Test.assertMessage(AppState.alertCriticalOverridesDnd, "valid override adopted");
-
-        resetDefaults();   // simulate a cold launch (compile-time defaults)
+        AppState.watchNotificationIntents = {};   // simulate a cold launch (compile-time default)
         AppState.loadPrefs();
-        Test.assertEqualMessage(AppState.alertIntensityMode, "audible", "restored mode from Storage");
-        Test.assertEqualMessage(AppState.alertAudibleMinSeverity, "high", "restored floor from Storage");
-        Test.assertMessage(AppState.alertCriticalOverridesDnd, "restored override from Storage");
+        Test.assertEqualMessage(AppState.watchNotificationIntents["deliveryStopped"], "alert",
+            "restored map from Storage");
+        Test.assertEqualMessage(AppState.watchNotificationIntents["glucoseAndControlIQ"], "quiet",
+            "restored quiet entry from Storage");
+
+        // A non-Dictionary payload is ignored (keeps the last map) — never a crash, never a reset to silence.
+        AppState.handle(statusRead({ "watchNotificationIntents" => "bogus" }));
+        Test.assertEqualMessage(AppState.watchNotificationIntents["deliveryStopped"], "alert",
+            "non-dictionary payload ignored, keeps last map");
         return true;
     }
 
