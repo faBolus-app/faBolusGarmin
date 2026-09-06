@@ -195,26 +195,26 @@ module AlertIntensityGateTest {
         return true;
     }
 
-    // The CLOSED-app background surface honors Silent — Silent+override-off ⇒ NO
-    // background notification for ANY tier (incl. critical); Silent+override-on ⇒ ONLY critical surfaces;
-    // vibrate/audible ⇒ always surface (the background-surface safety net).
+    // The CLOSED-app background surface consults the phone-resolved intent — an explicit "off"
+    // suppresses the system notification (the phone is the sole alerting surface); every louder rung
+    // surfaces the visual notification. FAIL-SAFE: an absent/malformed map resolved to "alert" upstream, so
+    // a legacy host still surfaces the closed-app safety net.
     (:test)
-    function backgroundSurfaceHonorsSilent(logger as Test.Logger) as Lang.Boolean {
-        // Silent + override OFF ⇒ nothing surfaces, even critical.
-        Test.assertMessage(!AppState.shouldSurfaceInBackground("critical", "silent", false),
-            "NEGATIVE: Silent+override-off ⇒ critical does NOT surface in background");
-        Test.assertMessage(!AppState.shouldSurfaceInBackground("high", "silent", false),
-            "NEGATIVE: Silent+override-off ⇒ high does not surface");
-        // Silent + override ON ⇒ only critical surfaces.
-        Test.assertMessage(AppState.shouldSurfaceInBackground("critical", "silent", true),
-            "Silent+override-on ⇒ critical surfaces (opt-in wrist fallback)");
-        Test.assertMessage(!AppState.shouldSurfaceInBackground("high", "silent", true),
-            "Silent+override-on ⇒ only critical, not high");
-        // Non-silent ⇒ always surface (safety net intact).
-        Test.assertMessage(AppState.shouldSurfaceInBackground("info", "vibrate", false),
-            "vibrate mode ⇒ background surface intact");
-        Test.assertMessage(AppState.shouldSurfaceInBackground("critical", "audible", false),
-            "audible mode ⇒ background surface intact");
+    function backgroundSurfaceFollowsResolvedIntent(logger as Test.Logger) as Lang.Boolean {
+        // Explicit "off" ⇒ nothing surfaces in the background.
+        Test.assertMessage(!AppState.shouldSurfaceIntentInBackground("off"),
+            "NEGATIVE: off ⇒ closed-app path surfaces nothing");
+        // quiet/alert/urgent ⇒ surface the visual notification.
+        Test.assertMessage(AppState.shouldSurfaceIntentInBackground("quiet"),
+            "quiet ⇒ background surface intact (visual)");
+        Test.assertMessage(AppState.shouldSurfaceIntentInBackground("alert"),
+            "alert ⇒ background surface intact");
+        Test.assertMessage(AppState.shouldSurfaceIntentInBackground("urgent"),
+            "urgent ⇒ background surface intact");
+        // FAIL-SAFE end to end: an absent map resolves to "alert" and therefore surfaces.
+        Test.assertMessage(
+            AppState.shouldSurfaceIntentInBackground(AppState.effectiveWatchIntent(null)),
+            "absent map ⇒ fail safe ⇒ closed-app path still surfaces the safety net");
         return true;
     }
 }

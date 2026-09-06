@@ -2309,22 +2309,17 @@ module AppState {
         return { "vibrate" => true, "vibeProfileKey" => vibeKey, "tone" => tone, "backlight" => tone };
     }
 
-    // May a CLOSED-app background alert surface a system
-    // notification (BgServiceDelegate.surfaceNewAlertsInBackground)? The foreground gate (alertActionFor)
-    // only governs the app's own vibrate/tone; the background Toybox.Notifications path is separate and
-    // used to fire regardless of the setting — so a closed-app critical could still post (and buzz per the
-    // OS) in Silent mode, contradicting the "phone is the sole authoritative alerting surface" choice.
-    // This extends the Silent guarantee to the background: Silent + override-off ⇒ surface NOTHING (the
-    // phone alerts); Silent + override-on ⇒ surface ONLY the critical tier (the opt-in wrist fallback);
-    // "vibrate"/"audible" ⇒ always surface (the closed-app safety net is intact). Unknown severity
-    // is already classified to "critical" by alertSeverityTier, so it surfaces exactly where critical does.
+    // May a CLOSED-app background alert surface a system notification
+    // (BgServiceDelegate.surfaceNewAlertsInBackground)? The background Toybox.Notifications path is a
+    // separate process from the foreground, so it consults the SAME phone-resolved intent — never the old
+    // watch-side policy — restored from the persisted map. A background process can only show-or-not a
+    // system notification (it cannot vibrate or pick a haptic), so it surfaces on every rung EXCEPT "off":
+    // "quiet"/"alert"/"urgent" all post the visual system notification, only an explicit "off" suppresses
+    // it. FAIL-SAFE: an absent/malformed map already resolved to "alert" upstream, so a legacy host still
+    // surfaces the closed-app safety net. Pure → unit-testable.
     (:background)
-    function shouldSurfaceInBackground(tier as Lang.String, mode as Lang.String,
-                                       criticalOverridesDnd as Lang.Boolean) as Lang.Boolean {
-        if (mode.equals("silent")) {
-            return criticalOverridesDnd && tier.equals("critical");
-        }
-        return true;
+    function shouldSurfaceIntentInBackground(intent as Lang.String) as Lang.Boolean {
+        return !intent.equals("off");
     }
 
     // The raw-snapshot proof-of-absence oracle's OWN identity parser. Deliberately NOT

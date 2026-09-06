@@ -145,16 +145,19 @@ class BgServiceDelegate extends System.ServiceDelegate {
         var pending = AppState.pendingBgNotifyAlerts();
         if (pending.size() == 0) { return; }
         if (!(Toybox.Notifications has :showNotification)) { return; }
+        // Consult the SAME phone-resolved watch intent the foreground path reads, restored from the
+        // persisted map (this background process has its own restored prefs). An explicit "off" keeps the
+        // closed-app path quiet (the phone is the sole alerting surface); every other rung surfaces the
+        // visual system notification. FAIL-SAFE: an absent/malformed map resolves to "alert" upstream, so a
+        // legacy host still surfaces here — the closed-app path never fails silent on a pump safety alert.
+        var intent = AppState.effectiveWatchIntent(AppState.watchNotificationIntents);
         var presented = [];
         for (var i = 0; i < pending.size(); i += 1) {
             var a = pending[i] as Lang.Dictionary;
-            // Honor the phone-synced alert-intensity mode in the CLOSED-app path
-            // too — in Silent mode the watch stays quiet (phone is the sole alerting surface), except the
-            // opt-in critical-override wrist fallback. A suppressed alert is left OUT of `presented`, so it
-            // stays pending (never marked notified) and would surface if the user later leaves Silent —
-            // it is not permanently dropped. "vibrate"/"audible" modes surface as before.
-            if (!AppState.shouldSurfaceInBackground(AppState.alertSeverityTier(a),
-                    AppState.alertIntensityMode, AppState.alertCriticalOverridesDnd)) {
+            // A suppressed ("off") alert is left OUT of `presented`, so it stays pending (never marked
+            // notified) and would surface if the user later raises the intent — it is not permanently
+            // dropped.
+            if (!AppState.shouldSurfaceIntentInBackground(intent)) {
                 continue;
             }
             try {
