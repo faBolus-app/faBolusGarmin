@@ -14,11 +14,10 @@ class BolusOnlyDelegate extends Ui.BehaviorDelegate {
             return true;
         }
         if (AppState.readOnly) { return true; }      // read-only blocks STARTING a bolus, not cancel
-        // Explain a durable unresolved-send lockout rather than swallowing the tap — mirrors
-        // MainDelegate.pressBolusButton (see its comment); must precede the canBolus() swallow.
-        if (AppState.hasUnresolvedTombstone()) { Nav.openUnresolvedSendLock(); return true; }
         if (!AppState.canBolus()) { return true; }   // inert when bolusing isn't possible
-        Nav.openBolusEntry();   // resets + shows the G5 one-time notice on first use
+        // A durable unresolved-send tombstone no longer disables the button; the honest "earlier dose
+        // unresolved" disclosure is shown at bolus-entry open (Nav.openBolusEntry), not by swallowing here.
+        Nav.openBolusEntry();   // resets + shows the G5 one-time notice / unresolved-dose disclosure
         return true;
     }
 

@@ -41,6 +41,15 @@ module Nav {
             Ui.pushView(new BolusIntroView(), new BolusIntroDelegate(), Ui.SLIDE_LEFT);
             return;
         }
+        // A prior dispatch is still unresolved: show the honest "verify on the pump" disclosure BEFORE
+        // composing a new dose. NON-BLOCKING — a confirm gesture continues to entry (continueToBolusEntry),
+        // BACK returns to the launching screen — so it sits at the exact moment a re-dose-into-unknown
+        // decision is made without walling the wearer off. The tombstone no longer disables the button, so
+        // this is where the full unresolvedSendDisclosure detail is reached now that it is not a lockout.
+        if (AppState.hasUnresolvedTombstone()) {
+            Ui.pushView(new UnresolvedSendView(), new UnresolvedSendDelegate(), Ui.SLIDE_LEFT);
+            return;
+        }
         pushBolusEntry();
     }
 
@@ -98,15 +107,6 @@ module Nav {
     function continueToPasscodeEntry() as Void {
         var pv = new PasscodeEntryView();
         Ui.switchToView(pv, new PasscodeEntryDelegate(pv), Ui.SLIDE_LEFT);
-    }
-
-    // Open the read-only disclosure for a bolus affordance locked out by a durable unresolved-send
-    // tombstone. A modal push on top of whatever screen launched it, so BACK/tap returns there —
-    // matching pushBolusEntry's stack semantics. Both bolus entry points route through here so the
-    // "explain, never silently swallow" behaviour lives in ONE place, exactly as openBolusEntry does
-    // for the G5 notice. Carries no unlock control: see UnresolvedSendView.
-    function openUnresolvedSendLock() as Void {
-        Ui.pushView(new UnresolvedSendView(), new UnresolvedSendDelegate(), Ui.SLIDE_LEFT);
     }
 
     function indexOf(id as Lang.String) as Lang.Number {

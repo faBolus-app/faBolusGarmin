@@ -998,6 +998,11 @@ module AppState {
     // pump. Returns whether it applied. Refuses unless `reqId` matches the live tombstone, so a stale,
     // duplicated or mismatched message can never unlock a DIFFERENT unresolved dispatch, and a resolve
     // arriving when nothing is locked is a no-op rather than a state change.
+    // NOTE - NOW DEAD: with the tombstone downgraded to disclosure, the phone half of this release
+    // (`bolusLockResolved`) was withdrawn — faBolus has ZERO senders for it (re-grep to confirm). This
+    // receiver, its inbound `bolusLockResolved` branch, and the KEY_LOCK_RESOLVED audit machinery are a
+    // DELETE-NOW candidate (needs a preservation branch + reintegration note, and retires the resolve
+    // cases in tests/UnresolvedSendLockTest.mc). Kept for now — this change was scoped to the downgrade.
     function resolveUnresolvedSendLock(reqId as Lang.String) as Lang.Boolean {
         var live = unresolvedTombstoneReqId;
         if (live == null) { return false; }
@@ -1981,6 +1986,8 @@ module AppState {
             // never blanket-unlock; a missing/malformed/mismatched id is a safe no-op. Note this is
             // strictly weaker than the bolusStatus path above: an authoritatively-resolved echo resolves
             // the DOSE, and remains the preferred resolution whenever the phone actually knows.
+            // NOTE - NOW DEAD: no faBolus sender emits this kind (the phone half was withdrawn with the
+            // tombstone downgrade). Kept as a DELETE-NOW candidate alongside resolveUnresolvedSendLock.
             var lrid = strCap(data["requestId"], 64);
             if (lrid != null) { resolveUnresolvedSendLock(lrid as Lang.String); }
         }

@@ -49,6 +49,15 @@ class BolusOnlyView extends Ui.View {
                 dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
                 dc.drawText(cx, by + bh + (h * 0.07), Gfx.FONT_XTINY, why, vc);
             }
+        } else if (!AppState.canCancel()) {
+            // Non-blocking disclosure marker: an EARLIER dispatch is still unconfirmed. Shown ALONGSIDE
+            // the enabled Bolus button (the tombstone no longer disables it) so the honest signal stays
+            // visible; the full detail is reached on opening bolus entry.
+            var note = AppState.unresolvedDisclosureMarker();
+            if (!note.equals("")) {
+                dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
+                dc.drawText(cx, by + bh + (h * 0.07), Gfx.FONT_XTINY, note, vc);
+            }
         }
     }
 }

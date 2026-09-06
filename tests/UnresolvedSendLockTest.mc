@@ -266,8 +266,9 @@ module UnresolvedSendLockTest {
 
     // --- 4. the disclosure copy: present, sized, and honest ----------------------------------------
 
-    // The wearer reaches this copy by tapping the locked button. It is the ONLY thing between them and an
-    // unexplained permanent lockout, so it must exist, must fit, and must not lie in EITHER direction.
+    // The wearer reaches this copy as the non-blocking disclosure shown at bolus-entry open while a prior
+    // dispatch is unresolved. It is the honest explanation behind the "Earlier dose unresolved" marker, so
+    // it must exist, must fit, and must not lie in EITHER direction.
     (:test)
     function disclosureIsPresentAndFits(logger as Test.Logger) as Lang.Boolean {
         var lines = AppState.unresolvedSendDisclosure();
