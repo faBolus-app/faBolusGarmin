@@ -94,6 +94,14 @@ module AppState {
     var historyEpochs as Lang.Array = [];
     (:background)
     var alerts as Lang.Array = [];        // active pump alerts: dicts {id, kind, title}
+    // Active app-GENERATED (faBolus's own) alerts to annunciate on the wrist: dicts {key, title}. Distinct
+    // from `alerts` (which mirrors the pump's own alarms) — the pump knows nothing about a dropped link, a
+    // failover-CGM low, or the app's own dose ledger, so faBolus is these alerts' only annunciator. Each
+    // `key` is the phone's namespaced category identifier ("appOwn:<category>") — the wrist dedupe identity
+    // AND the key its resolved per-category watch intent is read under in `watchNotificationIntents`. Comes
+    // fresh on every statusRead (not persisted); an empty array is the authoritative "none active".
+    (:background)
+    var appOwnAlerts as Lang.Array = [];
     // Transient — set true by AlertConfirmDelegate when a "clear alert" dismiss couldn't be
     // dispatched (phone unreachable) so the alert was NOT removed locally; AlertsListView renders a
     // "Phone not connected — not cleared" notice. Cleared at the top of the next handle() (any phone
@@ -1724,6 +1732,13 @@ module AppState {
                 watchNotificationIntents = sanitizeWatchIntents(wni as Lang.Dictionary);
                 Storage.setValue("watchNotificationIntents", watchNotificationIntents);
             }
+            // The active app-own alert subset to annunciate on the wrist. Only an Array is adopted (an empty
+            // array authoritatively clears — an app-own condition that resolved on the phone drops off the
+            // wrist too); an absent/garbage value keeps the last set (a legacy host that predates the field).
+            // Comes fresh on every statusRead, so it is not persisted; the per-category watch intent it is
+            // annunciated at rides watchNotificationIntents (parsed just above), which IS persisted.
+            var aoa = data["appOwnAlerts"];
+            if (aoa instanceof Lang.Array) { appOwnAlerts = sanitizeAppOwnAlerts(aoa as Lang.Array); }
             // The pump's controller identity + Control-IQ runtime on/off, for the LOCAL
             // auto-correction disclosure. FROZEN token set (CONTROLLER_VARIANTS = the schema
             // `controllerVariant` enum) — an unknown/garbage variant is ignored (keeps the last / safe
@@ -2272,6 +2287,143 @@ module AppState {
     (:background)
     function shouldSurfaceIntentInBackground(intent as Lang.String) as Lang.Boolean {
         return !intent.equals("off");
+    }
+
+    // ---- App-GENERATED (faBolus's own) alert annunciation ------------------------------------------
+    // The wrist annunciates the app-own subset (the phone's active safety notifications, incl. the durable
+    // unresolved-dose record) CONSISTENTLY with the pump-mirror path, but resolved PER-CATEGORY: each item
+    // carries its own namespaced key, so each app-own alert reads its own watch intent — unlike the pump
+    // batch, which the relayed `alerts` list cannot join to a category. Labeled as a faBolus alert (distinct
+    // from a pump alarm mirror). FAIL-SAFE: an app-own alert whose intent is absent/malformed on the
+    // wire resolves to the vibrating rung, never silence.
+
+    // Bound + type-check the app-own relay before adopting it: keep only {key:String, title:String} items,
+    // capped so a garbage payload cannot bloat state. Mirrors sanitizeAlerts/sanitizeWatchIntents.
+    (:background)
+    function sanitizeAppOwnAlerts(arr as Lang.Array) as Lang.Array {
+        var out = [];
+        var lim = (arr.size() > 32) ? 32 : arr.size();
+        for (var k = 0; k < lim; k += 1) {
+            var e = arr[k];
+            if (e instanceof Lang.Dictionary
+                && (e["key"] instanceof Lang.String) && (e["title"] instanceof Lang.String)) {
+                out.add({ "key" => e["key"], "title" => strCap(e["title"], 80) });
+            }
+        }
+        return out;
+    }
+
+    // App-own alert identity = its namespaced category key (the phone dedupes to one item per active
+    // category), the stable handle the wrist uses to tell a genuinely NEW app-own alert from a re-fetch.
+    (:background)
+    function appOwnIdentity(a as Lang.Dictionary) as Lang.String {
+        return a["key"] as Lang.String;
+    }
+
+    // The resolved watch intent for ONE app-own alert, read PER-CATEGORY from the phone-resolved map under
+    // the alert's own namespaced key. Mirrors the phone's RemoteCommand.resolvedWatchIntent fail-safe: an
+    // absent map, an absent key, or an unrecognized token all resolve to "alert" (the vibrating rung) —
+    // never silence — so a legacy host or a corrupted value can never quiet an app-own safety alert. An
+    // explicit, recognized value (including "off") is the user's own choice and is honored.
+    (:background)
+    function appOwnWatchIntentFor(key as Lang.String) as Lang.String {
+        var v = watchNotificationIntents[key];
+        if (v instanceof Lang.String && containsStr(WATCH_INTENTS, v as Lang.String)) { return v as Lang.String; }
+        return "alert";
+    }
+
+    // Reduce a batch of app-own alerts to the SINGLE loudest intent to drive the batch haptic, resolving
+    // EACH alert per its own category (appOwnWatchIntentFor). Empty ⇒ "off" (nothing to annunciate — the
+    // caller only reaches here with a non-empty new set). A non-empty alert whose intent is absent/malformed
+    // contributes at the "alert" rank via appOwnWatchIntentFor — never silence.
+    (:background)
+    function appOwnEffectiveIntent(list as Lang.Array) as Lang.String {
+        var best = "off";
+        var bestRank = 0;
+        for (var i = 0; i < list.size(); i += 1) {
+            var token = appOwnWatchIntentFor(appOwnIdentity(list[i] as Lang.Dictionary));
+            var r = watchIntentRank(token);
+            if (r > bestRank) { bestRank = r; best = token; }
+        }
+        return best;
+    }
+
+    // Pure: the app-own alerts not yet surfaced (identity not in `seen`). Mirrors newAlertsSince.
+    (:background)
+    function newAppOwnSince(seen as Lang.Array) as Lang.Array {
+        var out = [];
+        for (var i = 0; i < appOwnAlerts.size(); i += 1) {
+            var a = appOwnAlerts[i] as Lang.Dictionary;
+            if (!containsStr(seen, appOwnIdentity(a))) { out.add(a); }
+        }
+        return out;
+    }
+
+    // Pure: every currently-active app-own identity. Mirrors activeAlertIdentities.
+    (:background)
+    function activeAppOwnIdentities() as Lang.Array {
+        var out = [];
+        for (var i = 0; i < appOwnAlerts.size(); i += 1) {
+            out.add(appOwnIdentity(appOwnAlerts[i] as Lang.Dictionary));
+        }
+        return out;
+    }
+
+    // Separate persisted dedup stores from the pump-alert ones (KEY_SEEN_ALERTS / KEY_BG_NOTIFIED_ALERTS)
+    // so the two namespaces (numeric "kind-id" vs "appOwn:<category>") never mix.
+    (:background)
+    const KEY_SEEN_APPOWN = "seenAppOwn";
+    (:background)
+    function loadSeenAppOwn() as Lang.Array {
+        var s = Storage.getValue(KEY_SEEN_APPOWN);
+        return (s instanceof Lang.Array) ? s : [];
+    }
+    (:background)
+    function saveSeenAppOwn(seen as Lang.Array) as Void {
+        Storage.setValue(KEY_SEEN_APPOWN, seen);
+    }
+
+    // Pure: (previously-seen ∩ still-active) ∪ presented, restricted to ACTIVE identities so a resolved
+    // app-own condition drops out (re-annunciates if it re-fires). Mirrors reconciledSeenAlerts.
+    (:background)
+    function reconciledSeenAppOwn(presented as Lang.Array) as Lang.Array {
+        return reconcileSeenSet(activeAppOwnIdentities(), loadSeenAppOwn(), presented);
+    }
+
+    (:background)
+    const KEY_BG_NOTIFIED_APPOWN = "bgNotifiedAppOwn";
+    (:background)
+    function loadBgNotifiedAppOwn() as Lang.Array {
+        var s = Storage.getValue(KEY_BG_NOTIFIED_APPOWN);
+        return (s instanceof Lang.Array) ? s : [];
+    }
+    (:background)
+    function saveBgNotifiedAppOwn(seen as Lang.Array) as Void {
+        Storage.setValue(KEY_BG_NOTIFIED_APPOWN, seen);
+    }
+
+    // Pure, no side effect: the active app-own alerts not yet surfaced as a background notification.
+    (:background)
+    function pendingBgNotifyAppOwn() as Lang.Array {
+        return newAppOwnSince(loadBgNotifiedAppOwn());
+    }
+
+    // Pure: (previously-notified ∩ still-active) ∪ presented. Mirrors reconciledBgNotifiedAlerts.
+    (:background)
+    function reconciledBgNotifiedAppOwn(presented as Lang.Array) as Lang.Array {
+        return reconcileSeenSet(activeAppOwnIdentities(), loadBgNotifiedAppOwn(), presented);
+    }
+
+    // Shared pure reconcile: keep an active identity iff it was previously in the set OR presented this
+    // batch — so a cleared/resolved identity drops out while an un-presented one is never marked seen.
+    (:background)
+    function reconcileSeenSet(active as Lang.Array, prev as Lang.Array, presented as Lang.Array) as Lang.Array {
+        var out = [];
+        for (var i = 0; i < active.size(); i += 1) {
+            var ident = active[i] as Lang.String;
+            if (containsStr(prev, ident) || containsStr(presented, ident)) { out.add(ident); }
+        }
+        return out;
     }
 
     // The raw-snapshot proof-of-absence oracle's OWN identity parser. Deliberately NOT

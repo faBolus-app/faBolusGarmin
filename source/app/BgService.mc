@@ -142,36 +142,65 @@ class BgServiceDelegate extends System.ServiceDelegate {
     // posted (see AppState.reconciledBgNotifiedAlerts's own doc) — a failed post is left pending and
     // retried on the next temporal-event/phone-message tick instead of being dropped forever.
     function surfaceNewAlertsInBackground() as Void {
-        var pending = AppState.pendingBgNotifyAlerts();
-        if (pending.size() == 0) { return; }
         if (!(Toybox.Notifications has :showNotification)) { return; }
+        var pending = AppState.pendingBgNotifyAlerts();
         // Consult the SAME phone-resolved watch intent the foreground path reads, restored from the
         // persisted map (this background process has its own restored prefs). An explicit "off" keeps the
         // closed-app path quiet (the phone is the sole alerting surface); every other rung surfaces the
         // visual system notification. FAIL-SAFE: an absent/malformed map resolves to "alert" upstream, so a
         // legacy host still surfaces here — the closed-app path never fails silent on a pump safety alert.
-        var intent = AppState.effectiveWatchIntent(AppState.watchNotificationIntents);
-        var presented = [];
-        for (var i = 0; i < pending.size(); i += 1) {
-            var a = pending[i] as Lang.Dictionary;
-            // A suppressed ("off") alert is left OUT of `presented`, so it stays pending (never marked
-            // notified) and would surface if the user later raises the intent — it is not permanently
-            // dropped.
-            if (!AppState.shouldSurfaceIntentInBackground(intent)) {
-                continue;
+        // Pump-mirror path unchanged: only touch the pump bg-notified set when there is something pending,
+        // preserving its established save cadence (the app-own block below runs independently of it).
+        if (pending.size() > 0) {
+            var intent = AppState.effectiveWatchIntent(AppState.watchNotificationIntents);
+            var presented = [];
+            for (var i = 0; i < pending.size(); i += 1) {
+                var a = pending[i] as Lang.Dictionary;
+                // A suppressed ("off") alert is left OUT of `presented`, so it stays pending (never marked
+                // notified) and would surface if the user later raises the intent — it is not permanently
+                // dropped.
+                if (!AppState.shouldSurfaceIntentInBackground(intent)) {
+                    continue;
+                }
+                try {
+                    Notifications.showNotification("faBolus", a["title"] as Lang.String, null);
+                    presented.add(AppState.alertIdentity(a));
+                } catch (e) {
+                    // Deliberately NOT added to `presented`: reconciledBgNotifiedAlerts() below will NOT mark
+                    // this alert notified, so it is retried next cycle rather than permanently suppressed.
+                }
             }
-            try {
-                Notifications.showNotification("faBolus", a["title"] as Lang.String, null);
-                presented.add(AppState.alertIdentity(a));
-            } catch (e) {
-                // Deliberately NOT added to `presented`: reconciledBgNotifiedAlerts() below will NOT mark
-                // this alert notified, so it is retried next cycle rather than permanently suppressed.
-            }
+            // Persist EXACTLY (previously-notified ∩ still-active) ∪ presented-this-batch — ALWAYS, even when
+            // `presented` ends up empty (every attempt threw), so a cleared alert still drops out (a re-fire
+            // notifies again), while an alert whose post failed is never marked notified.
+            AppState.saveBgNotifiedAlerts(AppState.reconciledBgNotifiedAlerts(presented));
         }
-        // Persist EXACTLY (previously-notified ∩ still-active) ∪ presented-this-batch — ALWAYS, even when
-        // `presented` ends up empty (every attempt threw), so a cleared alert still drops out (a re-fire
-        // notifies again), while an alert whose post failed is never marked notified.
-        AppState.saveBgNotifiedAlerts(AppState.reconciledBgNotifiedAlerts(presented));
+
+        // App-GENERATED (faBolus's own) alerts — the closed-app safety net for the app-own subset (incl. the
+        // unresolved-dose disclosure), so a wrist that is pocketed while the app is suspended still hears
+        // faBolus's own alerts, not only the pump's. Resolved PER-CATEGORY (each item reads its own watch
+        // intent under its namespaced key): an explicit "off" for that category keeps it quiet; every other
+        // rung posts the visual system notification. FAIL-SAFE: an absent/malformed intent resolves to
+        // "alert" (appOwnWatchIntentFor), so a legacy host still surfaces it — the closed-app path never
+        // fails silent on an app-own safety alert. Tracked in its own dedup set, separate from the pump one.
+        var pendingAO = AppState.pendingBgNotifyAppOwn();
+        if (pendingAO.size() > 0) {
+            var presentedAO = [];
+            for (var j = 0; j < pendingAO.size(); j += 1) {
+                var ao = pendingAO[j] as Lang.Dictionary;
+                var intentAO = AppState.appOwnWatchIntentFor(AppState.appOwnIdentity(ao));
+                if (!AppState.shouldSurfaceIntentInBackground(intentAO)) {
+                    continue;   // explicit "off": left pending, not permanently dropped
+                }
+                try {
+                    Notifications.showNotification("faBolus alert", ao["title"] as Lang.String, null);
+                    presentedAO.add(AppState.appOwnIdentity(ao));
+                } catch (e) {
+                    // Not marked notified — retried next cycle rather than permanently suppressed.
+                }
+            }
+            AppState.saveBgNotifiedAppOwn(AppState.reconciledBgNotifiedAppOwn(presentedAO));
+        }
     }
 }
 

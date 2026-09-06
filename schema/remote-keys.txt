@@ -62,6 +62,12 @@ garminComplicationSlots
 # alert-intensity settings — the watch no longer runs its own intensity policy. Absent/malformed ⇒ the
 # watch fails safe to the vibrating rung.
 watchNotificationIntents
+# The active app-GENERATED (faBolus's own) alert subset to annunciate on the wrist (each item {key,title};
+# incl. the durable unresolved-dose record), consumed by AppState.handle (sanitizeAppOwnAlerts). Each item's
+# per-category watch intent rides watchNotificationIntents under its namespaced key. Absent ⇒ legacy host;
+# empty array ⇒ none active. A watch that gets an app-own alert with an absent/malformed intent fails safe
+# to vibrate — never silent.
+appOwnAlerts
 # Phase 20 (D-01): each `alerts` entry also carries an optional per-alert `severity` tier
 # (AppState.sanitizeAlerts preserves it; alertSeverityTier fails an absent one closed to "critical").
 # NOT a separate top-level key — it is a nested property of the `alerts` array item above (the

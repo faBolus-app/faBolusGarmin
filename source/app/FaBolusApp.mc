@@ -297,6 +297,43 @@ class FaBolusApp extends App.AppBase {
         // re-fires must re-notify), while an identity that wasn't actually
         // presented (skipped by the count bound, or a failed pushView) is never marked seen.
         AppState.saveSeenAlerts(AppState.reconciledSeenAlerts(presented));
+
+        // App-GENERATED (faBolus's own) alerts — annunciate the app-own subset (incl. the durable
+        // unresolved-dose record) CONSISTENTLY with the pump path, but resolved PER-CATEGORY: each item
+        // reads its own watch intent under its namespaced key. Labeled as a faBolus alert, distinct from a
+        // pump alarm mirror. FAIL-SAFE: an absent/malformed intent resolves to vibrate (appOwnEffectiveIntent),
+        // never silence. Tracked in a SEPARATE seen-set so it never interferes with the pump-alert flow.
+        var newAppOwn = AppState.newAppOwnSince(AppState.loadSeenAppOwn());
+        var appOwnPresented = [];
+        if (newAppOwn.size() > 0) {
+            var toPushAO = AppState.capAlertPushes(newAppOwn);
+            var dsAO = System.getDeviceSettings();
+            var vibrateOnAO = (dsAO has :vibrateOn) ? dsAO.vibrateOn : true;   // permissive if unreadable
+            var dndAO = (dsAO has :doNotDisturb) ? dsAO.doNotDisturb : false;  // not-in-DND if unreadable
+            var intentAO = AppState.appOwnEffectiveIntent(newAppOwn);
+            // App-own safety alerts carry no per-alert severity tier on the wire, so use the highest-salience
+            // ("critical") haptic FEEL — an app-own safety annunciation must never be under-felt.
+            var actionAO = AppState.watchActionForIntent(intentAO, vibrateOnAO, dndAO, "critical");
+            if (actionAO["vibrate"] && (Attention has :vibrate)) {
+                Attention.vibrate(buildVibeProfiles(AppState.vibePatternFor(actionAO["vibeProfileKey"])));
+            }
+            if (actionAO["tone"] && (Attention has :playTone)) {
+                Attention.playTone(Attention.TONE_ALARM);
+            }
+            if (actionAO["backlight"] && (Attention has :backlight)) {
+                Attention.backlight(true);
+            }
+            // Push a faBolus-labeled informational card per new app-own alert (least-serious last on top,
+            // mirroring the pump loop's ordering). Unlike a pump alert there is nothing to clear on the pump
+            // — the phone owns the condition — so it is dismiss-only.
+            for (var i = toPushAO.size() - 1; i >= 0; i -= 1) {
+                var a = toPushAO[i] as Lang.Dictionary;
+                if (pushAppOwnConfirm(a)) {
+                    appOwnPresented.add(AppState.appOwnIdentity(a));
+                }
+            }
+        }
+        AppState.saveSeenAppOwn(AppState.reconciledSeenAppOwn(appOwnPresented));
     }
 
     // Turn a pure haptic pattern ([[dutyCyclePct, durationMs], ...] from
@@ -323,6 +360,21 @@ class FaBolusApp extends App.AppBase {
         try {
             Ui.pushView(new Ui.Confirmation("Pump alert: " + a["title"] + " — clear?"),
                         new AlertConfirmDelegate(a["id"], a["kind"]), Ui.SLIDE_UP);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // The app-own (faBolus) counterpart to pushAlertConfirm: surface a genuinely-new app-GENERATED alert as
+    // a faBolus-labeled card. There is nothing to clear on the pump (the phone owns the condition and its
+    // resolution), so it is dismiss-only (AppOwnAlertDelegate) — the phone stays authoritative. Same
+    // pushView failure model as pushAlertConfirm: a background/no-view context throws, treated as "not
+    // presented" so the caller leaves the identity new for the next foreground statusRead.
+    function pushAppOwnConfirm(a as Lang.Dictionary) as Lang.Boolean {
+        try {
+            Ui.pushView(new Ui.Confirmation("faBolus alert: " + a["title"]),
+                        new AppOwnAlertDelegate(), Ui.SLIDE_UP);
             return true;
         } catch (e) {
             return false;
