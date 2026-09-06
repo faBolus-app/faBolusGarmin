@@ -2,22 +2,23 @@ using Toybox.Lang;
 using Toybox.Test;
 using Toybox.Time;
 
-// THE PERMANENT, UNDISCLOSED BOLUS LOCKOUT behind a durable unresolved-send tombstone.
+// THE UNRESOLVED-SEND DISCLOSURE behind a durable unresolved-send tombstone.
 //
-// A tombstone has always made every send fail at sendBolusNow's reattemptBlocked() guard. But
-// canBolus() did not consult it, so the affordance LIED: a fully enabled indigo Bolus button that
-// opened entry, let the wearer compose a dose and tap 1-2-3, and then refused at the send — silently,
-// permanently, and across reboots, because clearUnresolvedTombstone() had exactly one production caller
-// (a matching authoritative echo) and no user-reachable path at all.
+// A durable tombstone records that a prior dispatch's outcome is unconfirmed. The watch mirrors the
+// phone: it DISCLOSES that state (non-blocking) rather than walling off a new dose. canBolus() and
+// reattemptBlocked() do NOT consult the tombstone, so the Bolus button stays usable; the unresolved
+// state is surfaced by unresolvedDisclosureMarker() plus the read-only unresolvedSendDisclosure detail.
+// This deliberately weakens a wrist double-dose guard — the residual re-dose-into-unknown risk is
+// accepted because the pump is the primary annunciator and owns the authoritative history/IOB.
 //
-// This suite pins the three properties of the fix, all on pure AppState decisions:
-//   1. LOCKOUT IS HONEST     — canBolus() reflects the tombstone, and bolusBlockLabel() names it, ahead
-//                              of the transient reasons that would otherwise mask it.
-//   2. LOCKOUT IS BOUNDED    — adding that term perturbs neither the eligibility generation nor the
+// This suite pins the three properties, all on pure AppState decisions:
+//   1. DISCLOSURE, NOT A WALL — canBolus() ignores the tombstone (the button stays usable) and the send
+//                              gate does not refuse for it; unresolvedDisclosureMarker() names the state.
+//   2. THE MARKER IS BOUNDED  — the tombstone perturbs neither the eligibility generation nor the
 //                              cancel path, so it cannot tear down an armed confirm or block a cancel.
-//   3. RELEASE IS AUTHORITATIVE AND NEVER AUTOMATIC — the lock is released only by a requestId-matched
+//   3. RELEASE IS AUTHORITATIVE AND NEVER AUTOMATIC — the tombstone clears only by a requestId-matched
 //                              authoritative echo (preferred: resolves the DOSE) or by the phone
-//                              reporting a human reconciliation (resolves the LOCK only). Nothing
+//                              reporting a human reconciliation (resolves the marker only). Nothing
 //                              auto-clears, and a manual release does not lock out a later real echo.
 //
 // Pinned on pure AppState functions, matching tests/CanBolusTest.mc / tests/HoldTeardownTest.mc /
@@ -66,64 +67,66 @@ module UnresolvedSendLockTest {
         AppState.clearLockResolvedRecordForTest();
     }
 
-    // --- 1. the lockout is honest ------------------------------------------------------------------
+    // --- 1. disclosure, not a wall -----------------------------------------------------------------
 
-    // THE REGRESSION TEST for the lying button: same state, tombstone the only difference.
+    // THE CORE OF THE DOWNGRADE: same state, tombstone the only difference — and the button STAYS usable.
     (:test)
-    function tombstoneLocksTheBolusAffordance(logger as Test.Logger) as Lang.Boolean {
+    function tombstoneDoesNotLockTheBolusAffordance(logger as Test.Logger) as Lang.Boolean {
         bolusPossible();
         Test.assertMessage(AppState.canBolus(), "baseline: a bolus is possible");
         AppState.persistUnresolvedTombstone(REQ, Time.now().value(), "units:1.00");
-        Test.assertMessage(!AppState.canBolus(),
-            "an unresolved prior send ⇒ canBolus() false (the button stops looking enabled)");
-        // ...and the send gate agrees, so the affordance and the gate now tell the SAME story.
-        Test.assertEqualMessage(AppState.bolusSendRefusal(), "unresolvedPriorSend",
-            "the send gate refuses on the same condition the button now reflects");
+        Test.assertMessage(AppState.canBolus(),
+            "an unresolved prior send must NOT disable the button — the watch discloses, it does not wall off");
+        // ...and the send gate agrees: a bare durable tombstone yields no refusal (only an in-flight
+        // outcome would), so the affordance and the gate tell the SAME story.
+        Test.assertMessage(AppState.bolusSendRefusal() == null,
+            "the send gate does not refuse for a bare durable tombstone");
         tidy();
         return true;
     }
 
     (:test)
-    function lockoutIsNamedOnTheButton(logger as Test.Logger) as Lang.Boolean {
+    function unresolvedDoseIsNamedByTheMarker(logger as Test.Logger) as Lang.Boolean {
         bolusPossible();
-        Test.assertEqualMessage(AppState.bolusBlockLabel(), "", "baseline: no block, empty label");
+        Test.assertEqualMessage(AppState.unresolvedDisclosureMarker(), "",
+            "baseline: nothing unresolved, empty marker");
         AppState.persistUnresolvedTombstone(REQ, Time.now().value(), "units:1.00");
-        Test.assertEqualMessage(AppState.bolusBlockLabel(), "Earlier dose unresolved",
-            "the lockout is NAMED, never a silent grey button");
+        Test.assertEqualMessage(AppState.unresolvedDisclosureMarker(), "Earlier dose unresolved",
+            "the unresolved dose is NAMED by the non-blocking marker");
+        // ...and it does NOT masquerade as a block reason: the button is usable, so no block label.
+        Test.assertEqualMessage(AppState.bolusBlockLabel(), "",
+            "the marker is not a block label — the button stays enabled");
         tidy();
         return true;
     }
 
-    // ORDERING. The tombstone branch must sit ahead of every transient reason: it is the only block that
-    // never clears on its own, and the disclosure surface is opened only when the label reports it — so a
-    // masked reason would make the explanation unreachable and restore the original silence.
+    // The non-blocking marker is INDEPENDENT of the transient block reasons: it discloses the unresolved
+    // dose no matter what else is (or is not) blocking, while bolusBlockLabel() reports the ACTUAL
+    // disabling reason (the tombstone is no longer one). The two carry different information.
     (:test)
-    function lockDisclosureBeatsTransientReasons(logger as Test.Logger) as Lang.Boolean {
+    function markerDisclosesIndependentOfTransientBlocks(logger as Test.Logger) as Lang.Boolean {
         bolusPossible();
         AppState.persistUnresolvedTombstone(REQ, Time.now().value(), "units:1.00");
 
-        RemoteComm.testPhoneReachable = false;          // would otherwise be "Phone not connected"
-        Test.assertEqualMessage(AppState.bolusBlockLabel(), "Earlier dose unresolved",
-            "the permanent reason wins over an unreachable phone");
+        RemoteComm.testPhoneReachable = false;          // a real, transient block
+        Test.assertEqualMessage(AppState.unresolvedDisclosureMarker(), "Earlier dose unresolved",
+            "the marker still discloses the unresolved dose");
+        Test.assertEqualMessage(AppState.bolusBlockLabel(), "Phone not connected",
+            "...while the block label names the ACTUAL disabling reason, not the tombstone");
 
         RemoteComm.testPhoneReachable = true;
-        AppState.lastReplyEpoch = Time.now().value() - (AppState.CONNECTION_STALE_SEC + 1);
-        Test.assertEqualMessage(AppState.bolusBlockLabel(), "Earlier dose unresolved",
-            "...and over 'Reconnecting…', which would have the wearer wait forever");
-
-        AppState.lastReplyEpoch = Time.now().value();
-        AppState.hostCanBolus = false;                  // would otherwise be a pump reason
-        Test.assertEqualMessage(AppState.bolusBlockLabel(), "Earlier dose unresolved",
-            "...and over a pump-side reason");
+        AppState.hostCanBolus = false;                  // a different transient block
+        Test.assertEqualMessage(AppState.unresolvedDisclosureMarker(), "Earlier dose unresolved",
+            "the marker is unaffected by a pump-side block");
         tidy();
         return true;
     }
 
-    // --- 2. the lockout is bounded ----------------------------------------------------------------
+    // --- 2. the marker is bounded -----------------------------------------------------------------
 
-    // The single most important safety property of this change: canBolus() is NOT an input to
-    // eligibilityFingerprint() (which reads pumpBolusAllowed() directly), so the new term cannot bump
-    // bolusEligibilityGen and cannot spuriously tear down an already-armed confirm mid-flow.
+    // The single most important safety property: the tombstone is NOT an input to eligibilityFingerprint()
+    // (which reads pumpBolusAllowed() directly) and never was, so it cannot bump bolusEligibilityGen and
+    // cannot spuriously tear down an already-armed confirm mid-flow.
     (:test)
     function lockDoesNotPerturbTheEligibilityGeneration(logger as Test.Logger) as Lang.Boolean {
         bolusPossible();
@@ -147,8 +150,8 @@ module UnresolvedSendLockTest {
         AppState.connection = "Delivering…";   // bolusing() matches a "Deliver" prefix
         AppState.pendingRequestId = "req-in-flight-9";
         Test.assertMessage(AppState.bolusing(), "a bolus is in flight");
-        Test.assertMessage(!AppState.canBolus(), "starting a NEW bolus is locked");
-        Test.assertMessage(AppState.canCancel(), "but cancelling the in-flight one is still allowed");
+        Test.assertMessage(AppState.canCancel(),
+            "cancelling the in-flight one is allowed — cancel is never gated by the tombstone");
         tidy();
         return true;
     }

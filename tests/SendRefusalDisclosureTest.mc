@@ -30,7 +30,7 @@ module SendRefusalDisclosureTest {
     // Every token bolusSendRefusal() can return. Kept as data so the copy/honesty cases below iterate
     // the WHOLE set — a future seventh refusal that forgets its copy fails `everyTokenHasHonestCopy`.
     const ALL_TOKENS = ["policyDisabled", "staleArm", "phoneNotLive", "armExpired",
-                        "pumpBlocked", "outcomePending", "unresolvedPriorSend"];
+                        "pumpBlocked", "outcomePending"];
 
     // A cleanly-armed, fully-eligible dose: no refusal condition holds. Every field the six guards read is
     // set explicitly so cases are order-independent regardless of what other test modules left behind.
@@ -143,34 +143,28 @@ module SendRefusalDisclosureTest {
         return true;
     }
 
-    // The tombstone half of reattemptBlocked() must be DISTINGUISHABLE from the in-flight half: they have
-    // different remedies (wait for the result vs. go and check the pump's own history), so collapsing them
-    // into one message would mislead the wearer.
+    // A durable tombstone from an EARLIER dispatch no longer refuses a send: the watch discloses that
+    // unconfirmed prior dose (non-blocking) rather than walling off a new one. Only the TRANSIENT in-flight
+    // half of reattemptBlocked() (outcomePending) still refuses at the confirm screen.
     (:test)
-    function tombstoneYieldsItsOwnDistinctToken(logger as Test.Logger) as Lang.Boolean {
+    function tombstoneNoLongerRefusesTheSend(logger as Test.Logger) as Lang.Boolean {
         eligible();
         AppState.persistUnresolvedTombstone("req-prior-1", Time.now().value(), "units:1.00");
         Test.assertMessage(AppState.hasUnresolvedTombstone(), "a prior dispatch is unresolved");
         Test.assertMessage(!AppState.outcomePending(), "but nothing is in flight in THIS process");
-        var tombToken = AppState.bolusSendRefusal();
-        Test.assertEqualMessage(tombToken, "unresolvedPriorSend", "durable tombstone ⇒ unresolvedPriorSend");
-        // Now make the OTHER half of reattemptBlocked() true as well and confirm the tokens really differ
-        // (not just that two literals differ) — same gate, two different remedies for the wearer.
+        Test.assertMessage(AppState.bolusSendRefusal() == null,
+            "a bare durable tombstone yields NO send refusal — it is disclosed, not blocked");
+        // The in-flight half still refuses, with its own token.
         AppState.status = "delivering";
-        var flightToken = AppState.bolusSendRefusal();
-        Test.assertEqualMessage(flightToken, "outcomePending", "in-flight half reports its own token");
-        Test.assertMessage(!(flightToken as Lang.String).equals(tombToken as Lang.String),
-            "the two reattemptBlocked halves are distinguishable to the confirm screen");
-        Test.assertMessage(!AppState.sendRefusalDetail(tombToken as Lang.String)
-                .equals(AppState.sendRefusalDetail(flightToken as Lang.String)),
-            "...and their detail lines give different remedies");
+        Test.assertEqualMessage(AppState.bolusSendRefusal(), "outcomePending",
+            "an in-flight outcome still refuses on its own token");
         tidy();
         return true;
     }
 
     // --- 3. THE BUG: the four guards mustTeardownArmedBolus() cannot see must still be DISCLOSED ---
 
-    // This is the regression test for the reported defect. For each of the four conditions,
+    // This is the regression test for the reported defect. For each of these conditions,
     // mustTeardownArmedBolus() is FALSE — so HoldView's pre-existing "Bolusing off" / "Status changed"
     // notice never renders — yet sendBolusNow() refuses. Before the fix that combination was silent by
     // construction. Now every one of them must produce a non-empty reason the confirm screen can draw.
@@ -192,17 +186,11 @@ module SendRefusalDisclosureTest {
         AppState.hostCanBolus = false;
         assertDisclosed(logger, "pumpBlocked");
 
-        // guard 6 — a durable tombstone from a prior process; never folded into the fingerprint at all,
-        // so this one was silent AND permanent across relaunches.
-        eligible();
-        AppState.persistUnresolvedTombstone("req-prior-2", Time.now().value(), "units:2.00");
-        assertDisclosed(logger, "unresolvedPriorSend");
-
         tidy();
         return true;
     }
 
-    // The shared assertion for the four gap conditions: teardown blind, refusal certain, copy present.
+    // The shared assertion for the gap conditions: teardown blind, refusal certain, copy present.
     function assertDisclosed(logger as Test.Logger, expected as Lang.String) as Void {
         Test.assertMessage(!AppState.mustTeardownArmedBolus(),
             expected + ": mustTeardownArmedBolus() is BLIND to this condition");
@@ -268,7 +256,7 @@ module SendRefusalDisclosureTest {
         AppState.lastReplyEpoch = Time.now().value() - (AppState.CONNECTION_STALE_SEC + 1);
         AppState.armedAtEpoch = Time.now().value() - (AppState.ARM_CONTEXT_STALE_SEC + 1);
         AppState.hostCanBolus = false;
-        AppState.persistUnresolvedTombstone("req-order-1", Time.now().value(), "units:3.00");
+        AppState.status = "delivering";   // guard 6: an in-flight outcome (reattemptBlocked/outcomePending)
 
         Test.assertEqualMessage(AppState.bolusSendRefusal(), "policyDisabled", "guard 1 wins");
         AppState.readOnly = false;
@@ -280,8 +268,8 @@ module SendRefusalDisclosureTest {
         AppState.armedAtEpoch = Time.now().value();
         Test.assertEqualMessage(AppState.bolusSendRefusal(), "pumpBlocked", "guard 5 next");
         AppState.hostCanBolus = true;
-        Test.assertEqualMessage(AppState.bolusSendRefusal(), "unresolvedPriorSend", "guard 6 last");
-        AppState.clearUnresolvedTombstone();
+        Test.assertEqualMessage(AppState.bolusSendRefusal(), "outcomePending", "guard 6 last");
+        AppState.status = null;
         Test.assertMessage(AppState.bolusSendRefusal() == null, "all six clear ⇒ no refusal");
         tidy();
         return true;

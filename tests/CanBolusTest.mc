@@ -139,6 +139,29 @@ module CanBolusTest {
         return true;
     }
 
+    // The durable unresolved-send tombstone does NOT gate canBolus() — the watch mirrors the phone and
+    // DISCLOSES an unconfirmed prior dose rather than walling off a new one. With every other term
+    // satisfied and the phone reachable (via the documented test seam), canBolus() stays true even with an
+    // outstanding tombstone; the disclosure is carried non-blocking by unresolvedDisclosureMarker().
+    (:test)
+    function tombstoneDoesNotGateCanBolus(logger as Test.Logger) as Lang.Boolean {
+        RemoteComm.testPhoneReachable = true;
+        AppState.handle(statusRead({ "message" => "Connected", "canBolus" => true,
+                                     "garminBolusEnabled" => true }));
+        AppState.clearUnresolvedTombstone();
+        Test.assertMessage(AppState.canBolus(), "baseline: a bolus is possible");
+        AppState.persistUnresolvedTombstone("req-canbolus-1", 1000, "units:1.00");
+        Test.assertMessage(AppState.canBolus(),
+            "an outstanding tombstone must NOT disable the bolus affordance");
+        Test.assertEqualMessage(AppState.bolusBlockLabel(), "",
+            "...so there is no block label — the button is usable");
+        Test.assertEqualMessage(AppState.unresolvedDisclosureMarker(), "Earlier dose unresolved",
+            "...the unresolved prior dose is disclosed non-blocking instead");
+        AppState.clearUnresolvedTombstone();
+        RemoteComm.testPhoneReachable = null;
+        return true;
+    }
+
     // The reason token maps to short display text (pure, deterministic — no reachability dependency).
     (:test)
     function reasonTextMapsTokens(logger as Test.Logger) as Lang.Boolean {

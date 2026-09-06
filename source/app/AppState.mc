@@ -380,9 +380,10 @@ module AppState {
         if (pc0 instanceof Lang.Number && pc0 > 0 && pc0 < 1000) { plotCeiling = pc0; }
         if (plotFloor >= plotCeiling) { plotFloor = 40; plotCeiling = 300; }   // min-gap invariant
         // Restore the durable unresolved-delivery tombstone (if any) so a cold
-        // relaunch still knows a prior dispatch is unresolved — reattemptBlocked() consults this in
-        // sendBolusNow, independent of pendingRequestId (deliberately NOT restored here — the tombstone
-        // alone is sufficient to block a re-send; see the field's own doc comment).
+        // relaunch still knows a prior dispatch is unresolved — it is read for DISCLOSURE
+        // (unresolvedDisclosureMarker() / unresolvedSendDisclosure()), independent of pendingRequestId
+        // (deliberately NOT restored here — the tombstone alone is sufficient to disclose; see the
+        // field's own doc comment). It no longer blocks a re-send.
         var tomb = Storage.getValue(KEY_UNRESOLVED_TOMBSTONE);
         if (tomb instanceof Lang.Dictionary) {
             var trid = strCap(tomb["requestId"], 64);
@@ -622,20 +623,17 @@ module AppState {
     // app is live (recent reply) AND the pump side permits it. The Garmin never touches the pump
     // directly. `pumpBolusAllowed()` stays PURE (no liveness) so its own tests remain deterministic.
     //
-    // ...AND no durable unresolved-send tombstone is outstanding. That last term is not a new gate: a
-    // tombstone ALREADY made every send fail at sendBolusNow's reattemptBlocked() guard. Leaving it out of
-    // canBolus() meant the affordance LIED — a fully enabled indigo Bolus button that opened entry, let the
-    // wearer compose a dose and tap 1-2-3, and then refused at the send with no explanation, permanently
-    // and across reboots. Reflecting it here makes the button's appearance match what the send gate will
-    // actually do, and routes the wearer to the disclosure surface instead (MainDelegate/BolusOnlyDelegate).
-    //
-    // Deliberately NOT added to eligibilityFingerprint(): that fingerprint uses pumpBolusAllowed()
-    // directly and never consults canBolus(), so this term cannot perturb bolusEligibilityGen and cannot
-    // spuriously tear down an armed confirm. Nor does it touch canCancel() — cancelling an in-flight bolus
-    // is a safety action and must never be blocked by a tombstone from an EARLIER dose.
+    // A durable unresolved-send tombstone from an EARLIER dispatch does NOT gate this: the watch mirrors
+    // the phone and DISCLOSES an unconfirmed prior dose rather than walling off a new one. The pump is the
+    // primary annunciator and owns the authoritative history/IOB; refusing a legitimate new wrist dose
+    // because a previous outcome was never confirmed does more harm than the disclosure it replaces. The
+    // unresolved state is surfaced NON-BLOCKING (unresolvedDisclosureMarker() + unresolvedSendDisclosure()),
+    // and the tombstone still writes on dispatch and still clears on an authoritative echo. The transient
+    // in-flight guard (outcomePending, via reattemptBlocked) and the cancel-exemption (canCancel) are
+    // unaffected. This deliberately weakens a wrist double-dose guard; the residual re-dose-into-unknown
+    // risk is accepted because the pump annunciates and holds the record.
     function canBolus() as Lang.Boolean {
-        return garminBolusEnabled && RemoteComm.phoneReachable() && appLive() && pumpBolusAllowed()
-            && !hasUnresolvedTombstone();
+        return garminBolusEnabled && RemoteComm.phoneReachable() && appLive() && pumpBolusAllowed();
     }
 
     // The bolus affordance is HOST-POLICY-disabled when the phone put the remote in
@@ -749,16 +747,11 @@ module AppState {
     // A short user-facing reason the bolus button is disabled, so the bolus screen can say WHY
     // (every disabled control shows a reason). Prefers the host's reason token; falls back to the
     // connection string / reachability for an older host. "" when a bolus IS possible.
+    // A durable unresolved-send tombstone is NOT reported here — it no longer disables the button, so it
+    // is not a "why is this disabled" reason. It is surfaced non-blocking by unresolvedDisclosureMarker(),
+    // shown alongside the (enabled or disabled) button.
     function bolusBlockLabel() as Lang.String {
         if (canBolus()) { return ""; }
-        // FIRST, ahead of every transient reason. Two reasons this branch must not sit behind
-        // phoneReachable()/appLive()/bolusing(): (a) an unresolved prior send is the ONLY block in this
-        // function that never clears on its own — every other one resolves itself once the link, the pump
-        // or the in-flight dose settles, so a wearer told "Reconnecting…" would wait forever for a
-        // reconnect that had already happened; and (b) the disclosure surface is opened only when this
-        // label reports the lock (MainDelegate.pressBolusButton), so masking the reason would make the
-        // explanation unreachable — reintroducing the same silence this whole fix exists to remove.
-        if (hasUnresolvedTombstone()) { return "Earlier dose unresolved"; }
         if (!RemoteComm.phoneReachable()) { return "Phone not connected"; }
         // The BLE link is up but the faBolus app hasn't replied within CONNECTION_STALE_SEC (app
         // killed / backgrounded) — say we're reconnecting rather than showing a stale-derived reason.
@@ -770,6 +763,15 @@ module AppState {
         if (bolusing()) { return "Bolus in progress"; }
         if (!pumpConnected()) { return "Pump not connected"; }
         return "Unavailable";
+    }
+
+    // A NON-BLOCKING disclosure marker, shown ALONGSIDE the bolus affordance (enabled or not) whenever an
+    // EARLIER dispatch is still unresolved. Distinct from bolusBlockLabel() (a "why is this disabled"
+    // reason): the tombstone no longer disables the button, so this keeps the honest "an earlier dose was
+    // never confirmed" signal visible next to a usable button, and is the entry point to the full
+    // unresolvedSendDisclosure() detail. "" when there is nothing to disclose. Pure → unit-testable.
+    function unresolvedDisclosureMarker() as Lang.String {
+        return hasUnresolvedTombstone() ? "Earlier dose unresolved" : "";
     }
 
     // A bolus started from this watch is in flight and can be cancelled from the glance (e.g. after
@@ -909,8 +911,9 @@ module AppState {
     // happens BEFORE the phoneReachable() check; a synchronously-failed dispatch there — the outOfRange
     // return, or a `dispatched==false` transmit failure — means nothing reached the phone, so no phone
     // echo can EVER arrive, and a durable tombstone in that case would be an unrecoverable permanent
-    // lock). Consulted by reattemptBlocked() so a fresh sendBolusNow — even
-    // after a cold relaunch that lost pendingRequestId — is refused while unresolved. Cleared ONLY on an
+    // lock). Read for DISCLOSURE (unresolvedDisclosureMarker() / unresolvedSendDisclosure()) so a prior
+    // unconfirmed dispatch — even one that survived a cold relaunch that lost pendingRequestId — is shown
+    // to the wearer NON-BLOCKING; it no longer refuses a fresh send. Cleared ONLY on an
     // authoritative terminal echo (delivered/cancelled/failed) for the MATCHING requestId — see
     // handle()'s bolusStatus branch, which checks this independently of pendingRequestId (onBack's
     // clearInFlight() below wipes pendingRequestId/status locally WITHOUT touching the tombstone, so a
@@ -946,9 +949,10 @@ module AppState {
 
     // ── The unresolved-send LOCK, and how it is legitimately released ────────────────────────────
     //
-    // A tombstone locks watch bolusing (reattemptBlocked() → sendBolusNow; and now canBolus(), so the
-    // button stops lying). Releasing that lock is a delivery-safety act, so exactly TWO paths may do it,
-    // both AUTHORITATIVE and both keyed on the specific requestId — never a blanket unlock:
+    // A tombstone no longer BLOCKS watch bolusing — it is a non-blocking disclosure marker (see canBolus()
+    // / reattemptBlocked() / unresolvedDisclosureMarker()). It is still resolved AUTHORITATIVELY, and
+    // clearing it (dropping the disclosure) is a delivery-safety act, so exactly TWO paths may do it,
+    // both AUTHORITATIVE and both keyed on the specific requestId — never a blanket clear:
     //
     //   1. An authoritatively-resolved bolusStatus echo for that requestId (handle(), the pre-existing
     //      path). This is and remains the PREFERRED route: the phone reports what actually happened, so
@@ -1098,19 +1102,19 @@ module AppState {
     // lastReplyEpoch is stamped, so it is unconditionally "1" and an appLive() lapse can NEVER bump the
     // gen; and reattemptBlocked() is not folded into the fingerprint at all.
     //
-    // NOTHING here loosens, reorders, shortens or fails open any gate: these are the send gate's own six
-    // expressions in the send gate's own order, character for character. reattemptBlocked() is entered on
-    // the identical condition and only its REPORTING splits in two, because "wait for the result you already
-    // have in flight" and "an earlier dispatch was never confirmed — check the pump's own history" are
-    // different remedies for the wearer. Pure/deterministic (wall-clock only) → unit-testable; see
-    // tests/SendRefusalDisclosureTest.mc.
+    // This mirror does not loosen, reorder or shorten any of its own expressions: they are the send gate's
+    // own six, in the send gate's own order, character for character. reattemptBlocked() now reports a
+    // SINGLE condition — an outcome still pending in THIS process — so it maps straight to "outcomePending".
+    // (A durable tombstone from an EARLIER dispatch no longer refuses a send; the watch discloses it
+    // non-blocking instead, so there is no separate refusal token for it.) Pure/deterministic (wall-clock
+    // only) → unit-testable; see tests/SendRefusalDisclosureTest.mc.
     function bolusSendRefusal() as Lang.String? {
         if (bolusPolicyDisabled()) { return "policyDisabled"; }
         if (armedEligibilityGen != bolusEligibilityGen) { return "staleArm"; }
         if (!appLive()) { return "phoneNotLive"; }
         if (armContextExpired()) { return "armExpired"; }
         if (!pumpBolusAllowed()) { return "pumpBlocked"; }
-        if (reattemptBlocked()) { return outcomePending() ? "outcomePending" : "unresolvedPriorSend"; }
+        if (reattemptBlocked()) { return "outcomePending"; }
         return null;
     }
 
@@ -1140,16 +1144,13 @@ module AppState {
         if (reason.equals("armExpired")) { return "Expired"; }
         if (reason.equals("pumpBlocked")) { return "Pump not ready"; }
         if (reason.equals("outcomePending")) { return "Bolus pending"; }
-        if (reason.equals("unresolvedPriorSend")) { return "Earlier dose"; }
         return "";
     }
 
     // Pure token → confirm-screen DETAIL line. Every line opens with "not sent" — on a delivery-
     // authorising surface the wearer must never be left able to believe insulin went in, and the honest
-    // fact common to all six is that this attempt transmitted nothing (all six guards return before
-    // RemoteComm mints a requestId). unresolvedPriorSend deliberately does NOT claim the earlier dose was
-    // or was not delivered: that outcome is genuinely unknown, which is the whole reason the durable
-    // tombstone exists, so it names the pump's own history as the authority instead. "" for null/unknown.
+    // fact common to all of them is that this attempt transmitted nothing (every guard returns before
+    // RemoteComm mints a requestId). "" for null/unknown.
     function sendRefusalDetail(reason as Lang.String or Null) as Lang.String {
         if (reason == null) { return ""; }
         if (reason.equals("policyDisabled")) { return "not sent — off on phone"; }
@@ -1158,7 +1159,6 @@ module AppState {
         if (reason.equals("armExpired")) { return "not sent — start over"; }
         if (reason.equals("pumpBlocked")) { return "not sent — check the pump"; }
         if (reason.equals("outcomePending")) { return "not sent — wait for result"; }
-        if (reason.equals("unresolvedPriorSend")) { return "not sent — see pump history"; }
         return "";
     }
 
@@ -1217,10 +1217,11 @@ module AppState {
         // ARM_CONTEXT_STALE_SEC (armContextExpired()) — re-checked HERE, at the literal final send, so a
         // dose armed in a since-expired context is never transmitted even when no intervening statusRead
         // ever bumped bolusEligibilityGen to catch it; the pump no longer permits a bolus
-        // (pumpBolusAllowed() re-check at transmit); an outcome is still pending or a prior dispatch is
-        // unresolved (reattemptBlocked() — never mint a second reqId on top of one, a double-dose decision
-        // hazard). Nothing has been transmitted and no reqId minted at this point, so the caller de-arms
-        // its view-local confirm and the wearer re-confirms against current state.
+        // (pumpBolusAllowed() re-check at transmit); an outcome is still pending (reattemptBlocked() —
+        // never mint a second reqId on top of an in-flight one). Nothing has been transmitted and no reqId
+        // minted at this point, so the caller de-arms its view-local confirm and the wearer re-confirms
+        // against current state. A durable tombstone from an EARLIER dispatch does NOT refuse here — it is
+        // disclosed non-blocking; only an in-flight outcome still gates the send.
         var refusal = bolusSendRefusal();
         if (refusal != null) {
             // Record WHY so the confirm surface can say it. Before this, the bare `return false` left
@@ -1326,13 +1327,13 @@ module AppState {
     }
 
     // A NEW send must be refused while an outcome is still pending — never mint a second reqId on
-    // top of an in-flight one. Checked in sendBolusNow before minting.
-    // ALSO refused while a durable unresolved-delivery tombstone survives from a
-    // PRIOR process (a cold relaunch loses `status`/`outcomePending()`'s in-memory backing, but the
-    // tombstone is durable) — this is what makes a relaunch honor an unresolved dispatch, not just the
-    // current process's own in-memory outcome tracking.
+    // top of an in-flight one. Checked in sendBolusNow before minting. This is the TRANSIENT in-flight
+    // guard ONLY. A durable unresolved-delivery tombstone from a PRIOR dispatch no longer refuses a fresh
+    // send: the watch mirrors the phone and DISCLOSES that unconfirmed prior dose (non-blocking) rather
+    // than walling off a new one. The tombstone is still written on dispatch and still cleared on an
+    // authoritative echo; it simply no longer gates this send.
     function reattemptBlocked() as Lang.Boolean {
-        return outcomePending() || hasUnresolvedTombstone();
+        return outcomePending();
     }
 
     // Mark an in-flight bolus send as FAILED — pure/guarded so it can never regress a terminal

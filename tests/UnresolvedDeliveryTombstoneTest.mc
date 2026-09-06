@@ -4,13 +4,14 @@ using Toybox.Time;
 using Toybox.Application.Storage;
 
 // Wrist half: `pendingRequestId` (AppState.mc) is in-memory only and lost on a nav/restart/
-// kill, so a cold relaunch could re-arm/re-send a dose whose phone-side outcome is still genuinely
-// unknown — the wrist side of the settled-echo-loss double-dose window (the phone has its own guard).
-// The fix is a DURABLE tombstone {requestId, sentAt, doseKey} in Connect IQ
-// Application.Storage, written ONLY once dispatch to the phone might have occurred (dispatched==true),
-// consulted by reattemptBlocked() (so a fresh sendBolusNow after a relaunch is refused while unresolved),
-// and cleared only by an authoritative terminal echo (delivered/cancelled/failed) for the matching
-// requestId.
+// kill, so a cold relaunch loses the in-memory trace of a dose whose phone-side outcome is still
+// genuinely unknown. The DURABLE tombstone {requestId, sentAt, doseKey} in Connect IQ
+// Application.Storage preserves that fact across a relaunch: written ONLY once dispatch to the phone
+// might have occurred (dispatched==true), read for DISCLOSURE (unresolvedDisclosureMarker() /
+// unresolvedSendDisclosure()) so the wearer is told a prior dispatch is unconfirmed — NON-BLOCKING, it
+// no longer refuses a fresh send — and cleared only by an authoritative terminal echo
+// (delivered/cancelled/failed) for the matching requestId. The watch mirrors the phone: disclose, do
+// not wall off.
 //
 // A REFUTED alternative: arming the tombstone at pendingRequestId-set time, BEFORE the
 // phoneReachable() check, would survive a synchronously-failed dispatch — nothing ever
@@ -139,11 +140,13 @@ module UnresolvedDeliveryTombstoneTest {
     // --- survives a simulated relaunch + blocks a re-arm/re-send -----------------------------------
 
     (:test)
-    function dispatchedTombstoneSurvivesRelaunchAndBlocksResend(logger as Test.Logger) as Lang.Boolean {
+    function dispatchedTombstoneSurvivesRelaunchButNoLongerBlocksResend(logger as Test.Logger) as Lang.Boolean {
         baseline();
         wipeStorage();
         AppState.maybeWriteUnresolvedTombstone(true, "req-relaunch-1", Time.now().value(), "units:1.00");
-        Test.assertMessage(AppState.reattemptBlocked(), "a live tombstone blocks reattemptBlocked() pre-relaunch");
+        Test.assertMessage(AppState.hasUnresolvedTombstone(), "a live tombstone is written pre-relaunch");
+        Test.assertMessage(!AppState.reattemptBlocked(),
+            "a bare durable tombstone (nothing in flight) does NOT block a resend — it discloses only");
 
         // Simulate a cold relaunch: wipe every in-memory field a real process restart would lose, then
         // call loadPrefs() — the exact call FaBolusApp.onStart() makes.
@@ -153,17 +156,12 @@ module UnresolvedDeliveryTombstoneTest {
         Test.assertMessage(AppState.hasUnresolvedTombstone(), "loadPrefs() restores the durable tombstone");
         Test.assertEqualMessage(AppState.unresolvedTombstoneReqId, "req-relaunch-1", "restored requestId matches");
 
-        // A fresh send attempt (as if the wearer tried to re-arm/re-send after the relaunch) must be
-        // refused before minting a new requestId.
-        Test.assertMessage(AppState.reattemptBlocked(), "restored tombstone still blocks reattemptBlocked() post-relaunch");
-        var priorPending = AppState.pendingRequestId;
-        var sent = AppState.sendBolusNow(null);
-        Test.assertMessage(!sent, "sendBolusNow refuses while an unresolved tombstone survives the relaunch");
-        // Both are null here (pendingRequestId is deliberately not restored across a relaunch, and the
-        // tombstone guard refuses the send before any new reqId is minted). Assert equality with `==`
-        // rather than Test.assertEqualMessage, whose SDK impl invokes a method on the operands and throws
-        // an "Unexpected Type Error: Failed invoking <symbol>" when they are null.
-        Test.assertMessage(AppState.pendingRequestId == priorPending, "no new requestId minted");
+        // The restored tombstone is a DISCLOSURE marker, not a wall: a fresh send is no longer refused by
+        // it (only a transient in-flight outcome would). The honest disclosure survives the relaunch.
+        Test.assertMessage(!AppState.reattemptBlocked(),
+            "the restored tombstone still does NOT block a fresh send post-relaunch");
+        Test.assertEqualMessage(AppState.unresolvedDisclosureMarker(), "Earlier dose unresolved",
+            "...and is disclosed non-blocking after the relaunch");
         wipeStorage();
         return true;
     }
@@ -228,9 +226,9 @@ module UnresolvedDeliveryTombstoneTest {
 
     // Regression: an "unknown" echo (the outcome watchdog's honest timeout / the phone's
     // indeterminate) for the SAME requestId must NOT clear the tombstone either — it is the
-    // ambiguous-outcome case the tombstone exists to protect. Before this fix, the clear site reused
+    // ambiguous-outcome case the tombstone exists to disclose. Before this fix, the clear site reused
     // isTerminalStatus() (which treats "unknown" as terminal), so this echo would have wrongly cleared
-    // the tombstone and unblocked a re-send while the real outcome was still unresolved.
+    // the tombstone and dropped the honest disclosure while the real outcome was still unresolved.
     (:test)
     function unknownEchoDoesNotClearTombstone(logger as Test.Logger) as Lang.Boolean {
         baseline();
@@ -238,7 +236,8 @@ module UnresolvedDeliveryTombstoneTest {
         AppState.maybeWriteUnresolvedTombstone(true, "req-unknown-1", Time.now().value(), "units:1.00");
         AppState.handle(bolusStatusMsg("req-unknown-1", "unknown"));
         Test.assertMessage(AppState.hasUnresolvedTombstone(), "an 'unknown' echo leaves the tombstone in place");
-        Test.assertMessage(AppState.reattemptBlocked(), "a re-send is still blocked after an 'unknown' echo");
+        Test.assertEqualMessage(AppState.unresolvedDisclosureMarker(), "Earlier dose unresolved",
+            "...so the honest disclosure survives an indeterminate outcome");
         return true;
     }
 
