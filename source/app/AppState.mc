@@ -2099,6 +2099,9 @@ module AppState {
                 var o = { "id" => e["id"], "kind" => e["kind"], "title" => strCap(e["title"], 80) };
                 var sev = e["severity"];
                 if (sev instanceof Lang.String && isValidSeverityTier(sev as Lang.String)) { o["severity"] = sev; }
+                // Preserve the per-alert malfunction flag (present only for a non-dismissable malfunction),
+                // so a dismiss of this entry can name which side of a colliding (kind, id) it means.
+                if (e["isMalfunction"] == true) { o["isMalfunction"] = true; }
                 out.add(o);
             }
         }
@@ -2579,7 +2582,7 @@ module AppState {
     // identity (per-identity: at most one retry entry + one provisional) — persists BOTH lanes, and
     // returns the requestId to send. A lost-ack RETRY (the bounded-retry mechanism below) reuses the
     // SAME requestId+generation instead of calling this again.
-    function beginDismiss(id, kind, title as Lang.String) as Lang.String {
+    function beginDismiss(id, kind, title as Lang.String, isMalfunction as Lang.Boolean or Null) as Lang.String {
         var ident = dismissIdentity(id, kind);
         var prior = dismissPending[ident];
         var generation = (prior instanceof Lang.Dictionary && prior["generation"] instanceof Lang.Number)
@@ -2588,7 +2591,11 @@ module AppState {
         var reqId = RemoteComm.newRoutineRequestId();
         dismissPending[ident] = { "requestId" => reqId, "generation" => generation, "createdAt" => Time.now().value() };
         capDismissPending();
-        dismissProvisional[ident] = { "id" => id, "kind" => kind, "title" => title };
+        // Retain the malfunction flag so a lost-ack RETRY re-sends the SAME discriminator the original
+        // confirm carried (present only for a malfunction).
+        var prov = { "id" => id, "kind" => kind, "title" => title };
+        if (isMalfunction == true) { prov["isMalfunction"] = true; }
+        dismissProvisional[ident] = prov;
         saveDismissPending();
         saveDismissProvisional();
         return reqId;
@@ -2691,7 +2698,9 @@ module AppState {
             }
             var prov = dismissProvisional[k];
             if (prov instanceof Lang.Dictionary) {
-                out.add({ "requestId" => e["requestId"], "id" => prov["id"], "kind" => prov["kind"] });
+                var due = { "requestId" => e["requestId"], "id" => prov["id"], "kind" => prov["kind"] };
+                if (prov["isMalfunction"] == true) { due["isMalfunction"] = true; }
+                out.add(due);
             }
         }
         if (toPrune.size() > 0) {

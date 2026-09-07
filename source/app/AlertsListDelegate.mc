@@ -23,7 +23,7 @@ class AlertsListDelegate extends Ui.BehaviorDelegate {
                 // alert is a real action (the phone sends a signed dismiss to the pump), so a touch must
                 // go through the same AlertConfirmDelegate the buttons use, not fire-and-clear on tap.
                 Ui.pushView(new Ui.Confirmation(AppState.alertActionWord() + ": " + a["title"] + "?"),
-                            new AlertConfirmDelegate(a["id"], a["kind"]), Ui.SLIDE_UP);
+                            new AlertConfirmDelegate(a["id"], a["kind"], a["isMalfunction"]), Ui.SLIDE_UP);
                 return true;
             }
         }
@@ -38,7 +38,7 @@ class AlertsListDelegate extends Ui.BehaviorDelegate {
         if (AppState.alerts.size() == 0) { return true; }
         var a = AppState.alerts[0] as Lang.Dictionary;
         Ui.pushView(new Ui.Confirmation(AppState.alertActionWord() + ": " + a["title"] + "?"),
-                    new AlertConfirmDelegate(a["id"], a["kind"]), Ui.SLIDE_UP);
+                    new AlertConfirmDelegate(a["id"], a["kind"], a["isMalfunction"]), Ui.SLIDE_UP);
         return true;
     }
 

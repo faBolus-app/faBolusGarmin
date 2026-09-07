@@ -89,16 +89,22 @@ module RemoteComm {
     // shipping use.
     var testDismissAlertThrows = false;
 
-    // Clears a pump alert on the phone (which sends the signed dismiss to the pump).
-    function dismissAlert(requestId as Lang.String, alertId as Lang.Number, alertKind as Lang.Number) as Lang.Dictionary {
+    // Clears a pump alert on the phone (which sends the signed dismiss to the pump). `isMalfunction` is the
+    // source discriminator: an alarm and a malfunction can share the same (alertId, alertKind), so naming
+    // which one the wearer meant lets the phone resolve the exact entry instead of the first match.
+    function dismissAlert(requestId as Lang.String, alertId as Lang.Number, alertKind as Lang.Number, isMalfunction as Lang.Boolean or Null) as Lang.Dictionary {
         if (testDismissAlertThrows) { throw new Lang.Exception(); }
-        return {
+        var d = {
             "version" => SCHEMA_VERSION,
             "kind" => "dismissAlert",
             "requestId" => requestId,
             "alertId" => alertId,
             "alertKind" => alertKind
         };
+        // Carried ONLY for a malfunction; an alarm (or a legacy provisional with no flag) omits it, so the
+        // phone falls back to the dismissable sibling and never clears the non-dismissable malfunction.
+        if (isMalfunction == true) { d["alertIsMalfunction"] = true; }
+        return d;
     }
 
     // Advanced-control requests: ask the phone to suspend/resume insulin. The phone re-confirms

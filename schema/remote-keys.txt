@@ -20,6 +20,10 @@ sentAt
 forceGlucose
 alertId
 alertKind
+# The source discriminator on a dismissAlert (Boolean), added ONLY for a non-dismissable malfunction so
+# the phone resolves the exact entry when an alarm and a malfunction collide on the same (alertId,
+# alertKind). Absent ⇒ the phone falls back to the dismissable sibling (never the malfunction).
+alertIsMalfunction
 # C2 §2.3: the entered 4-digit bolus passcode (String), added to bolusRequest only when a code was
 # entered. The phone verifies it and denies the bolus if wrong/absent; the watch never verifies/persists.
 bolusPasscode

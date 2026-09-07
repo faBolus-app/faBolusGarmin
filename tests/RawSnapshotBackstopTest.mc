@@ -63,7 +63,7 @@ module RawSnapshotBackstopTest {
     function rawAbsenceRemovesTheWearerDismissedAlert(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         Test.assertMessage(AppState.dismissProvisional.hasKey("1-5"), "provisional retained after beginDismiss");
 
         // rawAlerts OMITS the identity entirely — proof the pump dropped it. supportsDismissAck=false
@@ -80,7 +80,7 @@ module RawSnapshotBackstopTest {
     function rawAbsenceRemovalLeavesSiblingUntouched(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off"), alertDict(9, 2, "Low insulin") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         // rawAlerts carries the sibling but omits the dismissed identity.
         AppState.handle(statusReadMsg([ alertDict(9, 2, "Low insulin") ], false, true,
                                        [ alertDict(9, 2, "Low insulin") ]));
@@ -96,7 +96,7 @@ module RawSnapshotBackstopTest {
     function rawPresenceKeepsTheAlertVisibleAndForceMarksSeen(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
 
         // The filtered list omits it (it's dismissed), but rawAlerts STILL CONTAINS it — the pump
         // hasn't cleared the condition.
@@ -113,7 +113,7 @@ module RawSnapshotBackstopTest {
     function rawPresenceKeepsAlertVisibleIndefinitely(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.handle(statusReadMsg([], false, true, [ alertDict(5, 1, "Auto-off") ]));
         AppState.handle(statusReadMsg([], false, true, [ alertDict(5, 1, "Auto-off") ]));
         AppState.handle(statusReadMsg([], false, true, [ alertDict(5, 1, "Auto-off") ]));
@@ -129,7 +129,7 @@ module RawSnapshotBackstopTest {
     function filteredAbsenceWithRawPresenceNeverRemoves(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.markDismissSent(5, 1);   // the fallback's bookkeeping AlertConfirmDelegate always sets too
 
         AppState.handle(statusReadMsg([], false, true, [ alertDict(5, 1, "Auto-off") ]));
@@ -145,8 +145,8 @@ module RawSnapshotBackstopTest {
     function presentEmptyRawAlertsRemovesEveryWearerProvisional(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off"), alertDict(9, 2, "Low insulin") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
-        AppState.beginDismiss(9, 2, "Low insulin");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
+        AppState.beginDismiss(9, 2, "Low insulin", null);
         Test.assertEqualMessage(AppState.dismissProvisional.keys().size(), 2, "two provisionals recorded");
 
         // A PRESENT but EMPTY rawAlerts ⇒ the pump reports zero active alerts ⇒ both are proven cleared.
@@ -163,7 +163,7 @@ module RawSnapshotBackstopTest {
     function absentRawAlertsUnderTheCapabilityRemovesNothingAndDoesNotFallThrough(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.markDismissSent(5, 1);   // if this fires, the filtered-reconcile fallback WOULD wrongly remove it
 
         // supportsRawAlertSnapshot=true but the message carries NO rawAlerts key at all.
@@ -180,7 +180,7 @@ module RawSnapshotBackstopTest {
     function nonArrayRawAlertsIsTreatedAsAbsent(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         var msg = statusReadMsg([], false, true, null);
         msg["rawAlerts"] = "not an array";
         AppState.handle(msg);
@@ -194,8 +194,8 @@ module RawSnapshotBackstopTest {
     function malformedRawAlertsItemIsSkippedNeverTraps(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off"), alertDict(9, 2, "Low insulin") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
-        AppState.beginDismiss(9, 2, "Low insulin");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
+        AppState.beginDismiss(9, 2, "Low insulin", null);
         var raw = [
             { "id" => 9, "kind" => 2, "title" => "Low insulin" },       // valid — id 9 present
             { "id" => "not-a-number", "kind" => 1, "title" => "junk" }, // malformed — must be skipped, not trap
@@ -215,7 +215,7 @@ module RawSnapshotBackstopTest {
     function malformedTitleInRawAlertsStillCountsIdentityAsPresent(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         var raw = [ { "id" => 5, "kind" => 1, "title" => 12345 } ];   // title is a Number, not a String
         AppState.handle(statusReadMsg([], false, true, raw));
         Test.assertEqualMessage(AppState.alerts.size(), 1,
@@ -227,7 +227,7 @@ module RawSnapshotBackstopTest {
     function absentTitleInRawAlertsStillCountsIdentityAsPresent(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         var raw = [ { "id" => 5, "kind" => 1 } ];   // title key entirely absent
         AppState.handle(statusReadMsg([], false, true, raw));
         Test.assertEqualMessage(AppState.alerts.size(), 1,
@@ -241,7 +241,7 @@ module RawSnapshotBackstopTest {
     function retryLaneExpiryAloneNeverRemovesOnTheRawTier(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         var entry = AppState.dismissPending["1-5"] as Lang.Dictionary;
         entry["createdAt"] = Time.now().value() - (AppState.DISMISS_RETRY_TTL_SEC + 60);
         AppState.dismissPending["1-5"] = entry;
@@ -261,7 +261,7 @@ module RawSnapshotBackstopTest {
     function dismissAckCapabilitySuppressesTheRawPathEvenWhenRawOmitsTheIdentity(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         // BOTH capabilities technically present on the wire (shouldn't happen in practice — mutually
         // exclusive by construction on the phone) — supportsDismissAck TRUE must win: no removal from
         // rawAlerts' absence.
@@ -276,7 +276,7 @@ module RawSnapshotBackstopTest {
     function neitherCapabilityRunsThe1408FallbackUnchanged(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.markDismissSent(5, 1);
         AppState.handle(statusReadMsg([], null, null, null));
         Test.assertEqualMessage(AppState.alerts.size(), 0,
@@ -290,7 +290,7 @@ module RawSnapshotBackstopTest {
     function rawCapabilitySelectsRawTierEvenWithAbsentRawAlertsNeverThe1408Fallback(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.markDismissSent(5, 1);   // if the filtered-reconcile fallback ran, this WOULD get removed
         AppState.handle(statusReadMsg([], false, true, null));
         Test.assertEqualMessage(AppState.alerts.size(), 1,
@@ -319,7 +319,7 @@ module RawSnapshotBackstopTest {
     function relaunchRestoresTheRawCapabilityAndReconcilesOnTheRawPath(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.supportsRawAlertSnapshot = true;
         Storage.setValue(AppState.KEY_SUPPORTS_RAW_ALERT_SNAPSHOT, true);
         AppState.markDismissSent(5, 1);   // if the fallback ran post-relaunch, this WOULD get removed
@@ -345,7 +345,7 @@ module RawSnapshotBackstopTest {
     function ackModeSequenceUnchangedByTheThreeWayBranch(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.supportsDismissAck = true;
 
         AppState.handle(statusReadMsg([], true, null, null));   // filtered-absence alone

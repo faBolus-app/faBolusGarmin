@@ -62,7 +62,7 @@ module DismissAckTest {
     function correlatedAckRemovesMatchingAlertAndClearsBothLanes(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         Test.assertMessage(AppState.dismissPending.hasKey("1-5"), "retry entry retained after beginDismiss");
         Test.assertMessage(AppState.dismissProvisional.hasKey("1-5"), "provisional entry retained after beginDismiss");
 
@@ -79,7 +79,7 @@ module DismissAckTest {
     function correlatedAckLeavesSiblingAlertsUntouched(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off"), alertDict(9, 2, "Low insulin") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.handle(dismissAckMsg(reqId, 5, 1));
         Test.assertEqualMessage(AppState.alerts.size(), 1, "only the acked alert is removed");
         var kept = AppState.alerts[0] as Lang.Dictionary;
@@ -93,7 +93,7 @@ module DismissAckTest {
     function noAckLeavesAlertStaying(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         // No dismissAck ever arrives — the alert stays exactly as-is.
         Test.assertEqualMessage(AppState.alerts.size(), 1, "no ack ⇒ the alert stays");
         return true;
@@ -103,7 +103,7 @@ module DismissAckTest {
     function mismatchedRequestIdRemovesNothing(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.handle(dismissAckMsg("totally-wrong-reqid", 5, 1));
         Test.assertEqualMessage(AppState.alerts.size(), 1, "a mismatched requestId removes nothing");
         return true;
@@ -113,7 +113,7 @@ module DismissAckTest {
     function matchedRequestIdButMismatchedIdentityRemovesNothing(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         // The SAME requestId, but a DIFFERENT (alertId, alertKind) — must not resolve to the entry that
         // actually owns this requestId (the identity-keyed lookup naturally refuses this).
         AppState.handle(dismissAckMsg(reqId, 5, 2));   // wrong kind
@@ -127,7 +127,7 @@ module DismissAckTest {
     function malformedAckIsASafeNoOp(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         // Missing alertId/alertKind, non-String requestId, non-Number alertId/alertKind — none of these
         // may trap or remove anything.
         AppState.handle({ "kind" => "dismissAck", "requestId" => reqId });
@@ -150,7 +150,7 @@ module DismissAckTest {
     function h1RelaunchInAckModeSurvivesFirstFilteredStatusRead(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.supportsDismissAck = true;
         Storage.setValue(AppState.KEY_SUPPORTS_DISMISS_ACK, true);
 
@@ -173,7 +173,7 @@ module DismissAckTest {
     function durableOverlaySurvivesRelaunchAndRepeatedFilteredStatusReads(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.supportsDismissAck = true;
         Storage.setValue(AppState.KEY_SUPPORTS_DISMISS_ACK, true);
         simulateRelaunch();
@@ -194,7 +194,7 @@ module DismissAckTest {
     function overlaidProvisionalIsForceMarkedSeen(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.supportsDismissAck = true;
         Storage.setValue(AppState.KEY_SUPPORTS_DISMISS_ACK, true);
         simulateRelaunch();
@@ -214,7 +214,7 @@ module DismissAckTest {
     function expiryAloneLeavesTheAlertVisible(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         // Force the retry entry's createdAt WELL past the TTL.
         var entry = AppState.dismissPending["1-5"] as Lang.Dictionary;
         entry["createdAt"] = Time.now().value() - (AppState.DISMISS_RETRY_TTL_SEC + 60);
@@ -235,7 +235,7 @@ module DismissAckTest {
     function clockRolledFutureCreatedAtIsTreatedAsExpired(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         var entry = AppState.dismissPending["1-5"] as Lang.Dictionary;
         entry["createdAt"] = Time.now().value() + 3600;   // an hour in the future
         AppState.dismissPending["1-5"] = entry;
@@ -251,7 +251,7 @@ module DismissAckTest {
     function expiredEntryStopsBeingOfferedForRetry(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         var now = Time.now().value();
         Test.assertEqualMessage(AppState.dueDismissRetries(now).size(), 1, "an unexpired entry is due for retry");
 
@@ -273,7 +273,7 @@ module DismissAckTest {
     function absentCapabilityFallsBackTo1408FilteredReconcile(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.markDismissSent(5, 1);   // the fallback's own bookkeeping (AlertConfirmDelegate always sets this)
 
         // A legacy host never sends supportsDismissAck at all (absent — no key on the wire).
@@ -289,7 +289,7 @@ module DismissAckTest {
     function falseCapabilityFallsBackTo1408FilteredReconcile(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.markDismissSent(5, 1);
 
         AppState.handle(statusReadMsg([], false));
@@ -305,7 +305,7 @@ module DismissAckTest {
     function trueCapabilityIsAuthenticatedAckOnlyNeverFilteredAbsence(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.markDismissSent(5, 1);
 
         AppState.handle(statusReadMsg([], true));
@@ -325,7 +325,7 @@ module DismissAckTest {
     function interleavedStatusReadBeforeAckDoesNotRemoveTheAlert(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         AppState.supportsDismissAck = true;
 
         AppState.handle(statusReadMsg([], true));   // races ahead of the ack
@@ -342,10 +342,10 @@ module DismissAckTest {
     function reDismissReplacesWithNewGenerationAndInvalidatesTheOldRequestId(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var firstReqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var firstReqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         var firstGen = (AppState.dismissPending["1-5"] as Lang.Dictionary)["generation"];
 
-        var secondReqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var secondReqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         var secondGen = (AppState.dismissPending["1-5"] as Lang.Dictionary)["generation"];
 
         Test.assertMessage(!firstReqId.equals(secondReqId), "a genuinely new occurrence mints a NEW requestId");
@@ -368,13 +368,41 @@ module DismissAckTest {
     function retryReusesTheSameRequestIdAndGeneration(logger as Test.Logger) as Lang.Boolean {
         baseline();
         AppState.alerts = [ alertDict(5, 1, "Auto-off") ];
-        var reqId = AppState.beginDismiss(5, 1, "Auto-off");
+        var reqId = AppState.beginDismiss(5, 1, "Auto-off", null);
         var due = AppState.dueDismissRetries(Time.now().value());
         Test.assertEqualMessage(due.size(), 1, "one identity due for retry");
         var d = due[0] as Lang.Dictionary;
         Test.assertEqualMessage(d["requestId"], reqId, "the retry reuses the SAME requestId — never mints a new one");
         Test.assertEqualMessage(d["id"], 5, "the retry's alertId matches");
         Test.assertEqualMessage(d["kind"], 1, "the retry's alertKind matches");
+        return true;
+    }
+
+    // The source discriminator: a malfunction survives parse → dismiss command → lost-ack replay, while a
+    // dismissable alarm omits it (so the phone falls back to the dismissable sibling, never the malfunction).
+    (:test)
+    function dismissDiscriminatorSurvivesParseCommandAndReplay(logger as Test.Logger) as Lang.Boolean {
+        baseline();
+        // Parse: a wire alert flagged isMalfunction keeps the flag; an unflagged one omits it.
+        var parsed = AppState.sanitizeAlerts([
+            { "id" => 5, "kind" => 1, "title" => "Auto-off", "isMalfunction" => true },
+            { "id" => 9, "kind" => 2, "title" => "Low insulin" }
+        ]);
+        Test.assertEqualMessage(parsed[0]["isMalfunction"], true, "a malfunction keeps isMalfunction on parse");
+        Test.assertMessage(!(parsed[1] as Lang.Dictionary).hasKey("isMalfunction"), "a non-malfunction omits isMalfunction on parse");
+
+        // Command: a malfunction dismiss carries the discriminator; an alarm dismiss omits the key entirely.
+        var mal = RemoteComm.dismissAlert("r1", 5, 1, true);
+        Test.assertEqualMessage(mal["alertIsMalfunction"], true, "a malfunction dismiss carries the discriminator");
+        var alarm = RemoteComm.dismissAlert("r2", 9, 2, null);
+        Test.assertMessage(!alarm.hasKey("alertIsMalfunction"), "an alarm dismiss omits the discriminator");
+
+        // Replay: the flag persists in the provisional and rides the lost-ack retry entry unchanged.
+        AppState.alerts = [ parsed[0] ];
+        AppState.beginDismiss(5, 1, "Auto-off", true);
+        var due = AppState.dueDismissRetries(Time.now().value());
+        Test.assertEqualMessage(due.size(), 1, "one identity due for retry");
+        Test.assertEqualMessage((due[0] as Lang.Dictionary)["isMalfunction"], true, "the retry re-sends the discriminator");
         return true;
     }
 }

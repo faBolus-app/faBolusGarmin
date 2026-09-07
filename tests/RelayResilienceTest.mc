@@ -26,7 +26,7 @@ module RelayResilienceTest {
         AppState.dismissProvisional = {};
         var app = new FaBolusApp();
         // Seed exactly one unexpired due dismiss retry (mirrors DismissAckTest.mc's beginDismiss idiom).
-        AppState.beginDismiss(5, 1, "Auto-off");
+        AppState.beginDismiss(5, 1, "Auto-off", null);
         RemoteComm.testDismissAlertThrows = true;
         Test.assertEqualMessage(app.scheduleCount(), 0, "no poll scheduled yet");
         Test.assertEqualMessage(app.pollGuardFailureCount(), 0, "no guard failure recorded yet");

@@ -6,10 +6,13 @@ using Toybox.Lang;
 class AlertConfirmDelegate extends Ui.ConfirmationDelegate {
     private var _id as Lang.Number;
     private var _kind as Lang.Number;
+    // Whether the alert being confirmed is a non-dismissable malfunction — the source discriminator carried
+    // back on the dismiss so the phone resolves the exact one when an alarm and a malfunction collide.
+    private var _isMalfunction as Lang.Boolean or Null;
 
-    function initialize(id as Lang.Number, kind as Lang.Number) {
+    function initialize(id as Lang.Number, kind as Lang.Number, isMalfunction as Lang.Boolean or Null) {
         ConfirmationDelegate.initialize();
-        _id = id; _kind = kind;
+        _id = id; _kind = kind; _isMalfunction = isMalfunction;
     }
 
     function onResponse(response) as Lang.Boolean {
@@ -27,8 +30,8 @@ class AlertConfirmDelegate extends Ui.ConfirmationDelegate {
             // the transient offline flag so AlertsListView shows "not cleared" instead of a dishonest
             // "No alerts".
             var title = AppState.alertTitleFor(_id, _kind);
-            var reqId = AppState.beginDismiss(_id, _kind, title);
-            var dispatched = RemoteComm.send(RemoteComm.dismissAlert(reqId, _id, _kind));
+            var reqId = AppState.beginDismiss(_id, _kind, title, _isMalfunction);
+            var dispatched = RemoteComm.send(RemoteComm.dismissAlert(reqId, _id, _kind, _isMalfunction));
             if (dispatched) {
                 AppState.markDismissSent(_id, _kind);   // reconcile-fallback bookkeeping (still needed absent/false)
             } else {

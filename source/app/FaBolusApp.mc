@@ -145,7 +145,7 @@ class FaBolusApp extends App.AppBase {
             var dueRetries = AppState.dueDismissRetries(now);
             for (var r = 0; r < dueRetries.size(); r += 1) {
                 var due = dueRetries[r] as Lang.Dictionary;
-                RemoteComm.send(RemoteComm.dismissAlert(due["requestId"], due["id"], due["kind"]));
+                RemoteComm.send(RemoteComm.dismissAlert(due["requestId"], due["id"], due["kind"], due["isMalfunction"]));
             }
         } catch (e) {
             // Counted (see _pollGuardFailureCount above) rather than silently swallowed, still
@@ -359,7 +359,7 @@ class FaBolusApp extends App.AppBase {
     function pushAlertConfirm(a as Lang.Dictionary) as Lang.Boolean {
         try {
             Ui.pushView(new Ui.Confirmation("Pump alert: " + a["title"] + " — clear?"),
-                        new AlertConfirmDelegate(a["id"], a["kind"]), Ui.SLIDE_UP);
+                        new AlertConfirmDelegate(a["id"], a["kind"], a["isMalfunction"]), Ui.SLIDE_UP);
             return true;
         } catch (e) {
             return false;
