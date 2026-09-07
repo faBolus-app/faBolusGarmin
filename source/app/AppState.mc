@@ -102,6 +102,10 @@ module AppState {
     // fresh on every statusRead (not persisted); an empty array is the authoritative "none active".
     (:background)
     var appOwnAlerts as Lang.Array = [];
+    // Running count of malformed app-own safety items dropped by sanitizeAppOwnAlerts within the scanned
+    // window, so a phone-side regression that malforms a safety title/key is observable, not invisible.
+    (:background)
+    var appOwnDroppedCount as Lang.Number = 0;
     // Transient — set true by AlertConfirmDelegate when a "clear alert" dismiss couldn't be
     // dispatched (phone unreachable) so the alert was NOT removed locally; AlertsListView renders a
     // "Phone not connected — not cleared" notice. Cleared at the top of the next handle() (any phone
@@ -2325,6 +2329,8 @@ module AppState {
             if (e instanceof Lang.Dictionary
                 && (e["key"] instanceof Lang.String) && (e["title"] instanceof Lang.String)) {
                 out.add({ "key" => strCap(e["key"], 80), "title" => strCap(e["title"], 80) });
+            } else {
+                appOwnDroppedCount += 1;
             }
         }
         return out;
@@ -2852,14 +2858,7 @@ module AppState {
     // cleared/reconciled alert still drops out of the seen-set (preserving the "a cleared
     // alert re-notifies if it re-fires" rule), while never adding an identity that wasn't actually presented.
     function reconciledSeenAlerts(presented as Lang.Array) as Lang.Array {
-        var active = activeAlertIdentities();
-        var prevSeen = loadSeenAlerts();
-        var out = [];
-        for (var i = 0; i < active.size(); i += 1) {
-            var ident = active[i];
-            if (containsStr(prevSeen, ident) || containsStr(presented, ident)) { out.add(ident); }
-        }
-        return out;
+        return reconcileSeenSet(activeAlertIdentities(), loadSeenAlerts(), presented);
     }
 
     // The set of alert identities already surfaced as a BACKGROUND system notification
@@ -2903,14 +2902,7 @@ module AppState {
     // actually posted.
     (:background)
     function reconciledBgNotifiedAlerts(presented as Lang.Array) as Lang.Array {
-        var active = activeAlertIdentities();
-        var prevNotified = loadBgNotifiedAlerts();
-        var out = [];
-        for (var i = 0; i < active.size(); i += 1) {
-            var ident = active[i];
-            if (containsStr(prevNotified, ident) || containsStr(presented, ident)) { out.add(ident); }
-        }
-        return out;
+        return reconcileSeenSet(activeAlertIdentities(), loadBgNotifiedAlerts(), presented);
     }
 
     function glucoseColor() as Gfx.ColorValue {

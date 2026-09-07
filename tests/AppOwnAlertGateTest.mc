@@ -169,6 +169,30 @@ module AppOwnAlertGateTest {
         return true;
     }
 
+    // ---- a silently-dropped malformed safety item is observable via a running counter ----------------
+    // A phone-side regression that malforms an app-own safety title/key would otherwise vanish without trace.
+    // sanitizeAppOwnAlerts bumps a running counter once per malformed item it drops within the scanned
+    // window, so the loss is detectable; a fully well-formed batch leaves the count unchanged.
+    (:test)
+    function sanitizeAppOwnAlertsCountsDrops(logger as Test.Logger) as Lang.Boolean {
+        AppState.appOwnDroppedCount = 0;
+        var out = AppState.sanitizeAppOwnAlerts([
+            { "key" => "appOwn:pumpDisconnect", "title" => "Pump disconnected" },  // well-formed ⇒ kept
+            { "title" => "no key" },                                               // malformed ⇒ dropped
+            { "key" => 7, "title" => "non-string key" },                           // malformed ⇒ dropped
+            "not a dict"                                                            // malformed ⇒ dropped
+        ]);
+        Test.assertEqualMessage(out.size(), 1, "the one well-formed item survives");
+        Test.assertEqualMessage(AppState.appOwnDroppedCount, 3, "the three malformed items are counted");
+        // A fully well-formed batch leaves the count unchanged.
+        AppState.appOwnDroppedCount = 0;
+        AppState.sanitizeAppOwnAlerts([
+            { "key" => "appOwn:cgmGap", "title" => "CGM gap" }
+        ]);
+        Test.assertEqualMessage(AppState.appOwnDroppedCount, 0, "a clean batch drops nothing");
+        return true;
+    }
+
     // ---- closed-app background surface follows the per-category intent, fails safe to surface --------
     (:test)
     function appOwnBackgroundSurfaceFailsSafeToSurface(logger as Test.Logger) as Lang.Boolean {
