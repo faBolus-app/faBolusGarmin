@@ -104,6 +104,38 @@ module AppOwnAlertGateTest {
         return true;
     }
 
+    // ---- pump-mirror reduction must NOT fold in the app-own per-category keys -------------------------
+    // effectiveWatchIntent drives the PUMP-mirror batch haptic. The same phone-resolved intent map also
+    // carries the per-category app-own keys (namespaced "appOwn:*"), which are resolved individually
+    // elsewhere. Folding them into the pump-mirror reduction lets an app-own "urgent" leak a tone onto a
+    // pump alarm and un-silence a pump alert the wearer set to "off". The reduction must skip the app-own
+    // keys — while still failing safe to "alert" when a map carries NO pump category (the consumers only
+    // reach this path with a live pump alert, so an all-app-own map must never resolve to silence).
+    (:test)
+    function effectiveWatchIntentExcludesAppOwnKeys(logger as Test.Logger) as Lang.Boolean {
+        // An app-own "urgent" must NOT un-silence a pump batch the wearer set to "off".
+        Test.assertEqualMessage(AppState.effectiveWatchIntent(
+            { "cgmLow" => "off", "appOwn:bolusIndeterminate" => "urgent" }), "off",
+            "app-own urgent does not un-silence an off'd pump batch");
+        // An app-own "urgent" must NOT raise an "alert" pump batch to "urgent" (no tone leak).
+        Test.assertEqualMessage(AppState.effectiveWatchIntent(
+            { "cgmLow" => "alert", "appOwn:bolusIndeterminate" => "urgent" }), "alert",
+            "app-own urgent does not tone an alert pump batch");
+        // A non-empty map with ONLY app-own keys (no pump category) fails safe to "alert", never silence.
+        Test.assertEqualMessage(AppState.effectiveWatchIntent(
+            { "appOwn:bolusIndeterminate" => "off", "appOwn:pumpDisconnect" => "quiet" }), "alert",
+            "only-app-own map fails safe to alert");
+        // A pump-only map is unchanged: loudest-across-categories still wins.
+        Test.assertEqualMessage(AppState.effectiveWatchIntent(
+            { "cgmLow" => "off", "cgmHigh" => "urgent" }), "urgent",
+            "pump-only reduction unchanged (loudest wins)");
+        // A pump-only all-off map is still honored as the wearer's explicit choice.
+        Test.assertEqualMessage(AppState.effectiveWatchIntent(
+            { "cgmLow" => "off", "cgmHigh" => "off" }), "off",
+            "pump-only all-off honored");
+        return true;
+    }
+
     // ---- sanitizeAppOwnAlerts keeps only well-formed {key,title} items -------------------------------
     (:test)
     function sanitizeAppOwnAlertsDropsMalformed(logger as Test.Logger) as Lang.Boolean {

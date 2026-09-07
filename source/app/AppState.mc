@@ -2252,13 +2252,22 @@ module AppState {
         var best = "off";
         var bestRank = 0;
         var keys = d.keys();
+        var sawPumpKey = false;
         for (var i = 0; i < keys.size(); i += 1) {
-            var v = d[keys[i]];
+            var k = keys[i];
+            // The per-category app-own keys share this map but are resolved individually elsewhere; folding
+            // them into the pump-mirror batch would let an app-own value tone or un-silence a pump alarm.
+            if (k instanceof Lang.String && (k as Lang.String).find("appOwn:") == 0) { continue; }
+            sawPumpKey = true;
+            var v = d[k];
             var token = (v instanceof Lang.String && containsStr(WATCH_INTENTS, v as Lang.String))
                         ? (v as Lang.String) : "alert";
             var r = watchIntentRank(token);
             if (r > bestRank) { bestRank = r; best = token; }
         }
+        // A non-empty map with no pump category (only app-own keys) must never collapse to silence: the
+        // pump-mirror path is only reached with a live pump alert, so fail safe to the vibrating rung.
+        if (!sawPumpKey) { return "alert"; }
         return best;
     }
 
