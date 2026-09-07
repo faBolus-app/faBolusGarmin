@@ -2324,7 +2324,7 @@ module AppState {
             var e = arr[k];
             if (e instanceof Lang.Dictionary
                 && (e["key"] instanceof Lang.String) && (e["title"] instanceof Lang.String)) {
-                out.add({ "key" => e["key"], "title" => strCap(e["title"], 80) });
+                out.add({ "key" => strCap(e["key"], 80), "title" => strCap(e["title"], 80) });
             }
         }
         return out;

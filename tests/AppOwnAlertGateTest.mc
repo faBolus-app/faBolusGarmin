@@ -151,6 +151,24 @@ module AppOwnAlertGateTest {
         return true;
     }
 
+    // ---- the persisted app-own key is length-bounded (truncates, never drops) ------------------------
+    // A kept item's key is capped to 80 chars before it flows into the seen/bg-notified dedup sets, matching
+    // how the title is already bounded — a malformed/oversized key can no longer bloat state, and no safety
+    // item is dropped by the bound (it truncates, keeping the item annunciated).
+    (:test)
+    function sanitizeAppOwnAlertsBoundsKey(logger as Test.Logger) as Lang.Boolean {
+        var longKey = "appOwn:";
+        for (var i = 0; i < 120; i += 1) { longKey = longKey + "x"; }   // well over 80 chars
+        var out = AppState.sanitizeAppOwnAlerts([
+            { "key" => longKey, "title" => "Oversized key" },
+            { "key" => "appOwn:bolusIndeterminate", "title" => "Short key" }
+        ]);
+        Test.assertEqualMessage(out.size(), 2, "both well-formed items are kept (bound truncates, never drops)");
+        Test.assertEqualMessage(out[0]["key"].length(), 80, "oversized key is bounded to 80 chars");
+        Test.assertEqualMessage(out[1]["key"], "appOwn:bolusIndeterminate", "a short key is stored unchanged");
+        return true;
+    }
+
     // ---- closed-app background surface follows the per-category intent, fails safe to surface --------
     (:test)
     function appOwnBackgroundSurfaceFailsSafeToSurface(logger as Test.Logger) as Lang.Boolean {
