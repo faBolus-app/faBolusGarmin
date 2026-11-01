@@ -202,7 +202,11 @@ class DetailsView extends Ui.View {
     static function row(id as Lang.String, now as Lang.Number) as Lang.String? {
         var unit = Prefs.glucoseUnit();
         if (id.equals("iob")) { return "Active Insulin: " + amount("iob", now); }
-        if (id.equals("reservoir")) { return "Reservoir: " + amount("reservoir", now); }
+        // Whole units, as the pump shows the reservoir, rounded down.
+        if (id.equals("reservoir")) {
+            var mU = Status.field("reservoir", "mU");
+            return "Reservoir: " + ((mU == null) ? "--" : (mU / 1000).toString() + " U" + mark("reservoir", now));
+        }
         // Its time is when it was given, not how old a reading is, so it's never marked old.
         if (id.equals("lastBolus")) {
             var mU = Status.field("lastBolus", "mU");

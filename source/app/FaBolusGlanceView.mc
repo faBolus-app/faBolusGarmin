@@ -35,11 +35,12 @@ class FaBolusGlanceView extends Ui.GlanceView {
         var hide = Prefs.hideDelaySeconds();
         if (hide != null && age > Prefs.staleSeconds() + hide) { return ["--", "", true, null]; }
         var mins = age / 60;
-        var ago = (mins <= 0) ? "NOW" : mins.toString() + "M AGO";
+        var ago = (mins <= 0) ? "now" : mins.toString() + "m ago";
         return [Display.glucose(g, Prefs.glucoseUnit()), ago, stale, stale ? null : Status.trend()];
     }
 
-    // A tag line ("FABOLUS · 2M AGO", the age orange once stale) over the reading, its arrow and its unit.
+    // A tag line (the app's name, and the reading's age, orange once stale) over the reading, its arrow and
+    // its unit.
     function onUpdate(dc as Gfx.Dc) as Void {
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
         dc.clear();
@@ -50,20 +51,19 @@ class FaBolusGlanceView extends Ui.GlanceView {
         var ago = l[1] as Lang.String;
         var stale = l[2] as Lang.Boolean;
         var trend = l[3] as Lang.String?;
-        // The tag line: the app's name left, the reading's age right (orange once stale); the name gives
-        // way when both don't fit.
+        // The tag line: the app's name left, always, and the reading's age right (orange once stale),
+        // shortened ("20m ago", then "20m") when both don't fit.
         var w = dc.getWidth();
-        var tag = "FABOLUS";
-        var gap = dc.getTextWidthInPixels("  ", Gfx.FONT_XTINY);
-        var fits = dc.getTextWidthInPixels(tag, Gfx.FONT_XTINY) + gap + dc.getTextWidthInPixels(ago, Gfx.FONT_XTINY) <= w;
-        if (fits || ago.length() == 0) {
-            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(0, h * 0.26, Gfx.FONT_XTINY, tag, vl);
-        }
+        var tag = "faBolus";
+        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(0, h * 0.26, Gfx.FONT_XTINY, tag, vl);
         if (ago.length() > 0) {
+            var room = w - dc.getTextWidthInPixels(tag + "  ", Gfx.FONT_XTINY);
+            if (dc.getTextWidthInPixels(ago, Gfx.FONT_XTINY) > room && ago.find(" ago") != null) {
+                ago = ago.substring(0, ago.find(" ago") as Lang.Number) as Lang.String;
+            }
             dc.setColor(stale ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(fits ? w : 0, h * 0.26, Gfx.FONT_XTINY, ago,
-                        (fits ? Gfx.TEXT_JUSTIFY_RIGHT : Gfx.TEXT_JUSTIFY_LEFT) | Gfx.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(w, h * 0.26, Gfx.FONT_XTINY, ago, Gfx.TEXT_JUSTIFY_RIGHT | Gfx.TEXT_JUSTIFY_VCENTER);
         }
         var g = Status.glucose();
         var color = (stale || g == null || text.equals("--")) ? Gfx.COLOR_LT_GRAY : Display.rangeColor(g);

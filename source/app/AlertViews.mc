@@ -110,7 +110,9 @@ class AlertNoticeView extends Ui.View {
         dc.setColor(critical ? Gfx.COLOR_RED : Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
         // Up to two lines, inside the round screen's width near the top; the explanation starts below them.
         var lineH = dc.getFontHeight(Gfx.FONT_SMALL);
-        var fitted = Gfx.fitTextToArea(Wire.text(_alert, "title", "Alert"), Gfx.FONT_SMALL, w * 0.70, lineH * 2, true);
+        // The fit needs a little headroom over two lines' height to wrap rather than truncate.
+        var fitted = Gfx.fitTextToArea(Wire.text(_alert, "title", "Alert"), Gfx.FONT_SMALL, w * 0.72, lineH * 2 + lineH / 2,
+                                       true);
         var title = (fitted != null) ? fitted : Wire.text(_alert, "title", "Alert");
         var titleH = (title.find("\n") != null) ? lineH * 2 : lineH;
         var titleTop = h * 0.16;
