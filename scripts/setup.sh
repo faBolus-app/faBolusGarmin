@@ -7,6 +7,13 @@ cd "$(dirname "$0")/.."
 hook="$(git rev-parse --git-path hooks)/pre-push"
 cat >"$hook" <<'HOOK'
 #!/usr/bin/env bash
+# Git passes one line per ref: <local ref> <local sha> <remote ref> <remote sha>. A push that only
+# deletes refs (local sha all zeros) sends no code, so it skips the gates.
+only_deletes=1
+while read -r _ local_sha _ _; do
+  case "$local_sha" in *[!0]*) only_deletes=0 ;; esac
+done
+[ "$only_deletes" = 1 ] && exit 0
 exec "$(git rev-parse --show-toplevel)/scripts/check.sh"
 HOOK
 chmod +x "$hook"
