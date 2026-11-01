@@ -1,5 +1,6 @@
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
+using Toybox.System;
 using Toybox.WatchUi as Ui;
 
 // The phone's active alerts. Tapping one asks to clear it on the pump when it can be cleared, and shows
@@ -91,6 +92,18 @@ class AlertNoticeView extends Ui.View {
 
     function alert() as Lang.Dictionary { return _alert; }
 
+    // A card can appear under a press meant for the screen it covers (START confirms a bolus there), so
+    // for its first second it takes no press.
+    static const SETTLE_MS = 1000;
+    private var _shownAtMs as Lang.Number? = null;
+
+    function onShow() as Void { _shownAtMs = System.getTimer(); }
+
+    function takesPressAt(nowMs as Lang.Number) as Lang.Boolean {
+        var at = _shownAtMs;
+        return at != null && nowMs - at >= SETTLE_MS;
+    }
+
     // What the latest status says, not the card's copy: an alert that went, or that a remote may no longer
     // clear, offers no Clear.
     function clearable() as Lang.Boolean {
@@ -152,6 +165,7 @@ class AlertCardDelegate extends Ui.BehaviorDelegate {
     }
 
     function onTap(evt as Ui.ClickEvent) as Lang.Boolean {
+        if (!_view.takesPressAt(System.getTimer())) { return true; }
         var c = evt.getCoordinates();
         var size = Nav.screenSize();
         if (_view.clearable() && Nav.inRect(c[0], c[1], AlertNoticeView.clearRect(size[0], size[1]))) { return clear(); }
@@ -160,6 +174,7 @@ class AlertCardDelegate extends Ui.BehaviorDelegate {
 
     function onSelect() as Lang.Boolean {
         if (Nav.isTouch()) { return false; }
+        if (!_view.takesPressAt(System.getTimer())) { return true; }
         return _view.clearable() ? clear() : close();
     }
 

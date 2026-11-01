@@ -1,4 +1,5 @@
 using Toybox.Lang;
+using Toybox.System;
 using Toybox.Time;
 
 // The phone's latest status: every live value with the time it was measured, by the phone's clock.
@@ -12,6 +13,15 @@ module Status {
     // When this watch received it (epoch seconds, the watch's clock).
     (:background, :glance)
     var _r as Lang.Number = 0;
+    // When it arrived by this watch's uptime (System.getTimer(), ms), for a status received in this process;
+    // null for one loaded from storage. The wall clock can be stepped back; uptime can't.
+    (:background, :glance)
+    var _rMs as Lang.Number? = null;
+    // The watch-minus-phone clock difference each recent status showed, its time in transit included.
+    (:background)
+    var _offsets as Lang.Array<Lang.Number> = [] as Lang.Array<Lang.Number>;
+    (:background)
+    const MAX_OFFSETS = 8;
 
     (:background)
     const LINKS = ["disconnected", "scanning", "connecting", "authenticating", "connected"];
@@ -42,6 +52,9 @@ module Status {
         if (_p != null && sent < sentAt() && receivedAt - _r < REORDER_SEC) { return false; }
         _p = clean;
         _r = receivedAt;
+        _rMs = System.getTimer();
+        _offsets.add(receivedAt - sent);
+        if (_offsets.size() > MAX_OFFSETS) { _offsets = _offsets.slice(1, null); }
         return true;
     }
 
@@ -199,6 +212,8 @@ module Status {
         var p = rec["p"];
         var r = rec["r"];
         if (p instanceof Lang.Dictionary && r instanceof Lang.Number && r >= _r) {
+            // Another process's copy: when it arrived by this process's uptime isn't known.
+            if (r > _r) { _rMs = null; }
             _p = p;
             _r = r;
         }
@@ -208,6 +223,8 @@ module Status {
     function clear() as Void {
         _p = null;
         _r = 0;
+        _rMs = null;
+        _offsets = [] as Lang.Array<Lang.Number>;
     }
 
     // MARK: Reading it.
@@ -257,11 +274,35 @@ module Status {
         return (v instanceof Lang.Number) ? v : null;
     }
 
-    // Seconds since this status arrived, by this watch's clock; never negative.
+    // Seconds since this status arrived; never negative. By the wall clock, or by uptime when that says
+    // longer, so a wall clock stepped back can't stop values aging.
     (:background, :glance)
     function elapsed(now as Lang.Number) as Lang.Number {
-        var e = now - _r;
+        return elapsedFrom(now - _r, _rMs, System.getTimer());
+    }
+
+    (:background, :glance)
+    function elapsedFrom(wall as Lang.Number, receivedMs as Lang.Number?, nowMs as Lang.Number) as Lang.Number {
+        var e = wall;
+        if (receivedMs != null) {
+            // A wrapped timer reads negative and is ignored.
+            var m = (nowMs - receivedMs) / 1000;
+            if (m > e) { e = m; }
+        }
         return (e > 0) ? e : 0;
+    }
+
+    // The phone's clock now, as near as this watch can tell: this watch's, less the smallest difference
+    // between the two that recent statuses showed. Time in transit only adds to a difference, so the
+    // smallest is the closest, and the estimate isn't ahead of the phone. A bolus request is stamped with
+    // it, because the phone judges the request's age, and whether a delivery since supersedes it, on its own
+    // clock.
+    function phoneNow(now as Lang.Number) as Lang.Number {
+        var best = clockOffset();
+        for (var i = 0; i < _offsets.size(); i += 1) {
+            if (i == 0 || _offsets[i] < best) { best = _offsets[i]; }
+        }
+        return now - best;
     }
 
     // Seconds to add to a time by the phone's clock to put it on this watch's: the phone's sentAt is this

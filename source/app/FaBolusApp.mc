@@ -176,7 +176,9 @@ module Controller {
         var fresh = Alerts.unseen(list, seen);
         var shown = [] as Lang.Array;
         if (fresh.size() > 0) {
-            if (Alerts.shouldVibrate(fresh)) { Alerts.vibrate(fresh); }
+            // One the background service already notified isn't vibrated for again.
+            var buzz = Alerts.toVibrate(fresh);
+            if (Alerts.shouldVibrate(buzz)) { Alerts.vibrate(buzz); }
             var n = (fresh.size() < Alerts.MAX_ANNOUNCED) ? fresh.size() : Alerts.MAX_ANNOUNCED;
             // Least severe first, so the most severe ends on top.
             for (var i = n - 1; i >= 0; i -= 1) {

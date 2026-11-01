@@ -39,7 +39,7 @@ module Inbound {
             if (!applyState(kind, data, now, Store.STATUS, Store.CONFIG)) { return kind; }
             Link.heard(now);
             if (kind == Wire.STATUS) {
-                Alerts.onStatus();
+                Alerts.onStatus(now);
                 var at = Status.field("glucose", "at");
                 var g = Status.glucose();
                 if (at != null && g != null) { History.append(at, g); }
@@ -53,7 +53,7 @@ module Inbound {
         } else if (kind == Wire.OUTCOME) {
             BolusFlow.onOutcome(p, now);
         } else if (kind == Wire.DISMISS_RESULT) {
-            Alerts.onDismissResult(p);
+            Alerts.onDismissResult(p, now);
         }
         return kind;
     }

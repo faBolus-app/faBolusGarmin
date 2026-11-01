@@ -298,6 +298,72 @@ module FaultTest {
         return true;
     }
 
+    // A bolus request is stamped by the phone's clock as near as the watch can tell: its own, less the
+    // smallest difference between the two that recent statuses showed, since time in transit only adds to
+    // a difference.
+    (:test)
+    function aBolusIsStampedByThePhonesClock(logger as Test.Logger) as Lang.Boolean {
+        Support.fresh();
+        Test.assert(Prefs.accept(Support.payloadOf(Rez.JsonData.fixture_config), NOW));
+        // The golden status, sent at NOW, reached the watch 40 s later by its clock.
+        Test.assert(Status.accept(Support.payloadOf(Rez.JsonData.fixture_status), NOW + 40));
+        Support.eq(Status.phoneNow(NOW + 100), NOW + 60);
+        // A later one took 5 s: the watch is at most 5 s ahead.
+        var later = Support.payloadOf(Rez.JsonData.fixture_status);
+        later["sentAt"] = NOW + 50;
+        Test.assert(Status.accept(later, NOW + 55));
+        Support.eq(Status.phoneNow(NOW + 100), NOW + 95);
+        Link.heard(NOW + 55);
+        BolusFlow.mode = "units";
+        BolusFlow.unitsMU = 2000;
+        Test.assert(BolusFlow.arm(NOW + 56));
+        Test.assert(BolusFlow.send(NOW + 56));
+        Support.eq(Wire.payload(Support.lastSent() as Lang.Dictionary)["sentAt"] as Lang.Object?, NOW + 51);
+        return true;
+    }
+
+    // The dial stops at the lower of the remote limit and the pump's max bolus.
+    (:test)
+    function theDialStopsAtTheLowerLimit(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        Support.eq(BolusFlow.dialMax(), 10000);
+        var p = Support.payloadOf(Rez.JsonData.fixture_status);
+        var bolus = p["bolus"] as Lang.Dictionary;
+        bolus["remoteLimitMU"] = 30000;
+        Test.assert(Status.accept(p, NOW + 1));
+        Support.eq(BolusFlow.dialMax(), 25000);
+        bolus.remove("remoteLimitMU");
+        Test.assert(Status.accept(p, NOW + 2));
+        Support.eq(BolusFlow.dialMax(), 25000);
+        return true;
+    }
+
+    // An alert the background service already notified is shown when the app opens, but not vibrated for
+    // again.
+    (:test)
+    function anAlertNotifiedInTheBackgroundIsntVibratedAgain(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        var list = Alerts.list();
+        Support.eq(Alerts.toVibrate(list).size(), 2);
+        Storage.setValue(Store.BG_NOTIFIED, ["pump.alert.2"]);
+        var buzz = Alerts.toVibrate(list);
+        Support.eq(buzz.size(), 1);
+        Support.eq(Alerts.idOf(buzz[0] as Lang.Dictionary), "app.pumpDisconnected");
+        return true;
+    }
+
+    // A wall clock stepped back can't stop values aging: uptime, when it says longer, counts.
+    (:test)
+    function aClockSteppedBackDoesntStopAging(logger as Test.Logger) as Lang.Boolean {
+        Support.eq(Status.elapsedFrom(30, null, 0), 30);
+        Support.eq(Status.elapsedFrom(-600, 1000, 61000), 60);
+        Support.eq(Status.elapsedFrom(90, 1000, 61000), 90);
+        Support.eq(Status.elapsedFrom(-5, null, 0), 0);
+        // A timer that wrapped reads negative and is ignored.
+        Support.eq(Status.elapsedFrom(20, 2000000000, 5), 20);
+        return true;
+    }
+
     // The background service, woken by a push, saves only its own keys, and the app then loads the newer.
     (:test)
     function aBackgroundPushIsSavedUnderItsOwnKeys(logger as Test.Logger) as Lang.Boolean {
@@ -348,7 +414,7 @@ module FaultTest {
         Test.assert(Alerts.dismiss("pump.alert.2", NOW));
         var first = Wire.text(Wire.payload(Support.lastSent() as Lang.Dictionary), "requestId", "");
         Test.assert(Alerts.dismiss("pump.alert.2", NOW + 1));
-        Test.assert(!Alerts.onDismissResult({ "requestId" => first, "alertId" => "pump.alert.2", "result" => "cleared" }));
+        Test.assert(!Alerts.onDismissResult({ "requestId" => first, "alertId" => "pump.alert.2", "result" => "cleared" }, NOW));
         Support.eq(Alerts.shown().size(), 2);
         Link.testReachable = false;
         Test.assert(!Alerts.dismiss("pump.alert.2", NOW + 2));
@@ -368,7 +434,7 @@ module FaultTest {
         var second = Wire.text(Wire.payload(Support.lastSent() as Lang.Dictionary), "requestId", "");
         Alerts.sendFailed(first);
         Support.eq(Alerts.note(), "Clearing…");
-        Test.assert(Alerts.onDismissResult({ "requestId" => second, "alertId" => "pump.alert.2", "result" => "cleared" }));
+        Test.assert(Alerts.onDismissResult({ "requestId" => second, "alertId" => "pump.alert.2", "result" => "cleared" }, NOW));
         Support.eq(Alerts.shown().size(), 1);
         // Its own error is shown.
         Test.assert(Alerts.dismiss("app.pumpDisconnected", NOW + 2));

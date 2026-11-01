@@ -1,5 +1,7 @@
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
+using Toybox.WatchUi as Ui;
+using Toybox.System;
 using Toybox.Test;
 
 // How values are written, ported from the old app's tests with their expectations, and how staleness
@@ -212,6 +214,44 @@ module DisplayTest {
         Support.eq(DetailsView.row("maxBasal", NOW), null);
         // None known: the row is left out, not shown as "--".
         Support.eq(DetailsView.row("autoCorrection", NOW), null);
+        return true;
+    }
+
+    // A hold on the confirm screen that another view covers ends there: its release goes to the view on top,
+    // so it must not finish and act. Uncovered, the same hold arms.
+    (:test)
+    function aCoveredHoldDoesNotFinish(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        var v = new HoldView();
+        var d = new HoldDelegate(v);
+        d.holdFrom(Ui.KEY_UP, 0);
+        d.tickAt(2000);
+        Test.assert(v.armed);
+        var covered = new HoldView();
+        var cd = new HoldDelegate(covered);
+        cd.holdFrom(Ui.KEY_UP, 0);
+        covered.onHide();
+        cd.tickAt(2000);
+        Test.assert(!covered.armed);
+        Support.eq(cd.holding(), null);
+        // An armed confirm that gets covered starts over.
+        covered.onShow();
+        covered.armed = true;
+        covered.onHide();
+        Test.assert(!covered.armed);
+        return true;
+    }
+
+    // An alert card takes no press for its first second: one may be meant for the screen it just covered.
+    (:test)
+    function anAlertCardTakesNoPressAtFirst(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        var card = new AlertNoticeView(Alerts.current("pump.alert.2") as Lang.Dictionary);
+        Test.assert(!card.takesPressAt(0));
+        card.onShow();
+        var shown = System.getTimer();
+        Test.assert(!card.takesPressAt(shown + AlertNoticeView.SETTLE_MS - 1));
+        Test.assert(card.takesPressAt(shown + AlertNoticeView.SETTLE_MS + 1));
         return true;
     }
 

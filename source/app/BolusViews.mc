@@ -295,13 +295,25 @@ class HoldView extends Ui.View {
     private var _homeTimer as Timer.Timer?;
     // The confirm went through and a request went out; from here the screen shows the request.
     public var sent as Lang.Boolean = false;
+    // Another view is over this one. A press or hold that view took isn't this confirm's.
+    public var covered as Lang.Boolean = false;
 
     function initialize() { View.initialize(); }
 
+    function onShow() as Void { covered = false; }
+
+    // Covered (an alert card, say), the confirm starts over: the release of a hold goes to the view on top,
+    // so a hold left running here would finish and send a bolus the user had let go of.
     function onHide() as Void {
         var t = _homeTimer;
         if (t != null) { t.stop(); }
         _homeTimer = null;
+        covered = true;
+        if (!sent) {
+            _taps = 0;
+            armed = false;
+            holdProgress = 0.0;
+        }
     }
 
     static function center(i as Lang.Number, w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
@@ -502,22 +514,35 @@ class HoldDelegate extends Ui.BehaviorDelegate {
     }
 
     private function begin(k as Lang.Number) as Void {
-        _holding = k;
-        _holdStart = System.getTimer();
-        _view.holdProgress = 0.0;
-        stop();
+        holdFrom(k, System.getTimer());
         var t = new Timer.Timer();
         t.start(method(:onTick), 80, true);
         _timer = t;
     }
 
-    function onTick() as Void {
+    // A hold of key `k` starting at `startMs` (System.getTimer()).
+    function holdFrom(k as Lang.Number, startMs as Lang.Number) as Void {
+        stop();
+        _holding = k;
+        _holdStart = startMs;
+        _view.holdProgress = 0.0;
+    }
+
+    function holding() as Lang.Number? { return _holding; }
+
+    function onTick() as Void { tickAt(System.getTimer()); }
+
+    // A hold ends when its key is released, or, finished, arms (UP) or sends (START). One whose screen was
+    // covered meanwhile just ends: its release went elsewhere.
+    function tickAt(nowMs as Lang.Number) as Void {
         var k = _holding;
-        if (k == null) {
+        if (k == null || _view.covered) {
+            _holding = null;
+            _view.holdProgress = 0.0;
             stop();
             return;
         }
-        var frac = (System.getTimer() - _holdStart).toFloat() / HOLD_MS;
+        var frac = (nowMs - _holdStart).toFloat() / HOLD_MS;
         if (frac >= 1.0) {
             _holding = null;
             _view.holdProgress = 0.0;

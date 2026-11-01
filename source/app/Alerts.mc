@@ -98,8 +98,12 @@ module Alerts {
 
     var _dismissId as Lang.String? = null;
     var _dismissNote as Lang.String? = null;
-    // Cleared on the pump but still in the last status; hidden until the next one.
+    // Cleared on the pump, with when (parallel arrays): hidden while statuses still list them, for a while.
     var _cleared as Lang.Array = [];
+    var _clearedAt as Lang.Array = [];
+    // The status the phone sends right after a clear can come before the pump's next alert read, so it may
+    // still list the alert. Past this, a status that lists it is believed.
+    const CLEARED_SEC = 60;
 
     function dismissable(a as Lang.Dictionary) as Lang.Boolean { return Wire.bool(a, "dismissable") == true; }
 
@@ -121,7 +125,7 @@ module Alerts {
     }
 
     // The phone's answer to this watch's latest dismiss; an answer to an earlier one is ignored.
-    function onDismissResult(p as Lang.Dictionary) as Lang.Boolean {
+    function onDismissResult(p as Lang.Dictionary, now as Lang.Number) as Lang.Boolean {
         var id = Wire.str(p, "requestId", Wire.MAX_ID);
         var alertId = Wire.str(p, "alertId", Wire.MAX_ID);
         var result = Wire.str(p, "result", 16);
@@ -129,7 +133,10 @@ module Alerts {
         if (id == null || alertId == null || result == null || mine == null || !id.equals(mine)) { return false; }
         _dismissId = null;
         if (result.equals("cleared")) {
-            if (!Wire.contains(_cleared, alertId)) { _cleared.add(alertId); }
+            if (!Wire.contains(_cleared, alertId)) {
+                _cleared.add(alertId);
+                _clearedAt.add(now);
+            }
             _dismissNote = null;
         } else if (result.equals("refused")) {
             _dismissNote = "Pump didn't clear it";
@@ -143,8 +150,27 @@ module Alerts {
         return true;
     }
 
-    // A new status is the authority: what it lists is active.
-    function onStatus() as Void { _cleared = []; }
+    // A new status is the authority on what's active, except for an alert cleared within CLEARED_SEC that
+    // it still lists. One it leaves out is gone.
+    function onStatus(now as Lang.Number) as Void {
+        var active = ids(list());
+        var keep = [] as Lang.Array;
+        var keepAt = [] as Lang.Array;
+        for (var i = 0; i < _cleared.size(); i += 1) {
+            var at = _clearedAt[i] as Lang.Number;
+            var id = _cleared[i] as Lang.String;
+            if (Wire.contains(active, id) && now - at < CLEARED_SEC) {
+                keep.add(id);
+                keepAt.add(at);
+            }
+        }
+        _cleared = keep;
+        _clearedAt = keepAt;
+    }
+
+    // Of `fresh`, those the background service hasn't already notified: they vibrate when the app shows
+    // them, and the others are only shown.
+    function toVibrate(fresh as Lang.Array) as Lang.Array { return unseen(fresh, loadSet(Store.BG_NOTIFIED)); }
 
     // The list as shown: the status's, less what the pump has just confirmed cleared.
     function shown() as Lang.Array {
@@ -174,5 +200,6 @@ module Alerts {
         _dismissId = null;
         _dismissNote = null;
         _cleared = [];
+        _clearedAt = [];
     }
 }

@@ -148,11 +148,22 @@ module ContractTest {
         Support.connected();
         Alerts._dismissId = "1793534395-r3-119001";
         Support.eq(Alerts.shown().size(), 2);
-        Test.assert(Alerts.onDismissResult(Support.payloadOf(Rez.JsonData.fixture_dismissResult)));
+        Test.assert(Alerts.onDismissResult(Support.payloadOf(Rez.JsonData.fixture_dismissResult), NOW));
         Support.eq(Alerts.shown().size(), 1);
         Support.eq(Alerts.idOf(Alerts.shown()[0] as Lang.Dictionary), "app.pumpDisconnected");
-        // The next status is the authority again.
-        Alerts.onStatus();
+        // A status straight after the clear may still list it (the pump hasn't been read again): it stays
+        // hidden. A minute on, a status that still lists it is believed.
+        Alerts.onStatus(NOW + 5);
+        Support.eq(Alerts.shown().size(), 1);
+        Alerts.onStatus(NOW + Alerts.CLEARED_SEC);
+        Support.eq(Alerts.shown().size(), 2);
+        // One a status leaves out is gone, and isn't held hidden for when it returns.
+        Alerts._dismissId = "1793534395-r3-119001";
+        Test.assert(Alerts.onDismissResult(Support.payloadOf(Rez.JsonData.fixture_dismissResult), NOW + 70));
+        Test.assert(Status.accept(Support.payloadOf(Rez.JsonData.fixture_status_minimal), NOW + 71));
+        Alerts.onStatus(NOW + 71);
+        Test.assert(Status.accept(Support.payloadOf(Rez.JsonData.fixture_status), NOW + 72));
+        Alerts.onStatus(NOW + 72);
         Support.eq(Alerts.shown().size(), 2);
         return true;
     }

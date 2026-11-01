@@ -76,11 +76,14 @@ module BolusFlow {
         }
     }
 
+    // The lower of the remote limit and the pump's max bolus, whichever are known.
     function dialMax() as Lang.Number {
-        var limit = Status.remoteLimit();
-        if (limit != null) { return limit; }
+        var top = DIAL_MAX_MU;
         var max = Status.field("calculator", "maxBolusMU");
-        return (max != null && max > 0) ? max : DIAL_MAX_MU;
+        if (max != null && max > 0) { top = max; }
+        var limit = Status.remoteLimit();
+        if (limit != null && (max == null || max <= 0 || limit < top)) { top = limit; }
+        return top;
     }
 
     // MARK: Glucose and the calculator
@@ -235,9 +238,12 @@ module BolusFlow {
     function send(now as Lang.Number) as Lang.Boolean {
         if (armBlock(now) != null) { return false; }
         var id = Link.newRequestId(now);
+        // Stamped by the phone's clock, which the phone judges it on; the watch times its own resends and
+        // waits by its own.
+        var stamp = Status.phoneNow(now);
         var msg = _armedMode.equals("units")
-            ? Wire.bolusUnits(id, now, _armedMU)
-            : Wire.bolusCarbs(id, now, _armedCarbs, _armedMU, _armedGlucose, _armedIncludeStale);
+            ? Wire.bolusUnits(id, stamp, _armedMU)
+            : Wire.bolusCarbs(id, stamp, _armedCarbs, _armedMU, _armedGlucose, _armedIncludeStale);
         _id = id;
         _sentAt = now;
         _lastSendAt = now;
