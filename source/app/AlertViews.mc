@@ -91,7 +91,12 @@ class AlertNoticeView extends Ui.View {
 
     function alert() as Lang.Dictionary { return _alert; }
 
-    function clearable() as Lang.Boolean { return Alerts.dismissable(_alert); }
+    // What the latest status says, not the card's copy: an alert that went, or that a remote may no longer
+    // clear, offers no Clear.
+    function clearable() as Lang.Boolean {
+        var now = Alerts.current(Alerts.idOf(_alert));
+        return now != null && Alerts.dismissable(now);
+    }
 
     static function clearRect(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
         return [w * 0.20, h * 0.68, w * 0.60, h * 0.13];

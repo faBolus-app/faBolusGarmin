@@ -158,6 +158,16 @@ module Alerts {
         return out;
     }
 
+    // The alert shown now under `id`, or null once it's gone.
+    function current(id as Lang.String) as Lang.Dictionary? {
+        var all = shown();
+        for (var i = 0; i < all.size(); i += 1) {
+            var a = all[i];
+            if (a instanceof Lang.Dictionary && idOf(a).equals(id)) { return a; }
+        }
+        return null;
+    }
+
     function note() as Lang.String? { return _dismissNote; }
 
     function reset() as Void {

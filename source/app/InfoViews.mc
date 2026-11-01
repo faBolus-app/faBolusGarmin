@@ -33,7 +33,7 @@ class ClockView extends Ui.View {
     // 12- or 24-hour as the watch is set.
     static function digitalText(hour as Lang.Number, minute as Lang.Number, is24 as Lang.Boolean) as [Lang.String, Lang.String] {
         if (is24) { return [hour.format("%02d") + ":" + minute.format("%02d"), ""]; }
-        var suffix = (hour >= 12) ? " PM" : " AM";
+        var suffix = (hour >= 12) ? "PM" : "AM";
         var hr = hour % 12;
         if (hr == 0) { hr = 12; }
         return [hr.format("%d") + ":" + minute.format("%02d"), suffix];
@@ -49,7 +49,7 @@ class ClockView extends Ui.View {
             var tw = dc.getTextWidthInPixels(text[0], Gfx.FONT_NUMBER_HOT);
             var fh = dc.getFontHeight(Gfx.FONT_NUMBER_HOT);
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx + tw / 2 + 4, cy - fh * 0.22, Gfx.FONT_XTINY, text[1].substring(1, 3),
+            dc.drawText(cx + tw / 2 + 4, cy - fh * 0.22, Gfx.FONT_XTINY, text[1],
                         Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER);
         }
     }
@@ -183,7 +183,11 @@ class CgmDelegate extends Ui.BehaviorDelegate {
 // The pump's values, as rows in the order the phone sets. Each value older than its window is marked.
 class DetailsView extends Ui.View {
 
-    function initialize() { View.initialize(); }
+    // Each visit starts on the first page.
+    function initialize() {
+        View.initialize();
+        _page = 0;
+    }
 
     static function amount(key as Lang.String, now as Lang.Number) as Lang.String {
         var mU = Status.field(key, "mU");
@@ -191,10 +195,13 @@ class DetailsView extends Ui.View {
         return Display.units(mU) + " U" + mark(key, now);
     }
 
+    // " (old)" once the value under `key` is older than the phone's window for it: IOB's own, the
+    // calculator's settings', and the pump status window for the rest.
     static function mark(key as Lang.String, now as Lang.Number) as Lang.String {
         var age = Status.ageOf(key, now);
-        // Older than the phone's window (IOB's own, the pump status window for the others), a value is marked old.
-        var window = key.equals("iob") ? Prefs.iobStaleSeconds() : Prefs.pumpStatusStaleSeconds();
+        var window = Prefs.pumpStatusStaleSeconds();
+        if (key.equals("iob")) { window = Prefs.iobStaleSeconds(); }
+        if (key.equals("calculator")) { window = Prefs.therapyStaleSeconds(); }
         return (age != null && age > window) ? " (old)" : "";
     }
 
@@ -220,18 +227,18 @@ class DetailsView extends Ui.View {
         if (id.equals("cgm")) { return "CGM: " + Glucose.text(now) + " " + Display.glucoseUnit(unit); }
         var ratio = Status.field("calculator", "carbRatioMg");
         if (id.equals("carbRatio")) {
-            return "Carb ratio: " + ((ratio != null && ratio > 0) ? (ratio.toFloat() / 1000.0).format("%.1f") + " g/U" : "--");
+            return "Carb ratio: " + ((ratio != null && ratio > 0) ? (ratio.toFloat() / 1000.0).format("%.1f") + " g/U" + mark("calculator", now) : "--");
         }
         var isf = Status.field("calculator", "isf");
         if (id.equals("isf")) {
-            return "ISF: " + ((isf != null && isf > 0) ? Display.glucose(isf, unit) + " " + Display.isfUnit(unit) : "--");
+            return "ISF: " + ((isf != null && isf > 0) ? Display.glucose(isf, unit) + " " + Display.isfUnit(unit) + mark("calculator", now) : "--");
         }
         var target = Status.field("calculator", "target");
         if (id.equals("target")) {
-            return "Target: " + ((target != null && target > 0) ? Display.glucose(target, unit) + " " + Display.glucoseUnit(unit) : "--");
+            return "Target: " + ((target != null && target > 0) ? Display.glucose(target, unit) + " " + Display.glucoseUnit(unit) + mark("calculator", now) : "--");
         }
         var max = Status.field("calculator", "maxBolusMU");
-        if (id.equals("maxBolus")) { return "Max bolus: " + ((max != null) ? Display.units(max) + " U" : "--"); }
+        if (id.equals("maxBolus")) { return "Max bolus: " + ((max != null) ? Display.units(max) + " U" + mark("calculator", now) : "--"); }
         if (id.equals("maxBasal")) {
             var maxBasal = Status.field("maxBasal", "mUPerHour");
             if (maxBasal == null || maxBasal <= 0) { return null; }
@@ -240,12 +247,12 @@ class DetailsView extends Ui.View {
             if (rate == null) { return null; }
             var pct = (rate * 100 + maxBasal / 2) / maxBasal;
             if (pct > 100) { pct = 100; }
-            return "Basal " + Display.units(rate) + "/" + Display.units(maxBasal) + " U/hr · " + pct.toString() + "%";
+            return "Basal " + Display.units(rate) + "/" + Display.units(maxBasal) + " U/hr · " + pct.toString() + "%" + mark("basal", now);
         }
         // Left out while none is known: no recent auto-correction is the usual case, not a missing value.
         if (id.equals("autoCorrection")) {
             var age = Status.ageOf("lastAutoCorrection", now);
-            return (age == null) ? null : "Auto-correction: " + (age / 60).toString() + "m ago";
+            return (age == null) ? null : "Auto-correction: " + Display.ago(age);
         }
         return null;
     }

@@ -55,12 +55,12 @@ module Prefs {
         var slots = tokens(Wire.arr(complication, "slots", 3), SLOTS);
         var labels = Wire.bool(complication, "labels");
         var unit = Wire.token(glucose, "unit", ["mgdl", "mmol"]);
-        var stale = Wire.int(glucose, "staleMinutes", 1, 60);
+        var stale = Wire.int(glucose, "staleMinutes", 0, 60);
         var floor = Wire.int(glucose, "plotFloor", 0, 400);
         var ceiling = Wire.int(glucose, "plotCeiling", 100, 600);
-        var iobMinutes = Wire.int(windows as Lang.Dictionary, "iobMinutes", 1, 60);
-        var therapyMinutes = Wire.int(windows as Lang.Dictionary, "therapyMinutes", 1, 240);
-        var statusMinutes = Wire.int(windows as Lang.Dictionary, "pumpStatusMinutes", 1, 240);
+        var iobMinutes = Wire.int(windows as Lang.Dictionary, "iobMinutes", 0, 60);
+        var therapyMinutes = Wire.int(windows as Lang.Dictionary, "therapyMinutes", 0, 240);
+        var statusMinutes = Wire.int(windows as Lang.Dictionary, "pumpStatusMinutes", 0, 240);
         if (enabled == null || readOnly == null || mode == null || unitsStep == null || carbStep == null
             || labels == null || order == null || order.size() == 0 || first == null || !Wire.contains(order, first)
             || details == null || hours == null || hours.size() == 0 || slots == null
@@ -211,14 +211,14 @@ module Prefs {
     (:background, :glance)
     function glucoseUnit() as Lang.String { return text("glucoseUnit", "mgdl"); }
     // IOB, the calculator's settings, and the pump's status values (reservoir, battery, basal) count as
-    // current while younger than these: the phone's own windows.
+    // current while younger than these: the phone's own windows. 0 counts nothing as current.
     (:background)
     function iobStaleSeconds() as Lang.Number { return number("iobMinutes", 5) * 60; }
     (:background)
     function therapyStaleSeconds() as Lang.Number { return number("therapyMinutes", 15) * 60; }
     (:background)
     function pumpStatusStaleSeconds() as Lang.Number { return number("pumpStatusMinutes", 15) * 60; }
-    // Seconds after which glucose is shown marked as stale.
+    // Seconds after which glucose is shown marked as stale; 0 marks every reading.
     (:background, :glance)
     function staleSeconds() as Lang.Number { return number("staleMinutes", 6) * 60; }
     // Seconds after going stale before glucose is hidden; null never hides it.

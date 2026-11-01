@@ -79,20 +79,27 @@ module BgComplication {
         return (unit.length() > 0) ? value + " " + unit : value;
     }
 
+    // The glucose complication's value, label and unit: [value or null, label, unit or null]. The label for
+    // a face that shows text, the number with the arrow as its unit for one that shows the value. The
+    // complication's colour bands are mg/dL and can't follow the user's unit, so with mmol/L there is no
+    // number, only the label: never a number in the wrong unit, or one the bands colour wrongly.
+    (:background)
+    function glucoseEntry(now as Lang.Number) as Lang.Array {
+        var g = Status.glucose();
+        var age = Status.ageOf("glucose", now);
+        if (g == null || age == null || age > Prefs.staleSeconds()) { return [null, "--", null]; }
+        var arrow = arrowFor(Status.trend());
+        var unit = Prefs.glucoseUnit();
+        var label = glucoseLabel(Display.glucose(g, unit), arrow, false);
+        if (unit.equals("mmol")) { return [null, label, null]; }
+        return [g, label, arrow];
+    }
+
     (:background)
     function publish(now as Lang.Number) as Void {
         if (!(Toybox has :Complications)) { return; }
-        var g = Status.glucose();
-        var age = Status.ageOf("glucose", now);
-        var stale = age == null || age > Prefs.staleSeconds();
-        if (g == null || stale) {
-            push(GLUCOSE_ID, null, "--", null);
-        } else {
-            var arrow = arrowFor(Status.trend());
-            // The label for a face that shows text, the number and the arrow as its unit for one that shows
-            // the value.
-            push(GLUCOSE_ID, g, glucoseLabel(Display.glucose(g, Prefs.glucoseUnit()), arrow, false), arrow);
-        }
+        var e = glucoseEntry(now);
+        push(GLUCOSE_ID, e[0] as Lang.Numeric?, e[1] as Lang.String, e[2] as Lang.String?);
         var slots = Prefs.complicationSlots();
         for (var i = 0; i < SLOT_IDS.size(); i += 1) {
             var id = SLOT_IDS[i] as Lang.Number;

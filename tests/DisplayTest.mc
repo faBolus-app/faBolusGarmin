@@ -72,6 +72,29 @@ module DisplayTest {
         return true;
     }
 
+    // The glucose complication: the number in mg/dL with its arrow while current; with mmol/L only the label,
+    // because the complication's colour bands are mg/dL; nothing once stale.
+    (:test)
+    function theGlucoseComplicationNeverShowsAWrongUnitNumber(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        var mgdl = BgComplication.glucoseEntry(NOW);
+        Support.eq(mgdl[0] as Lang.Object?, 142);
+        Support.eq(mgdl[1] as Lang.Object?, "142 /");
+        Support.eq(mgdl[2] as Lang.Object?, "/");
+        var config = Support.payloadOf(Rez.JsonData.fixture_config);
+        var glucose = config["glucose"] as Lang.Dictionary;
+        glucose["unit"] = "mmol";
+        Test.assert(Prefs.accept(config, NOW));
+        var mmol = BgComplication.glucoseEntry(NOW);
+        Support.eq(mmol[0] as Lang.Object?, null);
+        Support.eq(mmol[1] as Lang.Object?, "7.9 /");
+        Support.eq(mmol[2] as Lang.Object?, null);
+        var stale = BgComplication.glucoseEntry(NOW + 360 - 80 + 1);
+        Support.eq(stale[0] as Lang.Object?, null);
+        Support.eq(stale[1] as Lang.Object?, "--");
+        return true;
+    }
+
     // The slots show stale once their values are older than the phone's windows (IOB's own, the pump status
     // window for the rest), so a phone that went away shows on the face.
     (:test)
@@ -173,14 +196,43 @@ module DisplayTest {
         Support.eq(DetailsView.row("battery", NOW), "Battery: 72%");
         Support.eq(DetailsView.row("maxBasal", NOW), "Basal 0.85/3.00 U/hr · 28%");
         Support.eq(DetailsView.row("iob", NOW + 1000), "Active Insulin: 1.25 U (old)");
+        // The calculator's settings (read 20 s before the status) are old past the phone's 15-minute therapy
+        // window, and the basal (40 s before) past its pump status window, as IOB is past its own.
+        Support.eq(DetailsView.row("carbRatio", NOW + 880), "Carb ratio: 7.5 g/U");
+        Support.eq(DetailsView.row("carbRatio", NOW + 881), "Carb ratio: 7.5 g/U (old)");
+        Support.eq(DetailsView.row("isf", NOW + 1000), "ISF: 40 mg/dL/U (old)");
+        Support.eq(DetailsView.row("target", NOW + 1000), "Target: 110 mg/dL (old)");
+        Support.eq(DetailsView.row("maxBolus", NOW + 1000), "Max bolus: 25.00 U (old)");
+        Support.eq(DetailsView.row("maxBasal", NOW + 1000), "Basal 0.85/3.00 U/hr · 28% (old)");
         // The golden status's auto-correction was 45 minutes before it was sent, and ages from there.
-        Support.eq(DetailsView.row("autoCorrection", NOW), "Auto-correction: 45m ago");
-        Support.eq(DetailsView.row("autoCorrection", NOW + 900), "Auto-correction: 60m ago");
+        Support.eq(DetailsView.row("autoCorrection", NOW), "Auto-correction: 45 min ago");
+        Support.eq(DetailsView.row("autoCorrection", NOW + 900), "Auto-correction: 1h ago");
         Support.fresh();
         Support.eq(DetailsView.row("reservoir", NOW), "Reservoir: --");
         Support.eq(DetailsView.row("maxBasal", NOW), null);
         // None known: the row is left out, not shown as "--".
         Support.eq(DetailsView.row("autoCorrection", NOW), null);
+        return true;
+    }
+
+    // An alert card offers Clear from what the latest status says, not from the copy it was opened with.
+    (:test)
+    function anAlertCardClearsOnlyWhatTheStatusStillOffers(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        var low = Alerts.current("pump.alert.2") as Lang.Dictionary;
+        var card = new AlertNoticeView(low);
+        Test.assert(card.clearable());
+        Test.assert(!(new AlertNoticeView(Alerts.current("app.pumpDisconnected") as Lang.Dictionary)).clearable());
+        // The next status no longer lets a remote clear it.
+        var p = Support.payloadOf(Rez.JsonData.fixture_status);
+        var first = (p["alerts"] as Lang.Array)[0] as Lang.Dictionary;
+        first["dismissable"] = false;
+        Test.assert(Status.accept(p, NOW + 5));
+        Test.assert(!card.clearable());
+        // And once it's gone, there's nothing to clear.
+        Test.assert(Status.accept(Support.payloadOf(Rez.JsonData.fixture_status_minimal), NOW + 10));
+        Support.eq(Alerts.current("pump.alert.2"), null);
+        Test.assert(!card.clearable());
         return true;
     }
 
@@ -203,8 +255,8 @@ module DisplayTest {
 
     (:test)
     function clockText(logger as Test.Logger) as Lang.Boolean {
-        Test.assert(Support.same(ClockView.digitalText(0, 5, false), ["12:05", " AM"]));
-        Test.assert(Support.same(ClockView.digitalText(13, 0, false), ["1:00", " PM"]));
+        Test.assert(Support.same(ClockView.digitalText(0, 5, false), ["12:05", "AM"]));
+        Test.assert(Support.same(ClockView.digitalText(13, 0, false), ["1:00", "PM"]));
         Test.assert(Support.same(ClockView.digitalText(13, 0, true), ["13:00", ""]));
         return true;
     }

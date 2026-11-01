@@ -1,11 +1,9 @@
 <complications>
-    <!-- A single public BG complication. Default mode ("numericColor") publishes a NUMERIC :value so
-         Face It range-colors it via the <range> bands below, with a Latin trend arrow in the :unit
-         slot (rendered as e.g. "124 ^" in the band color). The earlier "BG reads 0" bug was caused
-         by sending a STRING :value into this numeric/ranged complication — publish a real Number and
-         it works. The "stringTrend" mode instead publishes a plain "124 ^" string (no color) for
-         faces that don't range-color. Trend arrows are Latin/ASCII only (Face It can't rely on
-         Unicode glyphs). Ranges are the glucose color bands (mg/dL): low / in-range / high / urgent. -->
+    <!-- The glucose complication. It publishes the reading as a number (a string :value reads as 0 on a
+         ranged face) with an ASCII trend arrow as its :unit, and "124 ^" as its label, for a face that shows
+         text. A stale reading is published as no value and a label of two dashes. The range is the glucose
+         bands in mg/dL (low, in range, high, very high) and can't follow the user's unit, so with mmol/L
+         only the label is published, never a number the bands would colour wrongly. -->
     <complication id="0" access="public"
                   longLabel="@Strings.ComplicationLong"
                   shortLabel="@Strings.ComplicationShort"
@@ -21,19 +19,11 @@
         </range>
     </complication>
 
-    <!-- Phase 20 (F1, D-02): THREE user-assignable pump-status complication slots published alongside
-         glucose, DISPLAY ONLY. Connect IQ hard-caps an app at FOUR complications total (SDK Core Topics /
-         Complications: "publish up to four complications"), and glucose (id 0) is the fixed primary — so
-         only THREE assignable slots exist. All FOUR pump-status fields (IOB / reservoir units-remaining /
-         pump battery % / basal rate) remain AVAILABLE: a phone-owned, watch-synced setting
-         (`garminComplicationSlots`, default IOB/reservoir/battery) chooses WHICH up-to-three fields fill
-         slots 1..3 and in what order; the watch publishes the selected field's value + :shortLabel into
-         each slot at runtime (BgComplication.publishFieldsFromState). The longLabel is a generic ordinal
-         (the config-menu label is static and cannot reflect the runtime selection); the wearer knows
-         slot N = the Nth field they chose on the phone. No <range> — status readouts, not clinically
-         range-colored like glucose. glancePreview is allowed on only ONE complication (id 0 has it), so
-         the slots omit it. Public so a user can add them to a face; the public-complication SVG-icon
-         requirement is satisfied by reusing @Drawables.BgComplicationIcon. -->
+    <!-- Three pump-status slots, display only: an app may publish four complications, and glucose is the
+         first. The phone's setting chooses which of IOB, reservoir, battery and basal fill them, in order
+         (BgComplication.slot). The long label is the slot's number, because the face's menu can't show the
+         runtime choice; the short label names the value unless the user turned names off. No range: these
+         aren't coloured like glucose. glancePreview is allowed on one complication, the glucose one. -->
     <complication id="1" access="public"
                   longLabel="@Strings.ComplicationSlot1Long"
                   shortLabel="@Strings.ComplicationSlot1Short"
