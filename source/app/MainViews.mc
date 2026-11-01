@@ -156,7 +156,7 @@ module Screens {
         if (BolusFlow.canCancel()) {
             fill = Gfx.COLOR_RED;
             labelColor = Gfx.COLOR_WHITE;
-            label = BolusFlow.cancelling() ? "Cancelling" : "Cancel";
+            label = BolusFlow.cancelling(now) ? "Cancelling" : "Cancel";
         } else if (Prefs.readOnly()) {
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, r[1] + r[3] / 2, Gfx.FONT_XTINY, "Read-only", vc);

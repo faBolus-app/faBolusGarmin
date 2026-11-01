@@ -180,7 +180,7 @@ class StaleBolusView extends Ui.View {
 
     // The choices on offer, in order.
     static function choices() as Lang.Array<Lang.String> {
-        return BolusFlow.staleIncludable() ? ["include", "carbsOnly", "cancel"] : ["carbsOnly", "cancel"];
+        return BolusFlow.staleIncludable(Status.now()) ? ["include", "carbsOnly", "cancel"] : ["carbsOnly", "cancel"];
     }
 
     static function rowRect(i as Lang.Number, w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
@@ -195,7 +195,7 @@ class StaleBolusView extends Ui.View {
 
     function onShow() as Void {
         // Buttons start on the choice that doesn't correct from the old reading.
-        cursor = BolusFlow.staleIncludable() ? 1 : 0;
+        cursor = BolusFlow.staleIncludable(Status.now()) ? 1 : 0;
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {
@@ -275,7 +275,7 @@ class StaleBolusDelegate extends Ui.BehaviorDelegate {
             Ui.popView(Ui.SLIDE_RIGHT);
             return true;
         }
-        BolusFlow.includeStale = choice.equals("include") && BolusFlow.staleIncludable();
+        BolusFlow.includeStale = choice.equals("include") && BolusFlow.staleIncludable(now);
         if (BolusFlow.calculatorBlock(now) != null || !BolusFlow.arm(now)) {
             BolusFlow.includeStale = false;
             Ui.popView(Ui.SLIDE_RIGHT);
@@ -433,7 +433,7 @@ class HoldView extends Ui.View {
             color = Gfx.COLOR_YELLOW;
         }
         dc.setColor(color, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.30, Gfx.FONT_MEDIUM, BolusFlow.headline(), vc);
+        dc.drawText(cx, h * 0.30, Gfx.FONT_MEDIUM, BolusFlow.headline(Status.now()), vc);
         var delivered = BolusFlow.deliveredMU();
         var line = BolusFlow.text();
         if (delivered != null) { line = Display.units(delivered) + " U delivered"; }
@@ -547,7 +547,9 @@ class HoldDelegate extends Ui.BehaviorDelegate {
             _holding = null;
             _view.holdProgress = 0.0;
             stop();
-            if (k == Ui.KEY_UP) { _view.armed = true; } else { _view.deliver(); }
+            // START sends only while the confirm is still armed: the screen disarms it when the dose can't go,
+            // and says so.
+            if (k == Ui.KEY_UP) { _view.armed = true; } else if (_view.armed) { _view.deliver(); }
         } else {
             _view.holdProgress = frac;
         }

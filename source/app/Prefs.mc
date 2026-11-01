@@ -56,6 +56,7 @@ module Prefs {
         var labels = Wire.bool(complication, "labels");
         var unit = Wire.token(glucose, "unit", ["mgdl", "mmol"]);
         var stale = Wire.int(glucose, "staleMinutes", 0, 60);
+        var includable = Wire.int(glucose, "includableMinutes", 0, 240);
         var floor = Wire.int(glucose, "plotFloor", 0, 400);
         var ceiling = Wire.int(glucose, "plotCeiling", 100, 600);
         var iobMinutes = Wire.int(windows as Lang.Dictionary, "iobMinutes", 0, 60);
@@ -64,14 +65,14 @@ module Prefs {
         if (enabled == null || readOnly == null || mode == null || unitsStep == null || carbStep == null
             || labels == null || order == null || order.size() == 0 || first == null || !Wire.contains(order, first)
             || details == null || hours == null || hours.size() == 0 || slots == null
-            || unit == null || stale == null || iobMinutes == null || therapyMinutes == null || statusMinutes == null || floor == null || ceiling == null || floor >= ceiling) {
+            || unit == null || stale == null || includable == null || iobMinutes == null || therapyMinutes == null || statusMinutes == null || floor == null || ceiling == null || floor >= ceiling) {
             return null;
         }
         var out = {
             "revision" => revision, "bolusEnabled" => enabled, "readOnly" => readOnly, "defaultMode" => mode,
             "unitsStepMU" => unitsStep, "carbStepG" => carbStep, "screenOrder" => order, "defaultScreen" => first,
             "details" => details, "chartHours" => hours,
-            "complicationSlots" => slots, "complicationLabels" => labels, "glucoseUnit" => unit, "staleMinutes" => stale, "iobMinutes" => iobMinutes, "therapyMinutes" => therapyMinutes,
+            "complicationSlots" => slots, "complicationLabels" => labels, "glucoseUnit" => unit, "staleMinutes" => stale, "includableMinutes" => includable, "iobMinutes" => iobMinutes, "therapyMinutes" => therapyMinutes,
             "pumpStatusMinutes" => statusMinutes,
             "plotFloor" => floor, "plotCeiling" => ceiling
         } as Lang.Dictionary;
@@ -218,6 +219,8 @@ module Prefs {
     function therapyStaleSeconds() as Lang.Number { return number("therapyMinutes", 15) * 60; }
     (:background)
     function pumpStatusStaleSeconds() as Lang.Number { return number("pumpStatusMinutes", 15) * 60; }
+    // A stale reading younger than this may be included in a correction when the user chooses to.
+    function includableSeconds() as Lang.Number { return number("includableMinutes", 15) * 60; }
     // Seconds after which glucose is shown marked as stale; 0 marks every reading.
     (:background, :glance)
     function staleSeconds() as Lang.Number { return number("staleMinutes", 6) * 60; }

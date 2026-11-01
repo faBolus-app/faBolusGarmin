@@ -224,7 +224,10 @@ class DetailsView extends Ui.View {
             if (pct == null) { return "Battery: --"; }
             return "Battery: " + pct.toString() + "%" + (Status.charging() ? " · Charging" : "") + mark("battery", now);
         }
-        if (id.equals("cgm")) { return "CGM: " + Glucose.text(now) + " " + Display.glucoseUnit(unit); }
+        if (id.equals("cgm")) {
+            var old = (!Glucose.isHidden(now) && Glucose.stale(now)) ? " (old)" : "";
+            return "CGM: " + Glucose.text(now) + " " + Display.glucoseUnit(unit) + old;
+        }
         var ratio = Status.field("calculator", "carbRatioMg");
         if (id.equals("carbRatio")) {
             return "Carb ratio: " + ((ratio != null && ratio > 0) ? (ratio.toFloat() / 1000.0).format("%.1f") + " g/U" + mark("calculator", now) : "--");
@@ -242,7 +245,7 @@ class DetailsView extends Ui.View {
         if (id.equals("maxBasal")) {
             var maxBasal = Status.field("maxBasal", "mUPerHour");
             if (maxBasal == null || maxBasal <= 0) { return null; }
-            if (Status.basalSuspended()) { return "Basal: suspended"; }
+            if (Status.basalSuspended()) { return "Basal: suspended" + mark("basal", now); }
             var rate = Status.field("basal", "mUPerHour");
             if (rate == null) { return null; }
             var pct = (rate * 100 + maxBasal / 2) / maxBasal;

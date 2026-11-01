@@ -133,9 +133,12 @@ module BolusFlow {
         return mode.equals("carbs") && Status.glucose() != null && glucoseStale(now);
     }
 
-    function staleIncludable() as Lang.Boolean {
+    // A stale reading may be included only while it's young enough that the phone would include it, and
+    // within 40–400 mg/dL.
+    function staleIncludable(now as Lang.Number) as Lang.Boolean {
         var g = Status.glucose();
-        return g != null && Calculator.plausible(g);
+        var age = Status.ageOf("glucose", now);
+        return g != null && Calculator.plausible(g) && age != null && age <= Prefs.includableSeconds();
     }
 
     function dose(now as Lang.Number) as Lang.Number {
@@ -270,7 +273,16 @@ module BolusFlow {
     function tick(now as Lang.Number) as Lang.Boolean {
         var msg = _msg;
         if (_id == null || msg == null) { return false; }
-        if (_state.equals("sending") && now - _sentAt <= FRESH_SEC && now - _lastSendAt >= RESEND_SEC) {
+        // A clock stepped back would hold the resends and the wait below until it caught up.
+        if (now < _lastSendAt) { _lastSendAt = now; }
+        if (now < _sentAt) {
+            _sentAt = now;
+            _heardAt = now;
+        }
+        // Once the user cancels it, a request the phone hasn't acknowledged isn't sent again; the cancel
+        // names it, so a copy already on its way is refused there.
+        if (_state.equals("sending") && _cancelAt == 0 && now - _sentAt <= FRESH_SEC
+            && now - _lastSendAt >= RESEND_SEC) {
             _lastSendAt = now;
             Link.transmit(msg, new BolusListener());
         }
@@ -340,7 +352,12 @@ module BolusFlow {
     function requestedMU() as Lang.Number? { return _requestedMU; }
     function deliveredMU() as Lang.Number? { return _deliveredMU; }
     function text() as Lang.String? { return _text; }
-    function cancelling() as Lang.Boolean { return _cancelAt != 0 && busy(); }
+    // A cancel went out for a bolus that's still going. Shown for CANCEL_SHOW_SEC: the watch hears nothing
+    // back about a cancel, so past that the button offers Cancel again rather than say it's in hand.
+    const CANCEL_SHOW_SEC = 15;
+    function cancelling(now as Lang.Number) as Lang.Boolean {
+        return _cancelAt != 0 && busy() && now - _cancelAt >= 0 && now - _cancelAt < CANCEL_SHOW_SEC;
+    }
 
     // The request the next poll names, so the phone sends its outcome again.
     function awaitingId(now as Lang.Number) as Lang.String? {
@@ -426,8 +443,8 @@ module BolusFlow {
     }
 
     // What the request screen says.
-    function headline() as Lang.String {
-        if (cancelling()) { return "Cancelling…"; }
+    function headline(now as Lang.Number) as Lang.String {
+        if (cancelling(now)) { return "Cancelling…"; }
         if (_state.equals("sending")) { return "Sending…"; }
         if (_state.equals("received") || _state.equals("accepted")) { return "Starting…"; }
         if (_state.equals("delivering")) { return "Delivering…"; }

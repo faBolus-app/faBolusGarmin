@@ -117,6 +117,8 @@ module Controller {
     function tick() as Void {
         var now = Status.now();
         var changed = BolusFlow.tick(now);
+        // A clock stepped back would hold the next poll until it caught up.
+        if (_nextPollAt - now > Link.MAX_POLL_MS / 1000 + 4) { _nextPollAt = now; }
         if (now >= _nextPollAt && Link.pollDue(now)) {
             Link.poll(now);
             _nextPollAt = now + (Link.delayMs() + Link.jitterMs()) / 1000;

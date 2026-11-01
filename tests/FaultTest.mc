@@ -90,7 +90,7 @@ module FaultTest {
         // Every 10 s within the 120 s the phone accepts.
         Support.eq(resends, 12);
         Support.eq(BolusFlow.state(), "noAnswer");
-        Support.eq(BolusFlow.headline(), "No answer");
+        Support.eq(BolusFlow.headline(NOW + 200), "No answer");
         Test.assert((BolusFlow.text() as Lang.String).find("Check the pump") != null);
         // Not stuck: a new bolus may start, and the request is still asked about.
         Test.assert(!BolusFlow.busy());
@@ -322,6 +322,48 @@ module FaultTest {
         return true;
     }
 
+    // Cancelling a request the phone hasn't acknowledged stops its resends (the cancel names it, and the
+    // phone refuses a copy that arrives later), and "Cancelling" isn't shown for good: the watch hears
+    // nothing back about a cancel, so after a while it offers Cancel again.
+    (:test)
+    function aCancelStopsTheResendsAndIsntShownForGood(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        BolusFlow.mode = "units";
+        BolusFlow.unitsMU = 2000;
+        BolusFlow.arm(NOW);
+        BolusFlow.send(NOW);
+        var id = BolusFlow.requestId();
+        Test.assert(BolusFlow.cancel(NOW + 3));
+        Support.eq(Wire.payload(Support.lastSent() as Lang.Dictionary)["bolusRequestId"] as Lang.Object?, id);
+        var sent = Link.testSent.size();
+        for (var t = NOW + 4; t <= NOW + 60; t += 1) { BolusFlow.tick(t); }
+        Support.eq(Link.testSent.size(), sent);
+        Test.assert(BolusFlow.cancelling(NOW + 10));
+        Test.assert(!BolusFlow.cancelling(NOW + 3 + BolusFlow.CANCEL_SHOW_SEC));
+        Test.assert(BolusFlow.canCancel());
+        return true;
+    }
+
+    // A stale reading may be included only while the phone would include it (the config's window).
+    (:test)
+    function aStaleReadingIsIncludableOnlyWhileYoungEnough(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        // The golden reading was measured 80 s before the status; the window is 15 minutes.
+        Test.assert(BolusFlow.staleIncludable(NOW + 900 - 80));
+        Test.assert(!BolusFlow.staleIncludable(NOW + 900 - 80 + 1));
+        return true;
+    }
+
+    // A clock stepped back doesn't hold the poll: the outstanding one counts as missed.
+    (:test)
+    function aClockSteppedBackDoesntHoldThePoll(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        Link.poll(NOW + 600);
+        Test.assert(Link.outstanding());
+        Test.assert(Link.pollDue(NOW));
+        return true;
+    }
+
     // The dial stops at the lower of the remote limit and the pump's max bolus.
     (:test)
     function theDialStopsAtTheLowerLimit(logger as Test.Logger) as Lang.Boolean {
@@ -452,13 +494,13 @@ module FaultTest {
         BolusFlow.arm(NOW);
         BolusFlow.send(NOW);
         Test.assert(BolusFlow.cancel(NOW + 3));
-        Test.assert(BolusFlow.cancelling());
+        Test.assert(BolusFlow.cancelling(NOW + 3));
         // An error for some earlier cancel changes nothing.
         BolusFlow.cancelFailed(NOW + 1);
-        Test.assert(BolusFlow.cancelling());
+        Test.assert(BolusFlow.cancelling(NOW + 3));
         BolusFlow.cancelFailed(NOW + 3);
-        Test.assert(!BolusFlow.cancelling());
-        Support.eq(BolusFlow.headline(), "Sending…");
+        Test.assert(!BolusFlow.cancelling(NOW + 3));
+        Support.eq(BolusFlow.headline(NOW + 3), "Sending…");
         Test.assert(BolusFlow.canCancel());
         return true;
     }

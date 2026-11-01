@@ -139,7 +139,7 @@ module ContractTest {
         Test.assert(BolusFlow.onOutcome(Support.payloadOf(Rez.JsonData.fixture_bolusOutcome_failed), NOW));
         Support.eq(BolusFlow.state(), "failed");
         Support.eq(BolusFlow.text(), "Remote control is turned off — remotes are read-only.");
-        Support.eq(BolusFlow.headline(), "Not delivered");
+        Support.eq(BolusFlow.headline(NOW), "Not delivered");
         return true;
     }
 

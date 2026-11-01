@@ -57,7 +57,8 @@ module Link {
     // a miss (which is counted).
     function pollDue(now as Lang.Number) as Lang.Boolean {
         if (_pollSentAt == 0) { return true; }
-        if (now - _pollSentAt >= REPLY_SEC) {
+        // A clock stepped back counts the outstanding poll as missed rather than wait for it to catch up.
+        if (now - _pollSentAt >= REPLY_SEC || now < _pollSentAt) {
             missed();
             return true;
         }

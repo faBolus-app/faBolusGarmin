@@ -206,6 +206,9 @@ module DisplayTest {
         Support.eq(DetailsView.row("target", NOW + 1000), "Target: 110 mg/dL (old)");
         Support.eq(DetailsView.row("maxBolus", NOW + 1000), "Max bolus: 25.00 U (old)");
         Support.eq(DetailsView.row("maxBasal", NOW + 1000), "Basal 0.85/3.00 U/hr · 28% (old)");
+        // The reading (80 s before the status) is old past the phone's six minutes.
+        Support.eq(DetailsView.row("cgm", NOW), "CGM: 142 mg/dL");
+        Support.eq(DetailsView.row("cgm", NOW + 360 - 80 + 1), "CGM: 142 mg/dL (old)");
         // The golden status's auto-correction was 45 minutes before it was sent, and ages from there.
         Support.eq(DetailsView.row("autoCorrection", NOW), "Auto-correction: 45 min ago");
         Support.eq(DetailsView.row("autoCorrection", NOW + 900), "Auto-correction: 1h ago");
@@ -239,6 +242,28 @@ module DisplayTest {
         covered.armed = true;
         covered.onHide();
         Test.assert(!covered.armed);
+        return true;
+    }
+
+    // A START hold sends only while the confirm is armed: the screen disarms it when the dose can't go.
+    (:test)
+    function aStartHoldSendsOnlyWhileArmed(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        var now = Status.now();
+        Link.heard(now);
+        BolusFlow.mode = "units";
+        BolusFlow.unitsMU = 2000;
+        Test.assert(BolusFlow.arm(now));
+        var v = new HoldView();
+        var d = new HoldDelegate(v);
+        d.holdFrom(Ui.KEY_START, 0);
+        d.tickAt(2000);
+        Test.assert(!v.sent);
+        Support.eq(BolusFlow.requestId(), null);
+        v.armed = true;
+        d.holdFrom(Ui.KEY_START, 0);
+        d.tickAt(2000);
+        Test.assert(v.sent);
         return true;
     }
 
