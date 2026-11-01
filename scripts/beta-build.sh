@@ -66,7 +66,13 @@ echo "→ Building your beta (all watch models)…"
 # --- 3. Point the iPhone app at this id automatically ---------------------------------------------
 if [ -d "$FABOLUS_DIR" ]; then
   LOCALCFG="$FABOLUS_DIR/LocalConfig.xcconfig"
-  [ -f "$LOCALCFG" ] || { [ -f "$FABOLUS_DIR/LocalConfig.xcconfig.example" ] && cp "$FABOLUS_DIR/LocalConfig.xcconfig.example" "$LOCALCFG" || touch "$LOCALCFG"; }
+  if [ ! -f "$LOCALCFG" ]; then
+    if [ -f "$FABOLUS_DIR/LocalConfig.xcconfig.example" ]; then
+      cp "$FABOLUS_DIR/LocalConfig.xcconfig.example" "$LOCALCFG"
+    else
+      touch "$LOCALCFG"
+    fi
+  fi
   if grep -q '^[[:space:]]*GARMIN_BETA_APP_ID' "$LOCALCFG"; then
     sed -i '' "s#^[[:space:]]*GARMIN_BETA_APP_ID.*#GARMIN_BETA_APP_ID = $DASHED#" "$LOCALCFG"
   else

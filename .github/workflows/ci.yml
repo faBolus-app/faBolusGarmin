@@ -1,158 +1,56 @@
 name: CI
 
 on:
-  # `main`, not `master`. This repo's default branch was renamed and these triggers were not, so CI
-  # has fired ZERO times since — the workflow was present, watched a branch that no longer receives
-  # pushes, and reported nothing. An absent check reads the same as a passing one on the repo page,
-  # which is exactly why this went unnoticed for the whole life of the branch.
   push:
-    branches: [main, experimental, 'dev/**']
+    branches: [main, rebuild]
   pull_request:
-    branches: [main, experimental, 'dev/**']
-  # Manual re-validation. This job checks out faBolus for the contract schema, so it can be broken by
-  # a commit in a DIFFERENT repo with no trigger here to notice. v3 §1.2's cross-repo reconciliation
-  # step needs to re-run this after faBolus moves.
   workflow_dispatch:
 
-# CI's Garmin coverage is the CONTRACT check below, and only that, by design. The build + unit-test
-# harness (scripts/build-and-test.sh) is a LOCAL developer gate, because three independent walls make a
-# faithful Garmin build/test in CI impossible: (1) the Connect IQ SDK is license-gated with no
-# unattended installer and an EULA that bars caching it here; (2) `monkeydo` runs the unit tests in the
-# GUI simulator, which needs a display GitHub runners don't have; (3) the shipping jungles need the
-# private, git-ignored EatingSense.barrel. Faking a green Garmin build badge would be worse than an
-# honest, scoped gate. The full matrix (4 barrel-free jungles + the shipping jungle for venu3s only
-# + the unit suite) is verified locally — see AGENTS.md.
+# Hosted CI can't build or test the watch app: the Connect IQ SDK's license keeps it out of public CI,
+# and the unit tests need the simulator's window. That gate is scripts/build-and-test.sh, run by the
+# pre-push hook that scripts/setup.sh installs. CI runs every other gate from scripts/check.sh.
 jobs:
-  schema-drift:
-    name: Monkey C ↔ contract schema drift
+  lint:
+    name: ShellCheck, actionlint, markdownlint, contract, SBOM
     runs-on: ubuntu-latest
     steps:
-      - name: Check out faBolusGarmin
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Branch-aware (v3 §1.2): check out faBolus at the branch matching this Garmin branch when one
-      # exists — an `experimental` Garmin remote validates against the `experimental` faBolus schema —
-      # else `main`. The dangerous failure is a silent fallback that greens a mismatch, so the resolved
-      # ref AND its SHA are logged. (Only one job here, so the resolver is inline rather than a shared
-      # job as in faBolus's workflow.)
-      - name: Resolve faBolus ref (match this branch, else main)
+      - name: Pick the faBolus branch to check the contract against (this branch's name, else main)
         id: fbref
+        env:
+          WANT: ${{ github.head_ref || github.ref_name }}
         run: |
-          set -euo pipefail
-          WANT="${{ github.head_ref || github.ref_name }}"
           REPO="https://github.com/faBolus-app/faBolus.git"
           if [ -n "$WANT" ] && git ls-remote --exit-code --heads "$REPO" "$WANT" >/dev/null 2>&1; then
-            REF="$WANT"; HOW="matched the Garmin branch '$WANT'"
+            echo "ref=$WANT" >> "$GITHUB_OUTPUT"
           else
-            REF="main"; HOW="fell back to main (no faBolus branch named '${WANT:-<none>}')"
+            echo "ref=main" >> "$GITHUB_OUTPUT"
           fi
-          SHA="$(git ls-remote "$REPO" "refs/heads/$REF" | cut -f1)"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-          echo "faBolus → $REF @ $SHA  ($HOW)"
-          echo "::notice title=faBolus checkout::$REF @ ${SHA:0:12} — $HOW"
 
-      - name: Check out faBolus (for the contract schema, branch-aware)
+      - name: Check out faBolus for the v1 contract schema
         uses: actions/checkout@v4
         with:
           repository: faBolus-app/faBolus
           ref: ${{ steps.fbref.outputs.ref }}
           path: _faBolus
 
-      - name: Check the Garmin remote against the schema
-        run: SCHEMA=_faBolus/schema/command.schema.json ./scripts/check-schema-drift.sh
-
-  # SBOM / license provenance. Independent of the schema-drift job above: it reads only local files (no
-  # sibling checkout, no SDK), asserting the attribution chain (LICENSE / NOTICE.md / THIRD_PARTY.md /
-  # docs/SBOM.md), that every declared barrel dependency is documented, and that NOTICE upstreams have an
-  # SBOM row. It cannot break the contract check, and vice versa.
-  sbom:
-    name: SBOM / license provenance
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out faBolusGarmin
-        uses: actions/checkout@v4
-      - name: Check the SBOM / attribution chain
-        run: ./scripts/check-sbom.sh
-
-  # Semgrep — the shared local ruleset lives in ONE place (faBolus `.semgrep/deslop.yml`) rather than
-  # being copied into each repo. Only the `phase-ticket-comment` and `migration-breadcrumb-comment`
-  # rules cover Monkey C (`source/app/*.mc`); there is no Realm-class Monkey C linter, and adding a new
-  # Connect IQ toolchain step is out of scope.
-  #
-  # Advisory (continue-on-error): every hit needs human triage. A Monkey C device caveat — touch vs
-  # buttons, complication limits, the honest `--` staleness render, the 1-2-3 / hold confirm gesture —
-  # is KEEP even when it sits next to a ticket ID.
-  semgrep:
-    name: Semgrep deslop rules (report advisory, residue ratcheted)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out faBolusGarmin
-        uses: actions/checkout@v4
-      # Tolerate a missing ruleset rather than failing the job: this file lives in a SIBLING repo, so
-      # a rename there (or a transient outage) must not turn this repo's CI red. The ratchet below is
-      # gated on the same flag, so infrastructure fails OPEN while residue fails CLOSED.
-      - name: Fetch the shared deslop ruleset
-        id: rules
+      - name: Install actionlint and markdownlint-cli2
         run: |
-          if curl -fsSL -o /tmp/deslop.yml \
-              https://raw.githubusercontent.com/faBolus-app/faBolus/main/.semgrep/deslop.yml; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::shared deslop ruleset not reachable — skipping the Semgrep report"
-            echo "available=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Semgrep (local deslop rules)
-        if: steps.rules.outputs.available == 'true'
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          sudo mv actionlint /usr/local/bin/
+          npm install --global markdownlint-cli2@0.24.0
+
+      - run: SCHEMA=_faBolus/schema/command.schema.json ./scripts/check.sh shell actions markdown contract
+
+  report:
+    name: Semgrep (report only)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Semgrep (faBolus's shared residue rules)
         run: |
-          pipx install semgrep || pip install --user semgrep
-          # No --error: semgrep exits 0 with findings by default, which is what "advisory" means here.
-          # Scan the repo, not just `source` — `tests/` is in the ruleset's globs too
-          # and was invisible while this scanned one directory. `.semgrepignore` is committed here
-          # because semgrep's built-in default list silently drops a lowercase `tests/`.
+          pipx install semgrep
+          curl -fsSL -o /tmp/deslop.yml https://raw.githubusercontent.com/faBolus-app/faBolus/main/.semgrep/deslop.yml
           semgrep --config /tmp/deslop.yml --metrics=off .
-      - name: Deslop residue ratchet
-        if: steps.rules.outputs.available == 'true'
-        run: |
-          semgrep --config /tmp/deslop.yml --metrics=off --json -q . > /tmp/sg.json
-          python3 - <<'PY'
-          # Reports every rule; FAILS only when a RESIDUE rule rises above its committed baseline.
-          #
-          # `source-text-scanning-test` and `working-tree-absence-scanner` are deliberately NOT gated.
-          # They do not flag slop -- they inventory this repo's source-scanning guard tests and
-          # working-tree absence guards, which are load-bearing safety machinery. Their count going UP
-          # means somebody added a guard, so gating them would punish the right behaviour.
-          import collections, json, sys
-
-          INVENTORY = {"source-text-scanning-test", "working-tree-absence-scanner"}
-          base = json.load(open(".semgrep/baseline.json"))["residue"]
-          results = json.load(open("/tmp/sg.json"))["results"]
-          cur = collections.Counter(r["check_id"].split(".")[-1] for r in results)
-
-          risen = []
-          print("rule                                now  baseline")
-          for rule in sorted(set(cur) | set(base) | INVENTORY):
-              n = cur.get(rule, 0)
-              if rule in INVENTORY:
-                  print(f"  {rule:34s} {n:4d}   (inventory, not gated)")
-                  continue
-              b = base.get(rule, 0)
-              note = ""
-              if n > b:
-                  note = "  <== ABOVE BASELINE"
-                  risen.append((rule, b, n))
-              elif n < b:
-                  note = "  (below baseline -- lower it to lock this in)"
-              print(f"  {rule:34s} {n:4d}  {b:4d}{note}")
-
-          if risen:
-              print()
-              for rule, b, n in risen:
-                  print(f"::error::deslop residue rose: {rule} {b} -> {n}. Remove the new "
-                        f"phase/ticket breadcrumb, migration note or drifted line reference. If the "
-                        f"hit is a genuine KEEP (a measurement, an ISO date, an oracle .java "
-                        f"citation, a display-width budget), raise the number in "
-                        f".semgrep/baseline.json in the same commit and say why.")
-              sys.exit(1)
-          print(f"\nresidue total: {sum(v for k, v in cur.items() if k not in INVENTORY)} "
-                f"(baseline {sum(base.values())}) -- no regression")
-          PY

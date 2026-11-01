@@ -108,7 +108,7 @@ class HoldView extends Ui.View {
     function onUpdate(dc as Gfx.Dc) as Void {
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
         dc.clear();
-        var w = dc.getWidth(), h = dc.getHeight(), cx = w / 2, cy = h / 2;
+        var w = dc.getWidth(), h = dc.getHeight(), cx = w / 2;
         var vc = Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER;
 
         if (AppState.status != null) {

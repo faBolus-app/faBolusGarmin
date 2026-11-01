@@ -46,6 +46,7 @@ the git log and the tag graph, so they are grouped and summarized rather than ex
 ## [Unreleased]
 
 ### Fixed
+
 - **The 1-2-3 confirm's 3rd tap refused in silence.** `AppState.sendBolusNow()` refuses a send on **six**
   conditions but returned a bare `Boolean`, and `HoldView` could explain only the **two** that
   `mustTeardownArmedBolus()` covers. For the other four (`!appLive()`, `armContextExpired()`,
@@ -69,6 +70,7 @@ the git log and the tag graph, so they are grouped and summarized rather than ex
   `canCancel()` (cancelling an in-flight bolus is a safety action).
 
 ### Added
+
 - **A user-reachable route out of an unresolved-send lockout**, and the watch half of its resolution.
   `AppState.resolveUnresolvedSendLock(requestId)` releases the **lock** — never the *dose* — on the phone's
   say-so after a human reconciled the dispatch against the pump's own history, matched on `requestId` so it
@@ -92,6 +94,7 @@ the git log and the tag graph, so they are grouped and summarized rather than ex
   `git` at build time rather than a number anyone has to remember to increment.
 
 ### Changed
+
 - **Phase-2 narrowing (2026-08-20).** `main`'s shipping build target is narrowed to the **Garmin
   Venu 3S only**: the five non-Venu devices (`fr265s`, `fenix7`, `fr245`, `edge540`, `edge1040`) are
   removed from both shipping manifests (`manifest.xml`, `manifest-official.xml`) and their jungle/
@@ -109,6 +112,7 @@ Moving last-known-good pointer, advanced to `979802b`. Lockstep with faBolus
 `safe-baseline/2026-08-07-p15`.
 
 ### Added
+
 - P15 §2.3: parse, gate, and persist the phone-driven **Garmin bolus-enable** (`garminBolusEnabled`),
   with a one-time on-watch notice when bolusing is first enabled (G3b / G5).
 - P15 Addendum B (AB4): **stale-CGM three-way bolus prompt** on the watch (include-stale / carbs-only /
@@ -118,9 +122,11 @@ Moving last-known-good pointer, advanced to `979802b`. Lockstep with faBolus
   dropped in favour of the phone setting).
 
 ### Changed
+
 - P13c-1: aligned the Garmin **glucose bands** to the closed clinical convention shared with the phone.
 
 ### Fixed
+
 - P15 §2.3 G4: tear down an armed `HoldView` when the phone disables bolusing mid-flow.
 
 ## [safe-baseline/2026-08-04] — 2026-08-05
@@ -130,21 +136,25 @@ snapshot date; lockstep with faBolus `safe-baseline/2026-08-04`). Gathers the ro
 CI enablement, and the P5/P6/P9–P13a Garmin work.
 
 ### Added
+
 - P9 S8: reliably surface a newly-arrived pump **ALERT** to the watch (notification fan-out).
 - P11: **stamp send-time** (`sentAt`) on delivery-authorizing commands so the host can reject a stale
   request.
 - P13a-2: Garmin alert-confirm **verb** derived from `supportsRemoteAlertDismiss` (Clear vs Snooze).
 
 ### Changed
+
 - P12 group D: gate the Garmin **START-bolus** on the host's semantic `canBolus` / `bolusBlockReason`
   rather than a local guess.
 - E5: plot CGM history on a **real-time x-axis** so a gap in readings renders as a gap.
 
 ### Fixed
+
 - Group A / A1: an **unknown-age** reading is treated as **stale**, never as "now" — the honest-staleness
   rule that the `--` / age display depends on.
 
 ### CI / infrastructure
+
 - **CI actually runs.** Triggers were pointed at `main` (and `experimental`); the workflow had fired
   **zero** times since the default-branch rename from `master`, so an absent check had been reading as a
   passing one.
@@ -157,13 +167,14 @@ CI enablement, and the P5/P6/P9–P13a Garmin work.
   private `EatingSense.barrel`) — the schema-drift contract check is CI's only Garmin coverage by design.
 - Captured the pre-restructuring **WIP register** (`WIP-REGISTER.md`) per v3 handoff §0.1.
 
-## [deprecated/2026-08-04-v0.1.0-build1] — 2026-07-23 _(frozen snapshot — do not use as a fallback)_
+## [deprecated/2026-08-04-v0.1.0-build1] — 2026-07-23 *(frozen snapshot — do not use as a fallback)*
 
 Immovable snapshot of `main` (`659dc34`) **before** the round-3 safety fixes. Rolling back here
 reintroduces every known pre-round-3 issue; it exists for forensics/bisection only, not as a supported
 fallback. Notable work in this window (after `v0.1.0`):
 
 ### Added
+
 - Round-3 Garmin remote safety (GA-01…GA-09): gesture-proof residual-risk documentation, touch
   double-routing guard, staleness persistence, and inbound-command validation.
 - Read-only mode: hide the bolus button on `remotesReadOnly`; add a CGM-only "glucose" screen.
@@ -176,6 +187,7 @@ fallback. Notable work in this window (after `v0.1.0`):
 - `AGENTS.md`, `llms.txt`, and store-build documentation.
 
 ### Fixed
+
 - GA-04: round bolus components to 2-decimal HALF_UP before combining (oracle parity).
 - C-01: port the oracle bolus calculation for the wrist preview.
 - BG **complication** correctness (numeric-value-first write, `:ranges` publish, string+ASCII-trend
@@ -185,6 +197,7 @@ fallback. Notable work in this window (after `v0.1.0`):
   outcome; keep a cancelled/delivering result on screen until acknowledged.
 
 ### Changed / docs
+
 - Phase-0 doc corrections (drop the "second factor" / "host confirmation" overclaim); trademark claim for
   the faBolus™ name in `NOTICE.md` / `README.md`; the iPhone Garmin target now defaults to Beta (the
   Official listing is dormant).
@@ -195,7 +208,8 @@ Initial tagged build (`2e4eed3`). The phone-relay Garmin remote: glance / histor
 screens, the bolus confirm (touch 1-2-3 and button two-button-hold), and the phone↔remote JSON contract.
 
 ### CI / infrastructure
+
 - Added the Monkey C ↔ contract **schema-drift** check (`scripts/check-schema-drift.sh`), mirroring the
   Swift-side check, to keep the `RemoteCommand.mc` mirror in sync with
-  `faBolus/schema/command.schema.json`. _(Note: this workflow initially triggered on `master`; it did not
-  actually run until the trigger was repointed at `main` in the `safe-baseline/2026-08-04` window.)_
+  `faBolus/schema/command.schema.json`. *(Note: this workflow initially triggered on `master`; it did not
+  actually run until the trigger was repointed at `main` in the `safe-baseline/2026-08-04` window.)*

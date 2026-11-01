@@ -28,12 +28,12 @@
 # monkeydo's exit code is UNRELIABLE (it returns nonzero even when every test passes), so this script
 # decides pass/fail by PARSING the "PASSED (passed=N, failed=0, errors=0)" line, never the exit code.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 2
 
 # --- locate the SDK ---------------------------------------------------------
 SDK="${CIQ_SDK:-}"
 if [ -z "$SDK" ]; then
-  SDK="$(ls -d "$HOME/Library/Application Support/Garmin/ConnectIQ/Sdks/"connectiq-sdk-* 2>/dev/null | sort | tail -1)"
+  SDK="$(find "$HOME/Library/Application Support/Garmin/ConnectIQ/Sdks" -maxdepth 1 -name 'connectiq-sdk-*' 2>/dev/null | sort | tail -1)"
 fi
 if [ -z "$SDK" ] || [ ! -x "$SDK/bin/monkeyc" ]; then
   echo "❌ Connect IQ SDK not found. Install it (SDK Manager) or set CIQ_SDK=/path/to/connectiq-sdk-..." >&2
@@ -61,26 +61,29 @@ else
 fi
 
 # --- compile matrix ---------------------------------------------------------
-# Every jungle here is barrel-free → their hardware-validated device (venu3s is the common one; each
-# carries its own manifest). `-w` shows compiler warnings (SDK 9.2.0 has no "treat warnings as errors"
-# flag — it is `-w, --warn  Show compiler warnings` only).
+# Each jungle compiles twice. The first pass is at the jungle's own type-check level and fails on any
+# error. The second pass turns type checking off (-l 0) so the only warnings left are the compiler's own
+# (unused locals, implicit entry points, ignored annotations), and any of those fails the build: SDK 9.2.0
+# has no warnings-as-errors flag, so this script is the flag. Type-check findings become errors when the
+# whole app moves to strict (level 3).
 compile() {  # <jungle> <device> [extra args...]
   local j="$1" d="$2"; shift 2
-  if "$MONKEYC" -f "$j.jungle" -o "$OUT/$j-$d.prg" -y "$KEY" -d "$d" "$@" >"$OUT/$j-$d.log" 2>&1; then
-    echo "  ✅ $j.jungle  ($d)"
+  if ! "$MONKEYC" -f "$j.jungle" -o "$OUT/$j-$d.prg" -y "$KEY" -d "$d" "$@" >"$OUT/$j-$d.log" 2>&1; then
+    echo "  ❌ $j.jungle  ($d)"; grep -iE "error|exception" "$OUT/$j-$d.log" | head -3; FAIL=1; return
+  fi
+  "$MONKEYC" -f "$j.jungle" -o "$OUT/$j-$d-l0.prg" -y "$KEY" -d "$d" -w -l 0 "$@" >"$OUT/$j-$d-l0.log" 2>&1 || true
+  local warnings
+  warnings="$(grep "WARNING" "$OUT/$j-$d-l0.log" | grep -v "type check level was specified both" || true)"
+  if [ -n "$warnings" ]; then
+    echo "  ❌ $j.jungle  ($d): compiler warnings"; echo "$warnings" | head -10; FAIL=1
   else
-    echo "  ❌ $j.jungle  ($d)"; grep -iE "error|exception" "$OUT/$j-$d.log" | head -3; FAIL=1
+    echo "  ✅ $j.jungle  ($d)"
   fi
 }
 
-echo "== barrel-free jungles =="
-compile test       venu3s -w
-# venu3s is now the sole declared shipping device (main is narrowed to Venu 3S only). official.jungle
-# is not compiled here — it never has been; adding that step is a separate decision, not this one's.
-compile monkey     venu3s -w
-# NARROW-MAIN (2026-08-27): the paused direct-pump/direct-cgm BLE engines + their probe.jungle/
-# direct-cgm.jungle are removed from main (they live on dev/direct-ble + experimental), so this matrix
-# no longer compiles them here.
+echo "== jungles =="
+compile test   venu3s
+compile monkey venu3s
 
 # --- unit tests (simulator) -------------------------------------------------
 if [ "${1:-}" != "--no-tests" ]; then

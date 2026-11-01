@@ -28,6 +28,7 @@ computers are build-verified on the `dev/garmin-devices` branch, not on `main`. 
 > or Garmin.
 
 ## How it fits together
+
 The watch is a **thin remote**: it renders status and sends confirmed commands
 (`statusRead` / `bolusRequest` / `cancelBolus` / `dismissAlert`) as the JSON contract; a **host**
 answers them. The bolus is confirmed by **one explicit gesture on the watch** (1-2-3 / hold). The host
@@ -51,6 +52,7 @@ one of *two* confirmations.
   in this tree (preservation branches only).
 
 Beyond the remote, the repo also builds one more Connect IQ surface from the same BG feed:
+
 - a **glance** (compact BG in the glance carousel) — built into the app (`FaBolusGlanceView`, reads
   the persisted reading directly).
 
@@ -62,8 +64,10 @@ Direct-to-pump BLE and direct-to-watch CGM engines are **not** on `main`. They l
 `dev/direct-ble` / `experimental` preservation branches.
 
 ## Build & test
+
 `./scripts/build-and-test.sh` is the gate and does all of the below for you. By hand:
-```
+
+```text
 # stamp the build commit for the Details "App:" row — the app does not compile without it
 ./scripts/stamp-revision.sh
 # release build (entry FaBolusApp); provide your own signing key as developer_key.der
@@ -72,6 +76,7 @@ monkeyc -f monkey.jungle -o bin/faBolusGarmin.prg -y developer_key.der -d venu3s
 monkeyc -f test.jungle -o bin/faBolusGarmin-test.prg -y developer_key.der -d venu3s --unit-test -w
 monkeydo bin/faBolusGarmin-test.prg venu3s -t
 ```
+
 The stamp is generated and git-ignored, so a bare `monkeyc` on a fresh clone fails with
 `Undefined symbol ':AppRevision'` until you run the script. That is deliberate: a binary with **no**
 version is fine, a binary stamped with the **wrong** tree is not.
@@ -79,6 +84,7 @@ Keep the Monkey C contract mirror in sync with `faBolus/schema/command.schema.js
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Related
+
 - [`faBolus`](https://github.com/faBolus-app/faBolus) — the iPhone host and the
   contract (`schema/`) this remote speaks; its
   [ARCHITECTURE.md](https://github.com/faBolus-app/faBolus/blob/master/ARCHITECTURE.md) explains how

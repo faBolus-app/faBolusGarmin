@@ -49,4 +49,4 @@ if [ "$fail" -ne 0 ]; then
   echo "❌ SBOM check failed — reconcile the component with $SBOM." >&2
   exit 1
 fi
-echo "✅ SBOM check passed: attribution files present, ${barrels:+barrel(s) [$(echo $barrels)] }and NOTICE upstreams accounted for in $SBOM."
+echo "✅ SBOM check passed: attribution files present, ${barrels:+barrel(s) [${barrels//$'\n'/ }] }and NOTICE upstreams accounted for in $SBOM."
