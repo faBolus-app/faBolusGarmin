@@ -138,9 +138,14 @@ module DisplayTest {
         Support.eq(DetailsView.row("battery", NOW), "Battery: 72%");
         Support.eq(DetailsView.row("maxBasal", NOW), "Basal 0.85/3.00 U/hr · 28%");
         Support.eq(DetailsView.row("iob", NOW + 1000), "Active Insulin: 1.25 U (old)");
+        // The golden status's auto-correction was 45 minutes before it was sent, and ages from there.
+        Support.eq(DetailsView.row("autoCorrection", NOW), "Auto-correction: 45m ago");
+        Support.eq(DetailsView.row("autoCorrection", NOW + 900), "Auto-correction: 60m ago");
         Support.fresh();
         Support.eq(DetailsView.row("reservoir", NOW), "Reservoir: --");
         Support.eq(DetailsView.row("maxBasal", NOW), null);
+        // None known: the row is left out, not shown as "--".
+        Support.eq(DetailsView.row("autoCorrection", NOW), null);
         return true;
     }
 

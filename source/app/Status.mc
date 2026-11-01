@@ -116,6 +116,13 @@ module Status {
             }
         }
 
+        // An event, not a reading: its time is all it carries.
+        var auto = Wire.obj(p, "lastAutoCorrection");
+        if (auto != null) {
+            var at = timeOf(auto);
+            if (at != null) { out["lastAutoCorrection"] = { "at" => at }; }
+        }
+
         var gate = { "canBolus" => canBolus } as Lang.Dictionary;
         // A reason this build doesn't know is kept, and shown generically.
         var reason = Wire.str(bolus, "blockReason", 32);

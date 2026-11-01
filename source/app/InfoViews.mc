@@ -262,6 +262,11 @@ class DetailsView extends Ui.View {
             if (pct > 100) { pct = 100; }
             return "Basal " + Display.units(rate) + "/" + Display.units(maxBasal) + " U/hr · " + pct.toString() + "%";
         }
+        // Left out while none is known: no recent auto-correction is the usual case, not a missing value.
+        if (id.equals("autoCorrection")) {
+            var age = Status.ageOf("lastAutoCorrection", now);
+            return (age == null) ? null : "Auto-correction: " + (age / 60).toString() + "m ago";
+        }
         return null;
     }
 

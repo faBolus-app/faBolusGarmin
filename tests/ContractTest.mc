@@ -31,6 +31,7 @@ module ContractTest {
         Support.eq(Status.field("calculator", "maxBolusMU"), 25000);
         Test.assert(Status.controlIQEnabled());
         Support.eq(Status.field("maxBasal", "mUPerHour"), 3000);
+        Support.eq(Status.ageOf("lastAutoCorrection", NOW), 2700);
         Test.assert(Status.canBolus());
         Support.eq(Status.blockReason(), null);
         Support.eq(Status.remoteLimit(), 10000);
