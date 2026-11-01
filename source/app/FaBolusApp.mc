@@ -12,15 +12,27 @@ using Toybox.WatchUi as Ui;
 //
 // The app class is compiled into every process, because getGlanceView and getServiceDelegate are in it,
 // so it holds only the platform's entry points; each passes straight to Controller, which runs in the
-// app's own process only.
+// app's own process only. onStart and onStop run in the glance and background processes too, where
+// Controller isn't loaded, so the app starts in getInitialView, which only its own process calls, and
+// onStop stops only what was started.
 class FaBolusApp extends App.AppBase {
+    (:background, :glance)
+    private var _started as Lang.Boolean = false;
+
     function initialize() { AppBase.initialize(); }
 
-    function onStart(state as Lang.Dictionary?) as Void { Controller.start(); }
+    (:background, :glance)
+    function onStop(state as Lang.Dictionary?) as Void {
+        if (_started) { Controller.stop(); }
+    }
 
-    function onStop(state as Lang.Dictionary?) as Void { Controller.stop(); }
-
-    function getInitialView() as [Ui.Views] or [Ui.Views, Ui.InputDelegates] { return Controller.initialView(); }
+    function getInitialView() as [Ui.Views] or [Ui.Views, Ui.InputDelegates] {
+        if (!_started) {
+            _started = true;
+            Controller.start();
+        }
+        return Controller.initialView();
+    }
 
     (:glance)
     function getGlanceView() as [Ui.GlanceView] or [Ui.GlanceView, Ui.GlanceViewDelegate] or Null {
@@ -32,7 +44,10 @@ class FaBolusApp extends App.AppBase {
         return [new BgServiceDelegate()];
     }
 
-    function onBackgroundData(data as App.PersistableType) as Void { Controller.backgroundData(); }
+    // Before the first view the app hasn't started; it loads what the background saved when it does.
+    function onBackgroundData(data as App.PersistableType) as Void {
+        if (_started) { Controller.backgroundData(); }
+    }
 }
 
 // The app while it's open. One timer ticks every second: it polls when the link says one is due, resends

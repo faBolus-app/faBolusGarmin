@@ -400,8 +400,6 @@ class HoldView extends Ui.View {
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.76, Gfx.FONT_XTINY, "release cancels", vc);
         }
-        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, "experimental", vc);
     }
 
     private function drawRequest(dc as Gfx.Dc, w as Lang.Number, h as Lang.Number, cx as Lang.Number,

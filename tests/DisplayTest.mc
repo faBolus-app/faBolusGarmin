@@ -44,15 +44,13 @@ module DisplayTest {
         return true;
     }
 
-    // The complication's label: the reading and its arrow while current; once stale, " old" in the numeric
-    // slot, which can't show "--", and "--" in string mode.
+    // The complication's label: the reading and its arrow while current, "--" once stale.
     (:test)
     function complicationLabels(logger as Test.Logger) as Lang.Boolean {
-        Support.eq(BgComplication.glucoseLabel("124", "^", true, true), "--");
-        Support.eq(BgComplication.glucoseLabel("124", "^", false, true), "124^");
-        Support.eq(BgComplication.glucoseLabel("124", "^", true, false), "124 old");
-        Support.eq(BgComplication.glucoseLabel("124", "^", false, false), "124^");
-        Support.eq(BgComplication.glucoseLabel(Display.glucose(124, "mmol"), "^", true, false), "6.9 old");
+        Support.eq(BgComplication.glucoseLabel("124", "^", true), "--");
+        Support.eq(BgComplication.glucoseLabel("124", "^", false), "124 ^");
+        Support.eq(BgComplication.glucoseLabel("124", "", false), "124");
+        Support.eq(BgComplication.glucoseLabel(Display.glucose(124, "mmol"), "->", false), "6.9 ->");
         Support.eq(BgComplication.arrowFor("up45"), "/");
         Support.eq(BgComplication.arrowFor(null), "");
         return true;
@@ -64,14 +62,17 @@ module DisplayTest {
     function slotsGoStaleAfterFifteenMinutes(logger as Test.Logger) as Lang.Boolean {
         Support.connected();
         var fresh = BgComplication.slot("iob", NOW);
-        Support.eq(fresh[1] as Lang.Object?, "1.25 U");
+        Support.eq(fresh[1] as Lang.Object?, "IOB 1.25");
+        Support.eq(fresh[2] as Lang.Object?, "U");
         Test.assert(Support.isSet(fresh[0] as Lang.Object?));
-        // IOB was measured 20 s before the status; 15 minutes later it's old.
+        // IOB was measured 20 s before the status; 15 minutes later it shows as unknown, not as current.
         var later = BgComplication.slot("iob", NOW + 900 - 20 + 1);
-        Support.eq(later[1] as Lang.Object?, "1.25 U old");
-        Support.eq(BgComplication.slot("battery", NOW)[1] as Lang.Object?, "72%");
-        Support.eq(BgComplication.slot("reservoir", NOW)[1] as Lang.Object?, "143.50 U");
-        Support.eq(BgComplication.slot("basal", NOW)[1] as Lang.Object?, "0.85 U/hr");
+        Support.eq(later[0] as Lang.Object?, null);
+        Support.eq(later[1] as Lang.Object?, "--");
+        Support.eq(BgComplication.slot("battery", NOW)[1] as Lang.Object?, "Bat 72%");
+        Support.eq(BgComplication.slot("reservoir", NOW)[1] as Lang.Object?, "Res 143");
+        Support.eq(BgComplication.slot("reservoir", NOW)[0] as Lang.Object?, 143);
+        Support.eq(BgComplication.slot("basal", NOW)[1] as Lang.Object?, "Basal 0.85");
         // Unknown is "--", never zero.
         Support.fresh();
         Status.accept(Support.payloadOf(Rez.JsonData.fixture_status_minimal), NOW);

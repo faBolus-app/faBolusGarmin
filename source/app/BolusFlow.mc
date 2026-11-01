@@ -332,7 +332,6 @@ module BolusFlow {
     function open() as Lang.Boolean { return _id != null && !isFinal(_state); }
 
     function state() as Lang.String { return _state; }
-    function hasRequest() as Lang.Boolean { return _id != null; }
     function requestId() as Lang.String? { return _id; }
     function requestedMU() as Lang.Number? { return _requestedMU; }
     function deliveredMU() as Lang.Number? { return _deliveredMU; }

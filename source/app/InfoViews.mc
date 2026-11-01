@@ -138,8 +138,9 @@ class CgmView extends Ui.View {
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.32, Gfx.FONT_XTINY, Display.glucoseUnit(Prefs.glucoseUnit()), vc);
 
+        // The gridline labels sit right of the plot, inside the round screen at the plot's lower edge.
         var left = w * 0.16;
-        var right = w * 0.84;
+        var right = w * 0.78;
         var top = h * 0.42;
         var bottom = h * 0.82;
         var lines = gridlines(floor, ceiling);
@@ -231,7 +232,11 @@ class DetailsView extends Ui.View {
         var unit = Prefs.glucoseUnit();
         if (id.equals("iob")) { return "Active Insulin: " + amount("iob", now); }
         if (id.equals("reservoir")) { return "Reservoir: " + amount("reservoir", now); }
-        if (id.equals("lastBolus")) { return "Last bolus: " + amount("lastBolus", now); }
+        // Its time is when it was given, not how old a reading is, so it's never marked old.
+        if (id.equals("lastBolus")) {
+            var mU = Status.field("lastBolus", "mU");
+            return "Last bolus: " + ((mU == null) ? "--" : Display.units(mU) + " U");
+        }
         if (id.equals("battery")) {
             var pct = Status.field("battery", "percent");
             if (pct == null) { return "Battery: --"; }
@@ -275,6 +280,17 @@ class DetailsView extends Ui.View {
         return top + (bottom - top) / (count - 1) * i;
     }
 
+    // The page shown when the rows don't fit on one; a tap moves to the next.
+    static var _page as Lang.Number = 0;
+
+    static function nextPage() as Void { _page += 1; }
+
+    // How many rows fit between top and bottom (fractions of `h`) without overlapping.
+    static function perPage(h as Lang.Number, fontHeight as Lang.Number, top as Lang.Float, bottom as Lang.Float) as Lang.Number {
+        var n = (((bottom - top) * h) / fontHeight).toNumber() + 1;
+        return (n < 1) ? 1 : n;
+    }
+
     function onUpdate(dc as Gfx.Dc) as Void {
         var now = Status.now();
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
@@ -283,7 +299,7 @@ class DetailsView extends Ui.View {
         var cx = dc.getWidth() / 2;
         var vc = Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER;
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.08, Gfx.FONT_XTINY, Display.linkLine(now), vc);
+        dc.drawText(cx, h * 0.13, Gfx.FONT_XTINY, Display.linkLine(now), vc);
         var rows = [] as Lang.Array<Lang.String>;
         var order = Prefs.details();
         for (var i = 0; i < order.size(); i += 1) {
@@ -296,9 +312,36 @@ class DetailsView extends Ui.View {
         var n = Alerts.shown().size();
         rows.add(n > 0 ? "Alerts: " + n.toString() : "No alerts");
         rows.add(AppVersion.label());
+        var top = 0.24;
+        var bottom = 0.80;
+        var per = perPage(h, dc.getFontHeight(Gfx.FONT_XTINY), top, bottom);
+        var pages = (rows.size() + per - 1) / per;
+        var page = _page % pages;
+        var first = page * per;
+        var count = rows.size() - first;
+        if (count > per) { count = per; }
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-        for (var i = 0; i < rows.size(); i += 1) {
-            dc.drawText(cx, h * rowY(rows.size(), i, 0.28, 0.80), Gfx.FONT_XTINY, rows[i], vc);
+        for (var i = 0; i < count; i += 1) {
+            // A full page spaces its rows to the edges; the last page keeps the same spacing.
+            dc.drawText(cx, h * rowY(per, i, top, bottom), Gfx.FONT_XTINY, rows[first + i], vc);
+        }
+        if (pages > 1) {
+            dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.88, Gfx.FONT_XTINY, (page + 1).toString() + "/" + pages.toString()
+                        + (Nav.isTouch() ? " · tap" : " · START"), vc);
         }
     }
+}
+
+class DetailsDelegate extends Ui.BehaviorDelegate {
+    function initialize() { BehaviorDelegate.initialize(); }
+    private function page() as Lang.Boolean {
+        DetailsView.nextPage();
+        Ui.requestUpdate();
+        return true;
+    }
+    function onTap(evt as Ui.ClickEvent) as Lang.Boolean { return page(); }
+    function onSelect() as Lang.Boolean { return Nav.isTouch() ? false : page(); }
+    function onNextPage() as Lang.Boolean { return Nav.goNext("details"); }
+    function onPreviousPage() as Lang.Boolean { return Nav.goPrev("details"); }
 }

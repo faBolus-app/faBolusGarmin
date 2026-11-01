@@ -25,10 +25,9 @@ per-release history is in [`CHANGELOG.md`](CHANGELOG.md).
 - **Fail gracefully on unsupported hardware.** Where a device genuinely cannot provide a capability, the
   app must degrade to an explicit, honest state — never a fabricated value or silent misbehavior. This
   is separate from the deliberate honest-staleness `--` shown for a stale/absent reading (a safety
-  signal, which must be preserved). The BG complication is the standing example: its numeric `:value`
-  slot cannot render `--` at all (a structural platform limit), so `BgComplication.shortLabelFor`
-  appends an explicit `" old"` marker to a stale reading instead of letting the frozen number pass for
-  current (`source/app/BgComplication.mc`).
+  signal, which must be preserved). The complications are the standing example: a face can't show a
+  value's age, so a stale value is published as no number and the label `--` rather than a frozen
+  number that passes for current (`source/app/BgComplication.mc`).
 
 ## Keep it host-agnostic
 

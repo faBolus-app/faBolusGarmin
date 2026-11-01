@@ -4,8 +4,8 @@ using Toybox.Lang;
 // judged from each value's measurement time when it's published, and the app and the background service
 // republish as time passes, so a value never sits on the face as current after the phone goes away.
 //
-// The numeric slot can't show "--", so a stale value is labelled " old" rather than dropped: an honest mark
-// for the platform's limit, never a value that passes for a fresh one.
+// A face shows a complication's label or its number, and can't show how old either is, so a stale value is
+// sent as no number and the label "--": never a value that passes for a current one.
 module BgComplication {
     (:background)
     const GLUCOSE_ID = 0;
@@ -28,41 +28,46 @@ module BgComplication {
         return "";
     }
 
-    // The glucose label: the reading with its arrow while current, marked " old" (numeric mode) or "--"
-    // (string mode) once stale.
+    // The glucose label: the reading with its arrow while current, "--" once stale. A face can't show the
+    // reading's age, so a stale reading isn't shown at all rather than passing for a current one.
     (:background)
-    function glucoseLabel(text as Lang.String, arrow as Lang.String, stale as Lang.Boolean,
-                          stringMode as Lang.Boolean) as Lang.String {
-        if (stringMode) { return stale ? "--" : text + arrow; }
-        return stale ? text + " old" : text + arrow;
+    function glucoseLabel(text as Lang.String, arrow as Lang.String, stale as Lang.Boolean) as Lang.String {
+        if (stale) { return "--"; }
+        return (arrow.length() > 0) ? text + " " + arrow : text;
     }
 
-    // A slot's value and label: [value or null, label].
+    // A slot's value, label and unit: [value or null, label, unit or null]. Each label names what it shows,
+    // because the face only knows the slot as "Pump Status 1–3"; a value older than SLOT_STALE_SEC shows
+    // as "--", like an unknown one.
     (:background)
     function slot(token as Lang.String, now as Lang.Number) as Lang.Array {
-        var key = token.equals("basal") ? "basal" : token;
-        var age = Status.ageOf(key, now);
-        var stale = age == null || age > SLOT_STALE_SEC;
-        var suffix = stale ? " old" : "";
-        if (token.equals("iob") || token.equals("reservoir")) {
-            var mU = Status.field(key, "mU");
-            if (mU == null) { return [null, "--"]; }
-            return [mU.toFloat() / 1000.0, Display.units(mU) + " U" + suffix];
+        var age = Status.ageOf(token, now);
+        if (age == null || age > SLOT_STALE_SEC) { return [null, "--", null]; }
+        if (token.equals("iob")) {
+            var mU = Status.field("iob", "mU");
+            if (mU == null) { return [null, "--", null]; }
+            return [mU.toFloat() / 1000.0, "IOB " + Display.units(mU), "U"];
+        }
+        if (token.equals("reservoir")) {
+            var mU = Status.field("reservoir", "mU");
+            if (mU == null) { return [null, "--", null]; }
+            // Whole units, as the pump shows it, rounded down.
+            return [mU / 1000, "Res " + (mU / 1000).toString(), "U"];
         }
         if (token.equals("battery")) {
-            var pct = Status.field(key, "percent");
-            if (pct == null) { return [null, "--"]; }
-            return [pct, pct.toString() + "%" + suffix];
+            var pct = Status.field("battery", "percent");
+            if (pct == null) { return [null, "--", null]; }
+            return [pct, "Bat " + pct.toString() + "%", "%"];
         }
         if (token.equals("basal")) {
             var b = Status.part("basal");
-            if (b == null) { return [null, "--"]; }
-            if (b["suspended"] == true) { return [0.0, "Suspended" + suffix]; }
+            if (b == null) { return [null, "--", null]; }
+            if (b["suspended"] == true) { return [0, "Basal off", "U/h"]; }
             var rate = Status.field("basal", "mUPerHour");
-            if (rate == null) { return [null, "--"]; }
-            return [rate.toFloat() / 1000.0, Display.units(rate) + " U/hr" + suffix];
+            if (rate == null) { return [null, "--", null]; }
+            return [rate.toFloat() / 1000.0, "Basal " + Display.units(rate), "U/h"];
         }
-        return [null, "--"];
+        return [null, "--", null];
     }
 
     (:background)
@@ -72,19 +77,19 @@ module BgComplication {
         var age = Status.ageOf("glucose", now);
         var stale = age == null || age > Prefs.staleSeconds();
         var stringMode = Prefs.complicationDisplay().equals("stringTrend");
-        if (g == null) {
+        if (g == null || stale) {
             push(GLUCOSE_ID, null, "--", null);
         } else {
-            var arrow = stale ? "" : arrowFor(Status.trend());
-            var label = glucoseLabel(Display.glucose(g, Prefs.glucoseUnit()), arrow, stale, stringMode);
-            push(GLUCOSE_ID, g, label, (stringMode || stale) ? null : arrow);
+            var arrow = arrowFor(Status.trend());
+            push(GLUCOSE_ID, g, glucoseLabel(Display.glucose(g, Prefs.glucoseUnit()), arrow, false),
+                 stringMode ? null : arrow);
         }
         var slots = Prefs.complicationSlots();
         for (var i = 0; i < SLOT_IDS.size(); i += 1) {
             var id = SLOT_IDS[i] as Lang.Number;
             if (i < slots.size() && slots[i] instanceof Lang.String) {
                 var s = slot(slots[i] as Lang.String, now);
-                push(id, s[0] as Lang.Numeric?, s[1] as Lang.String, null);
+                push(id, s[0] as Lang.Numeric?, s[1] as Lang.String, s[2] as Lang.String?);
             } else {
                 push(id, null, "--", null);
             }

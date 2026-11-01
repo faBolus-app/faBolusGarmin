@@ -14,9 +14,9 @@ class MainView extends Ui.View {
     }
 
     static function buttonRect(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
-        var bw = w * 0.52;
-        var bh = h * 0.17;
-        return [w / 2 - bw / 2, h * 0.68, bw, bh];
+        var bw = w * 0.58;
+        var bh = h * 0.15;
+        return [w / 2 - bw / 2, h * 0.705, bw, bh];
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {
@@ -32,13 +32,12 @@ class MainView extends Ui.View {
         dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.fillPolygon([[cx, h * 0.045], [cx - 9, h * 0.075], [cx + 9, h * 0.075]]);
 
-        Screens.drawGlucose(dc, cx, h * 0.36, Gfx.FONT_NUMBER_HOT, now);
-        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.55, Gfx.FONT_XTINY, Display.glucoseUnit(Prefs.glucoseUnit()), vc);
-        if (!Glucose.isHidden(now)) {
-            dc.setColor(Glucose.stale(now) ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.63, Gfx.FONT_XTINY, Display.ago(Glucose.age(now)), vc);
-        }
+        Screens.drawGlucose(dc, cx, h * 0.31, Gfx.FONT_NUMBER_HOT, now);
+        // The unit is part of the reading, so it sits close under the number, dim; the reading's age is a
+        // status, so it gets a chip of its own, orange once the reading is stale.
+        dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.475, Gfx.FONT_XTINY, Display.glucoseUnit(Prefs.glucoseUnit()), vc);
+        if (!Glucose.isHidden(now)) { Screens.drawAgeChip(dc, cx, h * 0.595, now); }
         if (_showBolus) {
             Screens.drawBolusButton(dc, buttonRect(w, h), now, Gfx.FONT_SMALL);
         } else {
@@ -117,17 +116,35 @@ module Screens {
                          now as Lang.Number) as Void {
         var text = Glucose.text(now);
         var color = Glucose.color(now);
+        var trend = Glucose.isHidden(now) ? null : Glucose.trend(now);
+        // The number and its arrow are centred together.
+        var size = dc.getFontHeight(font) / 7;
+        var gap = size;
+        var aw = (trend != null) ? TrendArrow.width(trend, size) : 0;
+        var tw = dc.getTextWidthInPixels(text, font);
+        var left = cx - (tw + ((aw > 0) ? gap + aw : 0)) / 2;
         dc.setColor(color, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, cy, font, text, Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
-        var trend = Glucose.trend(now);
-        if (trend != null && !Glucose.isHidden(now)) {
-            var tw = dc.getTextWidthInPixels(text, font);
-            TrendArrow.draw(dc, cx + tw / 2 + 22, cy, 12, trend, color);
-        }
+        dc.drawText(left + tw / 2, cy, font, text, Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
+        if (trend != null && aw > 0) { TrendArrow.draw(dc, left + tw + gap + aw / 2, cy, size, trend, color); }
     }
 
-    // The bolus button: Cancel while a bolus can be cancelled, Bolus when one may start, and a disabled
-    // Bolus with the reason otherwise. Read-only shows no Bolus button at all.
+    // The reading's age in a small dark chip: light text while current, orange once stale.
+    function drawAgeChip(dc as Gfx.Dc, cx as Lang.Numeric, cy as Lang.Numeric, now as Lang.Number) as Void {
+        var text = Display.ago(Glucose.age(now));
+        if (text.length() == 0) { return; }
+        var stale = Glucose.stale(now);
+        var tw = dc.getTextWidthInPixels(text, Gfx.FONT_XTINY);
+        var th = dc.getFontHeight(Gfx.FONT_XTINY);
+        var pad = th / 2;
+        dc.setColor(stale ? 0x3A2200 : 0x262626, Gfx.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(cx - tw / 2 - pad, cy - th / 2 - 1, tw + pad * 2, th + 2, (th + 2) / 2);
+        dc.setColor(stale ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, cy, Gfx.FONT_XTINY, text, Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
+    }
+
+    // The bolus button: Cancel while a bolus can be cancelled, Bolus when one may start, and otherwise a
+    // disabled button that says why (below it, the round screen has no room for a reason). Read-only shows
+    // no Bolus button at all.
     function drawBolusButton(dc as Gfx.Dc, r as Lang.Array<Lang.Numeric>, now as Lang.Number,
                              font as Gfx.FontType) as Void {
         var cx = r[0] + r[2] / 2;
@@ -151,55 +168,80 @@ module Screens {
                 labelColor = Gfx.COLOR_WHITE;
             }
         }
+        // A reason takes two lines of the smallest font, so a blocked button grows to hold them.
+        var lines = dc.getFontHeight(Gfx.FONT_XTINY) * 2;
+        var bh = (why != null && lines + 12 > r[3]) ? lines + 12 : r[3];
+        var top = r[1] + r[3] / 2 - bh / 2;
         dc.setColor(fill, Gfx.COLOR_TRANSPARENT);
-        dc.fillRoundedRectangle(r[0], r[1], r[2], r[3], 12);
+        dc.fillRoundedRectangle(r[0], top, r[2], bh, 12);
         dc.setColor(labelColor, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, r[1] + r[3] / 2, font, label, vc);
-        var below = r[1] + r[3] + dc.getFontHeight(Gfx.FONT_XTINY) / 2 + 4;
         if (why != null) {
-            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, below, Gfx.FONT_XTINY, why, vc);
-        } else if (BolusFlow.hasRequest() && !BolusFlow.canCancel()) {
-            // The last request's result, until the next one.
-            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, below, Gfx.FONT_XTINY, BolusFlow.headline(), vc);
+            dc.drawText(cx, r[1] + r[3] / 2, Gfx.FONT_XTINY,
+                        Gfx.fitTextToArea(why, Gfx.FONT_XTINY, r[2] * 0.90, lines + 6, true), vc);
+        } else {
+            dc.drawText(cx, r[1] + r[3] / 2, font, label, vc);
         }
     }
 }
 
 // The trend arrow, drawn: the watch's fonts can't show the arrow glyphs.
 module TrendArrow {
-    function head(dc as Gfx.Dc, tx as Lang.Float, ty as Lang.Float, dx as Lang.Float, dy as Lang.Float,
-                  size as Lang.Numeric) as Void {
-        var hl = size * 0.6;
-        var hw = size * 0.5;
-        var bx = tx - dx * hl;
-        var by = ty - dy * hl;
-        var px = -dy;
-        var py = dx;
-        dc.fillPolygon([[tx, ty], [bx + px * hw, by + py * hw], [bx - px * hw, by - py * hw]]);
+    // The arrow's direction for a trend token, and whether it's doubled; null for an unknown token.
+    function direction(token as Lang.String) as [Lang.Float, Lang.Float, Lang.Boolean]? {
+        if (token.equals("flat")) { return [1.0, 0.0, false]; }
+        if (token.equals("up")) { return [0.0, -1.0, false]; }
+        if (token.equals("upup")) { return [0.0, -1.0, true]; }
+        if (token.equals("up45")) { return [0.7071, -0.7071, false]; }
+        if (token.equals("down")) { return [0.0, 1.0, false]; }
+        if (token.equals("downdown")) { return [0.0, 1.0, true]; }
+        if (token.equals("down45")) { return [0.7071, 0.7071, false]; }
+        return null;
     }
 
+    // How wide the arrow drawn at `size` is, for centering it with the number.
+    function width(token as Lang.String, size as Lang.Numeric) as Lang.Number {
+        var d = direction(token);
+        if (d == null) { return 0; }
+        return (size * ((d[2] as Lang.Boolean) ? 3.2 : 2.0)).toNumber();
+    }
+
+    // One arrow centred on (cx, cy): a shaft ending at the head's base, so the head's point is its end.
+    function one(dc as Gfx.Dc, cx as Lang.Float, cy as Lang.Float, dx as Lang.Float, dy as Lang.Float, s as Lang.Float)
+        as Void {
+        var hl = s * 0.85;
+        var hw = s * 0.62;
+        var tipx = cx + dx * s;
+        var tipy = cy + dy * s;
+        var bx = tipx - dx * hl;
+        var by = tipy - dy * hl;
+        var px = -dy;
+        var py = dx;
+        // The shaft is a filled bar, so its tail is cut square to the arrow in every direction (a thick
+        // line's end isn't, on a diagonal).
+        var half = s * 0.16;
+        var tx = cx - dx * s;
+        var ty = cy - dy * s;
+        var ex = bx + dx * 2;
+        var ey = by + dy * 2;
+        dc.fillPolygon([[tx + px * half, ty + py * half], [ex + px * half, ey + py * half],
+                        [ex - px * half, ey - py * half], [tx - px * half, ty - py * half]]);
+        dc.fillPolygon([[tipx, tipy], [bx + px * hw, by + py * hw], [bx - px * hw, by - py * hw]]);
+    }
+
+    // Centred on (cx, cy). A doubled arrow is two arrows side by side.
     function draw(dc as Gfx.Dc, cx as Lang.Numeric, cy as Lang.Numeric, size as Lang.Numeric, token as Lang.String,
                   color as Gfx.ColorType) as Void {
-        var dx = 1.0;
-        var dy = 0.0;
-        var twice = false;
-        if (token.equals("up")) { dx = 0.0; dy = -1.0; }
-        else if (token.equals("upup")) { dx = 0.0; dy = -1.0; twice = true; }
-        else if (token.equals("up45")) { dx = 0.7; dy = -0.7; }
-        else if (token.equals("down")) { dx = 0.0; dy = 1.0; }
-        else if (token.equals("downdown")) { dx = 0.0; dy = 1.0; twice = true; }
-        else if (token.equals("down45")) { dx = 0.7; dy = 0.7; }
-        else if (!token.equals("flat")) { return; }
-        dc.setColor(color, Gfx.COLOR_TRANSPARENT);
+        var d = direction(token);
+        if (d == null) { return; }
+        var dx = d[0] as Lang.Float;
+        var dy = d[1] as Lang.Float;
         var s = size.toFloat();
-        var tipx = cx.toFloat() + dx * s;
-        var tipy = cy.toFloat() + dy * s;
-        dc.setPenWidth(3);
-        dc.drawLine(cx.toFloat() - dx * s, cy.toFloat() - dy * s, tipx, tipy);
-        head(dc, tipx, tipy, dx, dy, s);
-        if (twice) { head(dc, tipx - dx * s * 0.55, tipy - dy * s * 0.55, dx, dy, s); }
-        dc.setPenWidth(1);
+        dc.setColor(color, Gfx.COLOR_TRANSPARENT);
+        if (d[2] as Lang.Boolean) {
+            one(dc, cx.toFloat() - s * 0.6, cy.toFloat(), dx, dy, s);
+            one(dc, cx.toFloat() + s * 0.6, cy.toFloat(), dx, dy, s);
+        } else {
+            one(dc, cx.toFloat(), cy.toFloat(), dx, dy, s);
+        }
     }
 }

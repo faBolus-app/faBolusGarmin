@@ -78,33 +78,23 @@ class AlertsListDelegate extends Ui.BehaviorDelegate {
     function onPreviousPage() as Lang.Boolean { return Nav.goPrev("alerts"); }
 }
 
-// "Clear: <alert>?" — the one dismiss path. Yes sends the dismiss; the alert stays listed until the pump
-// confirms it cleared.
-class AlertConfirmDelegate extends Ui.ConfirmationDelegate {
-    private var _id as Lang.String;
-
-    function initialize(id as Lang.String) {
-        ConfirmationDelegate.initialize();
-        _id = id;
-    }
-
-    function onResponse(response as Ui.Confirm) as Lang.Boolean {
-        if (response == Ui.CONFIRM_YES) {
-            Alerts.dismiss(_id, Status.now());
-            Ui.requestUpdate();
-        }
-        return true;
-    }
-}
-
-// An alert there's nothing to clear for on the watch: the phone's own, or one the pump won't let a remote
-// dismiss.
+// An alert's card: what it is, in its severity's colour, and what it says. One the pump lets a remote clear
+// has a "Clear on pump" button, the one dismiss path; any other press closes the card. The alert stays
+// listed until the pump confirms it cleared.
 class AlertNoticeView extends Ui.View {
     private var _alert as Lang.Dictionary;
 
     function initialize(alert as Lang.Dictionary) {
         View.initialize();
         _alert = alert;
+    }
+
+    function alert() as Lang.Dictionary { return _alert; }
+
+    function clearable() as Lang.Boolean { return Alerts.dismissable(_alert); }
+
+    static function clearRect(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
+        return [w * 0.20, h * 0.68, w * 0.60, h * 0.13];
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {
@@ -114,15 +104,67 @@ class AlertNoticeView extends Ui.View {
         var h = dc.getHeight();
         var cx = w / 2;
         var vc = Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER;
+        var touch = Nav.isTouch();
+        var clear = clearable();
         var critical = Wire.text(_alert, "severity", "").equals("critical");
         dc.setColor(critical ? Gfx.COLOR_RED : Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.30, Gfx.FONT_SMALL, Wire.text(_alert, "title", "Alert"), vc);
+        // Up to two lines, inside the round screen's width near the top; the explanation starts below them.
+        var lineH = dc.getFontHeight(Gfx.FONT_SMALL);
+        var fitted = Gfx.fitTextToArea(Wire.text(_alert, "title", "Alert"), Gfx.FONT_SMALL, w * 0.70, lineH * 2, true);
+        var title = (fitted != null) ? fitted : Wire.text(_alert, "title", "Alert");
+        var titleH = (title.find("\n") != null) ? lineH * 2 : lineH;
+        var titleTop = h * 0.16;
+        dc.drawText(cx, titleTop + titleH / 2, Gfx.FONT_SMALL, title, vc);
         var body = Wire.text(_alert, "body", "");
         if (body.length() > 0) {
             dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.56, Gfx.FONT_XTINY, Gfx.fitTextToArea(body, Gfx.FONT_XTINY, w * 0.80, h * 0.36, true), vc);
+            var bodyTop = titleTop + titleH + h * 0.02;
+            var bodyH = (clear ? h * 0.66 : h * 0.80) - bodyTop;
+            dc.drawText(cx, bodyTop + bodyH / 2, Gfx.FONT_XTINY,
+                        Gfx.fitTextToArea(body, Gfx.FONT_XTINY, w * 0.80, bodyH, true), vc);
+        }
+        if (clear) {
+            var r = clearRect(w, h);
+            dc.setColor(0x333333, Gfx.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(r[0], r[1], r[2], r[3], 10);
+            dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, r[1] + r[3] / 2, Gfx.FONT_XTINY, touch ? "Clear on pump" : "START: clear on pump", vc);
         }
         dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.86, Gfx.FONT_XTINY, Nav.isTouch() ? "tap to close" : "START to close", vc);
+        var close = touch ? "tap to close" : (clear ? "BACK to close" : "START to close");
+        dc.drawText(cx, h * 0.85, Gfx.FONT_XTINY, close, vc);
+    }
+}
+
+class AlertCardDelegate extends Ui.BehaviorDelegate {
+    private var _view as AlertNoticeView;
+
+    function initialize(view as AlertNoticeView) {
+        BehaviorDelegate.initialize();
+        _view = view;
+    }
+
+    function onTap(evt as Ui.ClickEvent) as Lang.Boolean {
+        var c = evt.getCoordinates();
+        var size = Nav.screenSize();
+        if (_view.clearable() && Nav.inRect(c[0], c[1], AlertNoticeView.clearRect(size[0], size[1]))) { return clear(); }
+        return close();
+    }
+
+    function onSelect() as Lang.Boolean {
+        if (Nav.isTouch()) { return false; }
+        return _view.clearable() ? clear() : close();
+    }
+
+    // Asks the phone to clear it on the pump; what happened shows on the Alerts screen.
+    private function clear() as Lang.Boolean {
+        var sent = Alerts.dismiss(Alerts.idOf(_view.alert()), Status.now());
+        Toast.show(sent ? "Clearing on pump…" : "Phone not connected — not cleared");
+        return close();
+    }
+
+    private function close() as Lang.Boolean {
+        Ui.popView(Ui.SLIDE_DOWN);
+        return true;
     }
 }

@@ -59,11 +59,10 @@ Sibling repos: `../faBolus`, `../TandemKit`.
 ## Device floor
 
 venu3s only on `main`. Fail gracefully on a capability a device/display cannot provide — never
-fabricate a value. That is distinct from honest-staleness `--` (a safety signal). The BG
-complication's numeric `:value` slot is the standing example: it cannot render `--` at all, so
-`BgComplication.shortLabelFor` marks a stale reading with an explicit `" old"` suffix instead — an
-honest indicator of the platform limitation, never a bare dash that could pass for a fresh reading
-(`source/app/BgComplication.mc`).
+fabricate a value. That is distinct from honest-staleness `--` (a safety signal). The complications
+are the standing example: a face can't show a value's age, so a stale value is published as no number
+and the label `--`, never as a value that could pass for a current one (`source/app/BgComplication.mc`).
+Their arrows are ASCII (`^`, `/`, `->`): the watch's system fonts have no arrow glyphs.
 
 ## Reviewing
 

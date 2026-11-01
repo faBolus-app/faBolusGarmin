@@ -8,7 +8,7 @@ module Nav {
     function viewFor(id as Lang.String) as [Ui.Views, Ui.InputDelegates] {
         if (id.equals("alerts")) { return [new AlertsListView(), new AlertsListDelegate()]; }
         if (id.equals("history")) { return [new CgmView(), new CgmDelegate()]; }
-        if (id.equals("details")) { return [new DetailsView(), new ScreenDelegate("details")]; }
+        if (id.equals("details")) { return [new DetailsView(), new DetailsDelegate()]; }
         if (id.equals("glucose")) { return [new MainView(false), new MainDelegate(false, "glucose")]; }
         if (id.equals("clock")) { return [new ClockView(), new ScreenDelegate("clock")]; }
         if (id.equals("bolusonly")) { return [new BolusOnlyView(), new BolusOnlyDelegate()]; }
@@ -83,14 +83,10 @@ module Nav {
         if (replace) { Ui.switchToView(v, d, Ui.SLIDE_LEFT); } else { Ui.pushView(v, d, Ui.SLIDE_LEFT); }
     }
 
-    // A new alert's card: a pump alert that may be dismissed asks to clear it; anything else is shown.
+    // An alert's card, new or tapped in the list.
     function pushAlert(a as Lang.Dictionary) as Void {
-        var t = Wire.text(a, "title", "Alert");
-        if (Alerts.dismissable(a)) {
-            Ui.pushView(new Ui.Confirmation("Clear: " + t + "?"), new AlertConfirmDelegate(Alerts.idOf(a)), Ui.SLIDE_UP);
-        } else {
-            Ui.pushView(new AlertNoticeView(a), new NoticeDelegate(), Ui.SLIDE_UP);
-        }
+        var v = new AlertNoticeView(a);
+        Ui.pushView(v, new AlertCardDelegate(v), Ui.SLIDE_UP);
     }
 
     function isTouch() as Lang.Boolean {
@@ -123,15 +119,4 @@ class ScreenDelegate extends Ui.BehaviorDelegate {
     }
     function onNextPage() as Lang.Boolean { return Nav.goNext(_id); }
     function onPreviousPage() as Lang.Boolean { return Nav.goPrev(_id); }
-}
-
-// Closes a notice on any press.
-class NoticeDelegate extends Ui.BehaviorDelegate {
-    function initialize() { BehaviorDelegate.initialize(); }
-    function onTap(evt as Ui.ClickEvent) as Lang.Boolean { return close(); }
-    function onSelect() as Lang.Boolean { return close(); }
-    private function close() as Lang.Boolean {
-        Ui.popView(Ui.SLIDE_DOWN);
-        return true;
-    }
 }
