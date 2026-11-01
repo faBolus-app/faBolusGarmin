@@ -56,6 +56,25 @@ complication's numeric `:value` slot is the standing example: it cannot render `
 honest indicator of the platform limitation, never a bare dash that could pass for a fresh reading
 (`source/app/BgComplication.mc`).
 
+## Reviewing
+
+<!-- Only facts a reviewer can't get from the diff. How to review is the review tool's job; don't restate it here. -->
+
+Facts a reviewer needs that the diff doesn't show:
+
+- The Safety section above names what matters most here.
+- Out of scope: anything a `check.sh` gate already fails on. The jungles type-check at level 2; its
+  warnings are known, and become errors when the app moves to strict (level 3).
+- Connect IQ behavior is checked against the SDK 9.2.0 docs and samples, at the manifests'
+  `minSdkVersion`.
+- The app, the glance and the background service run as separate processes that share
+  `Application.Storage`, so a key written by more than one of them can be overwritten. Glance and
+  background code also run under much smaller memory limits.
+- `scripts/check-schema-drift.sh` checks field names, not messages the code produces, so a change to a
+  field's type or meaning passes it and still breaks the phone link.
+- Most past bugs were in the phone↔watch link: state kept outside a state machine, retry loops, stuck
+  states after a drop, and messages lost, duplicated or reordered.
+
 ## Conventions
 
 Match the phone's command semantics. Device input/UI differences go behind `DeviceProfile`. Comments
