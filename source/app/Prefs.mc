@@ -39,7 +39,8 @@ module Prefs {
         var screens = Wire.obj(p, "screens");
         var complication = Wire.obj(p, "complication");
         var glucose = Wire.obj(p, "glucose");
-        if (revision == null || bolus == null || screens == null || complication == null || glucose == null) {
+        var windows = Wire.obj(p, "freshness");
+        if (windows == null || revision == null || bolus == null || screens == null || complication == null || glucose == null) {
             return null;
         }
         var enabled = Wire.bool(bolus, "enabled");
@@ -57,17 +58,19 @@ module Prefs {
         var stale = Wire.int(glucose, "staleMinutes", 1, 60);
         var floor = Wire.int(glucose, "plotFloor", 0, 400);
         var ceiling = Wire.int(glucose, "plotCeiling", 100, 600);
+        var iobMinutes = Wire.int(windows as Lang.Dictionary, "iobMinutes", 1, 60);
+        var therapyMinutes = Wire.int(windows as Lang.Dictionary, "therapyMinutes", 1, 240);
         if (enabled == null || readOnly == null || mode == null || unitsStep == null || carbStep == null
             || labels == null || order == null || order.size() == 0 || first == null || !Wire.contains(order, first)
             || details == null || hours == null || hours.size() == 0 || slots == null
-            || unit == null || stale == null || floor == null || ceiling == null || floor >= ceiling) {
+            || unit == null || stale == null || iobMinutes == null || therapyMinutes == null || floor == null || ceiling == null || floor >= ceiling) {
             return null;
         }
         var out = {
             "revision" => revision, "bolusEnabled" => enabled, "readOnly" => readOnly, "defaultMode" => mode,
             "unitsStepMU" => unitsStep, "carbStepG" => carbStep, "screenOrder" => order, "defaultScreen" => first,
             "details" => details, "chartHours" => hours,
-            "complicationSlots" => slots, "complicationLabels" => labels, "glucoseUnit" => unit, "staleMinutes" => stale,
+            "complicationSlots" => slots, "complicationLabels" => labels, "glucoseUnit" => unit, "staleMinutes" => stale, "iobMinutes" => iobMinutes, "therapyMinutes" => therapyMinutes,
             "plotFloor" => floor, "plotCeiling" => ceiling
         } as Lang.Dictionary;
         // Absent: never hide a stale reading.
@@ -205,6 +208,12 @@ module Prefs {
     function complicationLabels() as Lang.Boolean { return flag("complicationLabels", false); }
     (:background, :glance)
     function glucoseUnit() as Lang.String { return text("glucoseUnit", "mgdl"); }
+    // IOB, and the pump's settings and status values, count as current while younger than these: the phone's
+    // own windows.
+    (:background)
+    function iobStaleSeconds() as Lang.Number { return number("iobMinutes", 5) * 60; }
+    (:background)
+    function therapyStaleSeconds() as Lang.Number { return number("therapyMinutes", 15) * 60; }
     // Seconds after which glucose is shown marked as stale.
     (:background, :glance)
     function staleSeconds() as Lang.Number { return number("staleMinutes", 6) * 60; }

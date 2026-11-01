@@ -15,6 +15,7 @@ for name in sorted(os.listdir("contract/fixtures")):
     if name.endswith(".json"):
         rid = "fixture_" + name[:-5].replace("-", "_")
         lines.append(f'    <jsonData id="{rid}" filename="../../contract/fixtures/{name}" />')
+lines.append('    <jsonData id="shared_constants" filename="../../contract/shared_constants.json" />')
 rows = []
 for line in open("contract/bolus_oracle_fixtures.jsonl"):
     r = json.loads(line)

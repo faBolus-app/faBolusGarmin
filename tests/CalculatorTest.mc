@@ -84,8 +84,8 @@ module CalculatorTest {
         BolusFlow.mode = "carbs";
         BolusFlow.carbs = 30;
         Test.assert(BolusFlow.estimate(Support.NOW) > 0);
-        Support.eq(BolusFlow.calculatorBlock(Support.NOW + BolusFlow.IOB_SEC), "waiting");
-        Support.eq(BolusFlow.estimate(Support.NOW + BolusFlow.IOB_SEC), -1);
+        Support.eq(BolusFlow.calculatorBlock(Support.NOW + Prefs.iobStaleSeconds()), "waiting");
+        Support.eq(BolusFlow.estimate(Support.NOW + Prefs.iobStaleSeconds()), -1);
         return true;
     }
 

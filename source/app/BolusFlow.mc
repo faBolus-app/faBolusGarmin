@@ -25,9 +25,6 @@ module BolusFlow {
     const AWAIT_MAX_SEC = 1800;
     // A confirm older than this must be started again.
     const ARM_SEC = 120;
-    // The calculator's inputs count while younger than these (faBolusCore CalcInputFreshness).
-    const IOB_SEC = 300;
-    const SETTINGS_SEC = 900;
     const MAX_CARBS = 200;
     // The dial's top when neither a remote limit nor the pump's max is known. Not a dose limit: the phone
     // and the pump check every dose.
@@ -106,8 +103,9 @@ module BolusFlow {
     // arrived fresh. "low"/"high": the CGM reads outside 40–400 mg/dL, and the phone refuses a calculated
     // dose then, so the watch says so before anything is sent.
     function calculatorBlock(now as Lang.Number) as Lang.String? {
-        if (Status.freshField("calculator", "carbRatioMg", SETTINGS_SEC, now) == null
-            || Status.freshField("iob", "mU", IOB_SEC, now) == null) {
+        // The calculator's inputs count while younger than the phone's windows (CalcInputFreshness).
+        if (Status.freshField("calculator", "carbRatioMg", Prefs.therapyStaleSeconds(), now) == null
+            || Status.freshField("iob", "mU", Prefs.iobStaleSeconds(), now) == null) {
             return "waiting";
         }
         var g = correctionGlucose(now);

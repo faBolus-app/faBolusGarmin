@@ -96,6 +96,8 @@ module ContractTest {
         Test.assert(Support.same(Prefs.chartHours(), [3, 6, 12, 24]));
         Test.assert(Support.same(Prefs.complicationSlots(), ["iob", "reservoir", "battery"]));
         Test.assert(!Prefs.complicationLabels());
+        Support.eq(Prefs.iobStaleSeconds(), 300);
+        Support.eq(Prefs.therapyStaleSeconds(), 900);
         Support.eq(Prefs.glucoseUnit(), "mgdl");
         Support.eq(Prefs.staleSeconds(), 360);
         Support.eq(Prefs.hideDelaySeconds(), null);

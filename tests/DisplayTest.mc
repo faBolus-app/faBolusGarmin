@@ -44,6 +44,20 @@ module DisplayTest {
         return true;
     }
 
+    // The constants the watch keeps a copy of are the phone's, as contract/shared_constants.json records them.
+    (:test)
+    function sharedConstantsAreThePhones(logger as Test.Logger) as Lang.Boolean {
+        var c = Support.fixture(Rez.JsonData.shared_constants);
+        var bands = c["glucoseBands"] as Lang.Dictionary;
+        Support.eq(Display.GLUCOSE_LOW, bands["low"] as Lang.Object?);
+        Support.eq(Display.GLUCOSE_HIGH, bands["high"] as Lang.Object?);
+        Support.eq(Display.GLUCOSE_VERY_HIGH, bands["veryHigh"] as Lang.Object?);
+        var plausible = c["plausibleGlucose"] as Lang.Dictionary;
+        Support.eq(Calculator.GLUCOSE_MIN, plausible["min"] as Lang.Object?);
+        Support.eq(Calculator.GLUCOSE_MAX, plausible["max"] as Lang.Object?);
+        return true;
+    }
+
     // The complication's label: the reading and its arrow while current, "--" once stale.
     (:test)
     function complicationLabels(logger as Test.Logger) as Lang.Boolean {
@@ -58,10 +72,10 @@ module DisplayTest {
         return true;
     }
 
-    // The slots show stale fifteen minutes after their values were measured, so a phone that went away
-    // shows on the face.
+    // The slots show stale once their values are older than the phone's windows (IOB's own, the pump
+    // settings' for the rest), so a phone that went away shows on the face.
     (:test)
-    function slotsGoStaleAfterFifteenMinutes(logger as Test.Logger) as Lang.Boolean {
+    function slotsGoStaleAfterThePhonesWindows(logger as Test.Logger) as Lang.Boolean {
         Support.connected();
         // Names on, as the user may set them.
         var named = Support.payloadOf(Rez.JsonData.fixture_config);
@@ -72,10 +86,14 @@ module DisplayTest {
         Support.eq(fresh[1] as Lang.Object?, "IOB 1.25");
         Support.eq(fresh[2] as Lang.Object?, "U");
         Test.assert(Support.isSet(fresh[0] as Lang.Object?));
-        // IOB was measured 20 s before the status; 15 minutes later it shows as unknown, not as current.
-        var later = BgComplication.slot("iob", NOW + 900 - 20 + 1);
+        // IOB was measured 20 s before the status; past the phone's 5 minutes it shows as unknown, not as
+        // current, while the reservoir, measured 40 s before, still shows until 15 minutes.
+        Support.eq(BgComplication.slot("iob", NOW + 300 - 20)[1] as Lang.Object?, "IOB 1.25");
+        var later = BgComplication.slot("iob", NOW + 300 - 20 + 1);
         Support.eq(later[0] as Lang.Object?, null);
         Support.eq(later[1] as Lang.Object?, "--");
+        Support.eq(BgComplication.slot("reservoir", NOW + 900 - 40)[1] as Lang.Object?, "Res 143");
+        Support.eq(BgComplication.slot("reservoir", NOW + 900 - 40 + 1)[1] as Lang.Object?, "--");
         Support.eq(BgComplication.slot("battery", NOW)[1] as Lang.Object?, "Bat 72%");
         Support.eq(BgComplication.slot("reservoir", NOW)[1] as Lang.Object?, "Res 143");
         Support.eq(BgComplication.slot("reservoir", NOW)[0] as Lang.Object?, 143);

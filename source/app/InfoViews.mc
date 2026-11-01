@@ -182,8 +182,6 @@ class CgmDelegate extends Ui.BehaviorDelegate {
 
 // The pump's values, as rows in the order the phone sets. Each value older than its window is marked.
 class DetailsView extends Ui.View {
-    // Older than this, a value is marked as old.
-    static const OLD_SEC = 900;
 
     function initialize() { View.initialize(); }
 
@@ -195,7 +193,9 @@ class DetailsView extends Ui.View {
 
     static function mark(key as Lang.String, now as Lang.Number) as Lang.String {
         var age = Status.ageOf(key, now);
-        return (age != null && age > OLD_SEC) ? " (old)" : "";
+        // Older than the phone's window (IOB's own, the pump settings' for the others), a value is marked old.
+        var window = key.equals("iob") ? Prefs.iobStaleSeconds() : Prefs.therapyStaleSeconds();
+        return (age != null && age > window) ? " (old)" : "";
     }
 
     // A row's text, or null when the row has nothing to show.
