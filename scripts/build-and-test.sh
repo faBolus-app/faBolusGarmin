@@ -21,9 +21,9 @@
 #      CI, and it has no unattended installer. `monkeyc` cannot run in CI without it.
 #   2. `monkeydo` runs the unit tests inside the GUI simulator, which needs a display. GitHub runners
 #      are headless, so the unit tests cannot run there at all — a technical wall, not just licensing.
-# CI's Garmin coverage is therefore the CONTRACT: schema-drift against faBolus's command.schema.json
-# (see ci.yml), which needs no SDK. Compilation and unit tests are this script, run by a developer who
-# has the SDK. Faking a green Garmin build badge in CI would be worse than an honest, scoped gate.
+# CI's Garmin coverage is therefore the contract pin (scripts/check-contract.sh against faBolus at
+# contract/PIN), which needs no SDK. Compilation, the golden-fixture tests and calculator parity are this
+# script, run by a developer who has the SDK.
 #
 # monkeydo's exit code is UNRELIABLE (it returns nonzero even when every test passes), so this script
 # decides pass/fail by PARSING the "PASSED (passed=N, failed=0, errors=0)" line, never the exit code.
@@ -64,8 +64,8 @@ fi
 # Each jungle compiles twice. The first pass is at the jungle's own type-check level and fails on any
 # error. The second pass turns type checking off (-l 0) so the only warnings left are the compiler's own
 # (unused locals, implicit entry points, ignored annotations), and any of those fails the build: SDK 9.2.0
-# has no warnings-as-errors flag, so this script is the flag. Type-check findings become errors when the
-# whole app moves to strict (level 3).
+# has no warnings-as-errors flag, so this script is the flag. The first pass is at strict (level 3), where
+# every type-check finding is an error.
 compile() {  # <jungle> <device> [extra args...]
   local j="$1" d="$2"; shift 2
   if ! "$MONKEYC" -f "$j.jungle" -o "$OUT/$j-$d.prg" -y "$KEY" -d "$d" "$@" >"$OUT/$j-$d.log" 2>&1; then
@@ -80,6 +80,9 @@ compile() {  # <jungle> <device> [extra args...]
     echo "  ✅ $j.jungle  ($d)"
   fi
 }
+
+echo "== contract test resources =="
+if ! ./scripts/gen-test-resources.sh; then echo "  ❌ couldn't generate the test resources from contract/"; FAIL=1; fi
 
 echo "== jungles =="
 compile test   venu3s

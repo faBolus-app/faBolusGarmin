@@ -16,24 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Pick the faBolus branch to check the contract against (this branch's name, else main)
-        id: fbref
-        env:
-          WANT: ${{ github.head_ref || github.ref_name }}
-        run: |
-          REPO="https://github.com/faBolus-app/faBolus.git"
-          if [ -n "$WANT" ] && git ls-remote --exit-code --heads "$REPO" "$WANT" >/dev/null 2>&1; then
-            echo "ref=$WANT" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=main" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Read the contract pin
+        id: pin
+        run: echo "sha=$(tr -d '[:space:]' < contract/PIN)" >> "$GITHUB_OUTPUT"
 
-      - name: Check out faBolus for the v1 contract schema
+      - name: Check out faBolus at the pinned commit
         uses: actions/checkout@v4
         with:
           repository: faBolus-app/faBolus
-          ref: ${{ steps.fbref.outputs.ref }}
+          ref: ${{ steps.pin.outputs.sha }}
           path: _faBolus
+          fetch-depth: 1
 
       - name: Install actionlint and markdownlint-cli2
         run: |
@@ -41,7 +34,7 @@ jobs:
           sudo mv actionlint /usr/local/bin/
           npm install --global markdownlint-cli2@0.24.0
 
-      - run: SCHEMA=_faBolus/schema/command.schema.json ./scripts/check.sh shell actions markdown contract
+      - run: FABOLUS=_faBolus ./scripts/check.sh shell actions markdown contract
 
   report:
     name: Semgrep (report only)

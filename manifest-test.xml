@@ -11,21 +11,12 @@
         <iq:products>
             <iq:product id="venu3s"/>
         </iq:products>
-        <!-- Only what the app + shared resources need: ComplicationPublisher for the complications
-             resource, Communications for RemoteComm.mc (compiled in with AppState.mc for the E5 parse
-             tests). NARROW-MAIN (2026-08-27): BluetoothLowEnergy is GONE — it existed only for the paused
-             direct-pump BLE client, now removed from main (lives on dev/direct-ble + experimental). -->
+        <!-- The same permissions as manifest.xml: the suite compiles the whole app, so the compiler
+             needs what the app's modules use. TestEntryApp never registers a background event. -->
         <iq:permissions>
             <iq:uses-permission id="ComplicationPublisher"/>
             <iq:uses-permission id="Communications"/>
-            <!-- CX-G-12 (13-04): FaBolusApp.mc/BgService.mc are now compiled into the test binary and
-                 declare a (:background) ServiceDelegate — the compiler requires this permission whenever
-                 a background application (any (:background)-annotated class) is present. Mirrors
-                 manifest.xml. This is a compile-time requirement only; the test entry (TestEntryApp)
-                 never actually registers a temporal event. -->
             <iq:uses-permission id="Background"/>
-            <!-- CX-G-06 (13-07): BgService.mc now calls Toybox.Notifications.showNotification() from the
-                 (:background) BgServiceDelegate — mirrors manifest.xml/manifest-official.xml. -->
             <iq:uses-permission id="Notifications"/>
         </iq:permissions>
         <iq:languages>

@@ -21,7 +21,7 @@
 #      copy of it, so the guard cannot drift from the thing it guards.
 #
 # The xcconfig path defaults to ../faBolus/Config.xcconfig (a sibling checkout); override with $XCCONFIG
-# or the first argument. Mirrors scripts/check-schema-drift.sh's contract, including its exit codes:
+# or the first argument. Exit codes:
 #   0 = in sync (or skipped, when the sibling checkout is absent)   1 = drift   2 = bad invocation
 set -euo pipefail
 cd "$(dirname "$0")/.."

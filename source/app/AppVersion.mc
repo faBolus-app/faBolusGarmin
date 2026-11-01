@@ -30,6 +30,7 @@ using Toybox.Lang;
 module AppVersion {
 
     // Keep EQUAL to faBolus Config.xcconfig MARKETING_VERSION (guarded by scripts/check-version-sync.sh).
+    (:background)
     const NAME = "0.1.0";
 
     // The Details row label, e.g. "App: 0.1.0 · 6f60fa9" — 20 chars at the current version, 21 with the

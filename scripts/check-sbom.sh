@@ -9,8 +9,8 @@
 #   (3) each third-party upstream attributed in NOTICE.md (pumpX2, G7SensorKit) also appears in the SBOM
 #       — keeps the prose and the machine-checkable table in step.
 #
-# Reads only local files (no network, no sibling checkout), so it is independent of the schema-drift
-# contract check and safe to run as a separate CI step.
+# Reads only local files (no network, no sibling checkout), so it is independent of the contract check
+# and safe to run as a separate CI step.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

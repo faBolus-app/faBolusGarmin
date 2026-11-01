@@ -13,22 +13,31 @@ FDA-cleared. Companion map: [`llms.txt`](llms.txt). Branch policy is canonical i
   `experimental`).
 - Bolus confirm is a deliberate gesture per device (touch 1-2-3 / two-button hold). Don't weaken it.
   It is one explicit gesture, not a second host confirmation. The phone recomputes the dose from carbs,
-  rejects divergence, and clamps to max bolus.
+  refuses it if it differs from the watch's estimate, and the pump's own limits govern.
 
-## Command contract
+## Phone↔watch contract
 
-`RemoteCommand` is mirrored in Monkey C from faBolus's `schema/command.schema.json`. Change fields →
-update the mirror → `scripts/check-schema-drift.sh`. Phone-only kinds (auth/sealed/approval) are not
-in this shared schema.
+The watch speaks protocol version 2, defined in faBolus's `Packages/RemoteProtocol/contract/` (field
+reference, JSON schema, golden fixtures written by the phone's Swift, and the calculator's oracle rows).
+`contract/` here is a vendored copy at the faBolus commit in `contract/PIN`; change it only with
+`scripts/sync-contract.sh <faBolus-commit>`. `scripts/check-contract.sh` checks the copy against that
+commit, and the unit suite reads every fixture and runs the calculator on every oracle row. A message of
+any other version is shown as "update", never read.
 
 ## Layout
 
-- `source/app/` — UI, bolus confirm, `RemoteComm` (phone-relay), `AppState`.
+- `source/app/` — one module per concern, each the only writer of its `Storage` keys (`Store.mc` names
+  them): `Link` (the phone link: polling, backoff, transmit), `Wire` (messages), `Inbound` (dispatch),
+  `Status`, `Prefs`, `History`, `Alerts`, `BolusFlow` (the bolus request and its outcome), `Calculator`,
+  `Display`; the views and delegates; `BgService`/`BgComplication` (background) and
+  `FaBolusGlanceView` (glance).
+- `contract/` — the vendored phone↔watch contract (see above).
 - Jungles: `monkey.jungle` + `manifest.xml` (Beta), `official.jungle` + `manifest-official.xml`
   (Official), `test.jungle`.
 - **venu3s** is the sole `main` build target and the sole hardware-validated device. Other devices
   live on `dev/garmin-devices`.
-- `tests/` — Monkey C unit suite (run locally; CI has no SDK).
+- `tests/` — Monkey C unit suite (run locally; CI has no SDK). `scripts/gen-test-resources.sh` turns
+  `contract/` into the suite's resources under `tests/generated/` (git-ignored).
 
 Sibling repos: `../faBolus`, `../TandemKit`.
 
@@ -39,8 +48,8 @@ Sibling repos: `../faBolus`, `../TandemKit`.
   compiles every jungle, fails on any compiler warning (SDK 9.2.0 has no warnings-as-errors flag, so
   the script is the flag) and runs the unit suite in the simulator. Hosted CI can't run that gate
   (the SDK's license keeps it out of public CI, and the tests need the simulator's window), so CI
-  runs the rest: ShellCheck, actionlint, markdownlint, the v1 schema-drift contract and the SBOM
-  check. Semgrep reports only. `monkeydo`'s exit code lies, so the script parses
+  runs the rest: ShellCheck, actionlint, markdownlint, the contract check (against a checkout of
+  faBolus at `contract/PIN`) and the SBOM check. Semgrep reports only. `monkeydo`'s exit code lies, so the script parses
   `PASSED (…failed=0, errors=0)`.
 - **Sideload:** `./scripts/stamp-revision.sh && monkeyc -f monkey.jungle -o bin/faBolus.prg -y developer_key.der -d venu3s`
   (the Details "App:" row's commit stamp is generated and git-ignored; skipping it fails the compile on
@@ -63,21 +72,22 @@ honest indicator of the platform limitation, never a bare dash that could pass f
 Facts a reviewer needs that the diff doesn't show:
 
 - The Safety section above names what matters most here.
-- Out of scope: anything a `check.sh` gate already fails on. The jungles type-check at level 2; its
-  warnings are known, and become errors when the app moves to strict (level 3).
+- Out of scope: anything a `check.sh` gate already fails on. Every jungle type-checks at strict
+  (level 3). A `(:typecheck([disableBackgroundCheck, disableGlanceCheck]))` annotation declares which
+  process a module runs in (Garmin's BackgroundTimer sample pattern); it turns off no type check.
 - Connect IQ behavior is checked against the SDK 9.2.0 docs and samples, at the manifests'
   `minSdkVersion`.
 - The app, the glance and the background service run as separate processes that share
   `Application.Storage`, so a key written by more than one of them can be overwritten. Glance and
   background code also run under much smaller memory limits.
-- `scripts/check-schema-drift.sh` checks field names, not messages the code produces, so a change to a
-  field's type or meaning passes it and still breaks the phone link.
+- The fixtures are messages the phone's code produced, so a change to a field's type or meaning fails
+  the suite once `contract/` is synced; until then the watch tests against the pinned contract.
 - Most past bugs were in the phone↔watch link: state kept outside a state machine, retry loops, stuck
   states after a drop, and messages lost, duplicated or reordered.
 
 ## Conventions
 
-Match the phone's command semantics. Device input/UI differences go behind `DeviceProfile`. Comments
+Match the phone's semantics. Touch and button input branch on `Nav.isTouch()`. Comments
 explain why (confirm gesture, staleness, schema). Do not add phase/ticket IDs or describe deleted
 engines as if they were on `main`.
 

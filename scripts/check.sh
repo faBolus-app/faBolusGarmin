@@ -7,7 +7,8 @@
 # Gates: build, shell, actions, markdown, contract.
 # `build` is scripts/build-and-test.sh: it needs the Connect IQ SDK and the simulator, so it runs on a
 # developer's Mac (the pre-push hook from scripts/setup.sh), never in hosted CI. CI runs the others.
-# `contract` reads faBolus's v1 schema from ../faBolus unless SCHEMA points elsewhere.
+# `contract` checks contract/ against faBolus at contract/PIN, from ../faBolus unless FABOLUS points
+# elsewhere (CI checks faBolus out at the pin).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -16,7 +17,7 @@ gate_shell() { git ls-files -z '*.sh' | xargs -0 shellcheck; }
 gate_actions() { actionlint; }
 gate_markdown() { markdownlint-cli2; }
 gate_contract() {
-  ./scripts/check-schema-drift.sh
+  ./scripts/check-contract.sh
   ./scripts/check-sbom.sh
 }
 

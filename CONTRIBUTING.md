@@ -32,17 +32,15 @@ per-release history is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Keep it host-agnostic
 
-- The watch is a thin remote. Everything it sends/receives is the shared contract
-  (`statusRead` / `bolusRequest` / `cancelBolus` / `dismissAlert` + the status payload). Don't bake
-  assumptions about a specific pump or host into the phone-relay path.
-- `RemoteComm` is the one seam for transports — add transports there and leave the UI / `AppState`
+- The watch is a thin remote. Everything it sends and receives is the shared contract in `contract/`
+  (protocol version 2). Don't bake assumptions about a specific pump or host into the phone link.
+- `Link` is the one seam for transports — add transports there and leave the UI and the state modules
   untouched.
 
 ## Add support for another Garmin device
 
-The app adapts to the device **at runtime** — `DeviceProfile` (`source/app/DeviceProfile.mc`) reads
-`System.getDeviceSettings()` and every screen chooses its input model and complication vs. none from
-it. Layout is already resolution-relative. So adding a device is mostly a manifest entry, not a
+The app adapts to the device **at runtime** — `Nav.isTouch()` (`source/app/Nav.mc`) reads
+`System.getDeviceSettings()` and every screen chooses its input model from it. Layout is already resolution-relative. So adding a device is mostly a manifest entry, not a
 rewrite:
 
 1. **Declare the product (usually all you need).** Add `<iq:product id="<deviceId>"/>` to
@@ -55,8 +53,7 @@ rewrite:
 3. **Launcher icon (optional polish).** If the default icon is upscaled for the device, add a
    correctly-sized `launcher_icon` via a resource-qualifier folder (`resources-<device>/drawables/…`).
 4. **Verify.** Run the device in the CIQ simulator, exercising bolus entry and the confirm with the
-   device's actual input (buttons if it's button-only), then on hardware; keep the schema drift check
-   green. Add the device to the README's "Supported devices" list and note simulator-only vs.
+   device's actual input (buttons if it's button-only), then on hardware; keep the unit suite green. Add the device to the README's "Supported devices" list and note simulator-only vs.
    hardware-tested.
 
 Only the Venu 3S is hardware-validated today; the button-device and Edge paths are build-verified and
@@ -65,8 +62,7 @@ delivers on its own), but they need on-device shakeout before a device is called
 
 ### The two input models
 
-`DeviceProfile.isTouch()` picks between them; the views/delegates branch on it, so both live in the
-same files:
+`Nav.isTouch()` picks between them; the views/delegates branch on it, so both live in the same files:
 
 - **Touch** (e.g. Venu 3S, edge 1040): tap the drawn controls; confirm by tapping **1 → 2 → 3** in
   order.
@@ -77,8 +73,7 @@ same files:
   press.
 
 When adapting to a new input layout, keep the confirm at least this deliberate (two distinct,
-sustained actions), and keep the touch and button flows in sync in `HoldView`/`HoldDelegate` and
-`BolusView`/`BolusDelegate`.
+sustained actions), and keep the touch and button flows in sync in `source/app/BolusViews.mc`.
 
 ## Add a watch face or another Connect IQ app type
 
@@ -90,17 +85,19 @@ by side (like `monkey.jungle` / `test.jungle`):
   watch face.
 - **Glance** — built into the remote app itself: `FaBolusApp.getGlanceView()` +
   `source/app/FaBolusGlanceView.mc`, both annotated `(:glance)`. Because it's the same app it reads
-  the persisted BG (`bg`/`bgEpoch`) directly, so it shows a real reading with no extra wiring.
+  the stored status directly, so it shows a real reading with no extra wiring.
 - **Widget** — not built; add it the same way (its own `manifest-*.xml` + `*.jungle` + source dir).
 
-## The contract mirror (don't let it drift)
+## The contract (don't let it drift)
 
-The source of truth is `faBolus/schema/command.schema.json`, mirrored in Swift (`RemoteCommand`) and
-here in Monkey C (`RemoteComm.mc` / `AppState.mc`). If you change the contract:
+The source of truth is faBolus's `Packages/RemoteProtocol`: its Swift types write the golden fixtures in
+`contract/`, which this repo vendors at the faBolus commit in `contract/PIN`. If you change the contract:
 
-1. Update the schema and bump its `version`, plus the Swift mirror (in faBolus).
-2. Update the Monkey C mirror to match.
-3. Prefer additive, optional fields so older remotes keep working.
+1. Change it in faBolus, regenerate the fixtures there and commit.
+2. Run `./scripts/sync-contract.sh <that faBolus commit>` here, update the Monkey C to match, and run the
+   unit suite, which reads every fixture.
+3. A change older watches can't read is a new protocol version: each side shows a message of another
+   version as "update", never reads it.
 
 ## Safety
 

@@ -6,19 +6,19 @@
 # Default owner for everything.
 *                                   @zgranowitz
 
-# The cross-app contract mirror. faBolus's schema/command.schema.json is the source of truth; the
-# Monkey C mirror lives in these files, and schema/remote-keys.txt + scripts/check-schema-drift.sh
-# enforce that they don't drift. The check enforces the mirror; the semantics are a human concern.
-/schema/                            @zgranowitz
-/source/app/RemoteComm.mc           @zgranowitz
-/source/app/AppState.mc             @zgranowitz
+# The phone↔watch contract: contract/ is faBolus's, vendored at contract/PIN; the watch reads and writes
+# it in these files. The fixtures check the shapes; the semantics are a human concern.
+/contract/                          @zgranowitz
+/source/app/Wire.mc                 @zgranowitz
+/source/app/Inbound.mc              @zgranowitz
+/source/app/Link.mc                 @zgranowitz
+/source/app/Status.mc               @zgranowitz
 
 # The bolus-confirm interlock: the deliberate 1-2-3 tap (touch) and two-button hold (button). Never
 # weaken these — the watch gesture is a second factor on top of the host's clamp (CONTRIBUTING.md).
-/source/app/HoldView.mc             @zgranowitz
-/source/app/HoldDelegate.mc         @zgranowitz
-/source/app/BolusView.mc            @zgranowitz
-/source/app/BolusDelegate.mc        @zgranowitz
+/source/app/BolusViews.mc           @zgranowitz
+/source/app/BolusFlow.mc            @zgranowitz
+/source/app/Calculator.mc           @zgranowitz
 
 # NARROW-MAIN (2026-08-27): the paused direct-pump + direct-cgm BLE engines have been removed from main
 # and live on the dev/direct-ble + experimental branches only, so there is no /direct-pump/ path on main

@@ -29,32 +29,35 @@ computers are build-verified on the `dev/garmin-devices` branch, not on `main`. 
 
 ## How it fits together
 
-The watch is a **thin remote**: it renders status and sends confirmed commands
-(`statusRead` / `bolusRequest` / `cancelBolus` / `dismissAlert`) as the JSON contract; a **host**
+The watch is a **thin remote**: it shows the status the phone sends and sends `poll`, `bolus`, `cancel`
+and `dismiss` messages (protocol version 2, the contract in `contract/`, vendored from faBolus); the phone
 answers them. The bolus is confirmed by **one explicit gesture on the watch** (1-2-3 / hold). The host
 does not add a separate confirmation gesture today; instead it independently **recomputes the dose from
 the carbs, rejects it if it diverges from the estimate the watch showed, and clamps to the max-bolus
-limit** (defense in depth, not a second human confirmation). A bound two-phase host-nonce confirmation
+limit** (defense in depth, not a second human confirmation). The watch rounds its own estimate down to
+the pump's step, and says before the confirm when a CGM LOW or HIGH means a calculator dose can't be sent. A bound two-phase host-nonce confirmation
 is planned (see `reaudit-remediation-plan` GA-01); until it lands, do not describe the watch gesture as
 one of *two* confirmations.
 
 - `source/app/` — the UI. The swipeable screens are user-orderable from the phone: **glance** (glucose +
   bolus), **glucose-only** (no button), **clock** (analog/digital + glucose, tap to switch, no button),
-  **bolus-only** (just the button), **history**, **alerts** — plus the bolus/confirm modal flow, the
-  complication, `TrendArrow`, `AppState`, and the `Nav` carousel. Entry: `FaBolusApp`.
-- `source/app/DeviceProfile.mc` — the device seam. Screens read it (`isTouch()`, `isButtons()`)
-  and adapt at runtime:
+  **bolus-only** (just the button), **history**, **alerts**, **details** — plus the bolus/confirm modal
+  flow, the complication and the `Nav` carousel. The state lives in one module per concern (`Status`,
+  `Prefs`, `History`, `Alerts`, `BolusFlow`, `Link`), each the only writer of its stored keys. Entry:
+  `FaBolusApp`.
+- Every screen reads `Nav.isTouch()` and adapts at runtime:
   - **Touch** devices: tap the controls; confirm by tapping **1 → 2 → 3**.
   - **Button** devices: **UP/DOWN** adjust the dose, **MENU** switches Units/Carbs, **START**
     delivers; confirm is a deliberate **two-button hold** (hold UP to arm, then hold START to
     deliver). No on-screen cursor.
-- `source/app/RemoteComm` — phone-relay send behind one `send(cmd)` seam. Direct-to-pump is **not**
-  in this tree (preservation branches only).
+- `source/app/Link.mc` — the phone link: every message goes out through it, polls back off while the
+  phone is silent, and a bolus request is resent until the phone answers. Direct-to-pump is **not** in
+  this tree (preservation branches only).
 
 Beyond the remote, the repo also builds one more Connect IQ surface from the same BG feed:
 
 - a **glance** (compact BG in the glance carousel) — built into the app (`FaBolusGlanceView`, reads
-  the persisted reading directly).
+  the stored status directly and marks its age from the measurement time).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md#add-a-watch-face-or-another-connect-iq-app-type) for building
 and extending these. (A standalone watch-face app that consumed the complication previously lived on

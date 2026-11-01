@@ -6,8 +6,8 @@ already in place around it.
 
 ## GA-01 — application-level proof of the confirmation gesture (open, bench/product-gated)
 
-**Finding.** The watch sends a one-phase `bolusRequest` (`RemoteComm.mc`, `HoldView.confirmDeliver`),
-and `GarminRemoteBridge` on the phone delivers it. The payload is not cryptographically bound to a
+**Finding.** The watch sends a one-phase `bolus` message (`Wire.mc`, sent by `BolusFlow.send` after the
+hold), and the phone's remote host (faBolus `Packages/WatchLink`) delivers it. The payload is not cryptographically bound to a
 human confirmation gesture, so a forged or replayed message from a *compromised or replacement Connect
 IQ app* could in principle reach the host without the on-watch hold.
 
@@ -24,7 +24,7 @@ decision**, not a mechanical fix — so it is left to the owner rather than chan
 |---|---|
 | **Replay** of a captured request | Durable idempotency ledger (FB-03): a repeated `(peerId, requestId)` is a no-op; a settled id never re-delivers, even across app relaunch. |
 | **Wrong dose** / stale-settings dose | Host recomputes the authoritative dose and rejects if the watch estimate diverges > 0.10 U (C-06); component rounding now matches the oracle (GA-04), so the shown and delivered numbers agree. |
-| **Mutated / malformed payload** | Inbound validation (GA-09): every field is type/range/finite-checked and enum-validated before it mutates host or watch state; the schema is `additionalProperties:false` and payloads are validated against it in CI (GA-07). |
+| **Mutated / malformed payload** | Inbound validation (GA-09): every field is type/range/finite-checked and enum-validated before it mutates host or watch state; the schema is `additionalProperties:false` and payloads are validated against it in CI (GA-07); a message of another protocol version is never read. |
 | **Wrong device / cross-app** | Connect IQ delivers only to the specific paired companion app; each tester build uses a per-person app id. |
 | **Unauthorized surface** | Child-mode gating (A1) and per-device read-only (the host refuses a bolus from a read-only/locked peer regardless of what the watch sends). |
 
@@ -37,9 +37,9 @@ is the part that needs either the product decision above or bench validation.
 1. **Phone confirmation for Garmin** (strongest): route Garmin requests through the host's existing
    `presentRemoteBolus` → on-phone `confirmRemoteBolus` interlock (as other remotes can), gated by a
    user setting. Reuses proven code; adds a phone tap per Garmin bolus.
-2. **Two-phase token contract** (schema already supports it — `bolusConfirm` + short-lived
-   single-use `confirmToken`): watch `bolusRequest` → host issues a token bound to `{dose, device,
-   expiry}` → after the hold the watch sends `bolusConfirm{confirmToken}` → host verifies once. Closes
+2. **Two-phase token contract** (needs a protocol change — version 2 has no confirm token): watch
+   `bolus` → host issues a short-lived single-use token bound to `{dose, device, expiry}` → after the
+   hold the watch sends a confirm carrying it → host verifies once. Closes
    replay/expiry/wrong-dose/wrong-device/mutation at the protocol layer (but not a compromised app that
    auto-confirms — hence option 1 for that threat).
 

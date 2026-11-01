@@ -27,21 +27,20 @@ Fill in what applies; delete what doesn't. See CONTRIBUTING.md, AGENTS.md, and B
       BLE permission (P0-c; narrow-main — they live on dev/direct-ble + experimental) — or this PR's
       explicit subject is that hold, and says so
 
-## Contract (schema mirror)
+## Contract
 
-- [ ] Did **not** touch the phone↔remote contract
-- [ ] — or did, and: bumped the schema `version` in faBolus, updated the Monkey C mirror
-      (`RemoteComm.mc` / `AppState.mc`) **and** `schema/remote-keys.txt`, kept changes additive/optional,
-      and `scripts/check-schema-drift.sh` passes against the matching faBolus branch
+- [ ] Did **not** touch the phone↔watch contract
+- [ ] — or did: the change landed in faBolus's `Packages/RemoteProtocol/contract/` first, `contract/` here
+      was updated with `scripts/sync-contract.sh <faBolus-commit>`, and the unit suite passes against it
 
 ## Verification
 
-<!-- CI's Garmin coverage is the schema-drift contract check, the SBOM check, and an advisory
+<!-- CI's Garmin coverage is the contract check, the SBOM check, and an advisory
      Semgrep pass (the SDK/simulator can't run in cloud CI — see .github/workflows/ci.yml). The
      build + unit suite is a LOCAL gate; paste what you ran. -->
 
 - [ ] `./scripts/build-and-test.sh` (compiles every jungle + runs the Monkey C unit suite in the sim)
-- [ ] `./scripts/check-schema-drift.sh` passes (with the sibling faBolus checkout)
+- [ ] `./scripts/check-contract.sh` passes (with the sibling faBolus checkout)
 - [ ] `./scripts/check-sbom.sh` passes
 - [ ] Hardware-tested vs. compile-only noted (venu3s is the only hardware-validated device)
 
