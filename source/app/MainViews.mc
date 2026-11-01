@@ -184,7 +184,8 @@ module Screens {
     }
 }
 
-// The trend arrow, drawn: the watch's fonts can't show the arrow glyphs.
+// The trend arrow, drawn: the watch's fonts can't show the arrow glyphs. The glance draws it too.
+(:glance)
 module TrendArrow {
     // The arrow's direction for a trend token, and whether it's doubled; null for an unknown token.
     function direction(token as Lang.String) as [Lang.Float, Lang.Float, Lang.Boolean]? {

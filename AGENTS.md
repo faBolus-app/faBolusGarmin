@@ -62,7 +62,8 @@ venu3s only on `main`. Fail gracefully on a capability a device/display cannot p
 fabricate a value. That is distinct from honest-staleness `--` (a safety signal). The complications
 are the standing example: a face can't show a value's age, so a stale value is published as no number
 and the label `--`, never as a value that could pass for a current one (`source/app/BgComplication.mc`).
-Their arrows are ASCII (`^`, `/`, `->`): the watch's system fonts have no arrow glyphs.
+Their arrows are ASCII (`^`, `/`, `->`): a face draws the label in its own font, Garmin's guidance is
+Latin characters only, and a symbol a device's font lacks shows as `?` or nothing.
 
 ## Reviewing
 

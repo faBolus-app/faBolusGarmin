@@ -24,31 +24,61 @@ class FaBolusGlanceView extends Ui.GlanceView {
 
     function onTick() as Void { Ui.requestUpdate(); }
 
-    // What the glance shows, and whether it's current: [text, stale].
+    // What the glance shows: [reading or "--", age text, stale, trend token or null].
     static function line(now as Lang.Number) as Lang.Array {
         Status.load();
         Prefs.load(Status.revision());
         var g = Status.glucose();
         var age = Status.ageOf("glucose", now);
-        if (g == null || age == null) { return ["--", true]; }
-        var unit = Prefs.glucoseUnit();
+        if (g == null || age == null) { return ["--", "", true, null]; }
         var stale = age > Prefs.staleSeconds();
         var hide = Prefs.hideDelaySeconds();
-        if (hide != null && age > Prefs.staleSeconds() + hide) { return ["--", true]; }
-        var text = Display.glucose(g, unit) + " " + Display.glucoseUnit(unit);
-        if (stale) { text = text + " · " + (age / 60).toString() + "m"; }
-        return [text, stale];
+        if (hide != null && age > Prefs.staleSeconds() + hide) { return ["--", "", true, null]; }
+        var mins = age / 60;
+        var ago = (mins <= 0) ? "NOW" : mins.toString() + "M AGO";
+        return [Display.glucose(g, Prefs.glucoseUnit()), ago, stale, stale ? null : Status.trend()];
     }
 
+    // A tag line ("FABOLUS · 2M AGO", the age orange once stale) over the reading, its arrow and its unit.
     function onUpdate(dc as Gfx.Dc) as Void {
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
         dc.clear();
         var h = dc.getHeight();
         var vl = Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER;
-        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(0, h * 0.30, Gfx.FONT_TINY, "faBolus", vl);
         var l = line(Status.now());
-        dc.setColor((l[1] as Lang.Boolean) ? Gfx.COLOR_LT_GRAY : 0x8AB4FF, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(0, h * 0.70, Gfx.FONT_MEDIUM, l[0] as Lang.String, vl);
+        var text = l[0] as Lang.String;
+        var ago = l[1] as Lang.String;
+        var stale = l[2] as Lang.Boolean;
+        var trend = l[3] as Lang.String?;
+        // The tag line: the app's name left, the reading's age right (orange once stale); the name gives
+        // way when both don't fit.
+        var w = dc.getWidth();
+        var tag = "FABOLUS";
+        var gap = dc.getTextWidthInPixels("  ", Gfx.FONT_XTINY);
+        var fits = dc.getTextWidthInPixels(tag, Gfx.FONT_XTINY) + gap + dc.getTextWidthInPixels(ago, Gfx.FONT_XTINY) <= w;
+        if (fits || ago.length() == 0) {
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(0, h * 0.26, Gfx.FONT_XTINY, tag, vl);
+        }
+        if (ago.length() > 0) {
+            dc.setColor(stale ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(fits ? w : 0, h * 0.26, Gfx.FONT_XTINY, ago,
+                        (fits ? Gfx.TEXT_JUSTIFY_RIGHT : Gfx.TEXT_JUSTIFY_LEFT) | Gfx.TEXT_JUSTIFY_VCENTER);
+        }
+        var g = Status.glucose();
+        var color = (stale || g == null || text.equals("--")) ? Gfx.COLOR_LT_GRAY : Display.rangeColor(g);
+        dc.setColor(color, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(0, h * 0.68, Gfx.FONT_MEDIUM, text, vl);
+        var x = dc.getTextWidthInPixels(text, Gfx.FONT_MEDIUM) + 6;
+        if (trend != null) {
+            var size = dc.getFontHeight(Gfx.FONT_MEDIUM) / 5;
+            var aw = TrendArrow.width(trend, size);
+            TrendArrow.draw(dc, x + aw / 2, h * 0.68, size, trend, color);
+            x += aw + 8;
+        }
+        if (!text.equals("--")) {
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(x, h * 0.72, Gfx.FONT_XTINY, Display.glucoseUnit(Prefs.glucoseUnit()), vl);
+        }
     }
 }

@@ -14,9 +14,8 @@
       12,
       24
     ],
-    "clockAnalog": false,
     "complication": {
-      "display": "numericColor",
+      "labels": false,
       "slots": [
         "iob",
         "reservoir",
@@ -40,7 +39,7 @@
       "staleMinutes": 6,
       "unit": "mgdl"
     },
-    "revision": "47a1350f8a7b0085",
+    "revision": "e8a9b4ce5ccf4404",
     "screens": {
       "default": "glance",
       "order": [

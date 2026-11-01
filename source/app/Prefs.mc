@@ -39,9 +39,7 @@ module Prefs {
         var screens = Wire.obj(p, "screens");
         var complication = Wire.obj(p, "complication");
         var glucose = Wire.obj(p, "glucose");
-        var clock = Wire.bool(p, "clockAnalog");
-        if (revision == null || bolus == null || screens == null || complication == null || glucose == null
-            || clock == null) {
+        if (revision == null || bolus == null || screens == null || complication == null || glucose == null) {
             return null;
         }
         var enabled = Wire.bool(bolus, "enabled");
@@ -53,23 +51,23 @@ module Prefs {
         var first = Wire.token(screens, "default", SCREENS);
         var details = tokens(Wire.arr(p, "details", 32), DETAILS);
         var hours = numbers(Wire.arr(p, "chartHours", 4), CHART_HOURS);
-        var display = Wire.token(complication, "display", ["numericColor", "stringTrend"]);
         var slots = tokens(Wire.arr(complication, "slots", 3), SLOTS);
+        var labels = Wire.bool(complication, "labels");
         var unit = Wire.token(glucose, "unit", ["mgdl", "mmol"]);
         var stale = Wire.int(glucose, "staleMinutes", 1, 60);
         var floor = Wire.int(glucose, "plotFloor", 0, 400);
         var ceiling = Wire.int(glucose, "plotCeiling", 100, 600);
         if (enabled == null || readOnly == null || mode == null || unitsStep == null || carbStep == null
-            || order == null || order.size() == 0 || first == null || !Wire.contains(order, first)
-            || details == null || hours == null || hours.size() == 0 || display == null || slots == null
+            || labels == null || order == null || order.size() == 0 || first == null || !Wire.contains(order, first)
+            || details == null || hours == null || hours.size() == 0 || slots == null
             || unit == null || stale == null || floor == null || ceiling == null || floor >= ceiling) {
             return null;
         }
         var out = {
             "revision" => revision, "bolusEnabled" => enabled, "readOnly" => readOnly, "defaultMode" => mode,
             "unitsStepMU" => unitsStep, "carbStepG" => carbStep, "screenOrder" => order, "defaultScreen" => first,
-            "details" => details, "chartHours" => hours, "complicationDisplay" => display,
-            "complicationSlots" => slots, "clockAnalog" => clock, "glucoseUnit" => unit, "staleMinutes" => stale,
+            "details" => details, "chartHours" => hours,
+            "complicationSlots" => slots, "complicationLabels" => labels, "glucoseUnit" => unit, "staleMinutes" => stale,
             "plotFloor" => floor, "plotCeiling" => ceiling
         } as Lang.Dictionary;
         // Absent: never hide a stale reading.
@@ -201,10 +199,10 @@ module Prefs {
     }
     function chartHours() as Lang.Array { return list("chartHours", [3, 6, 12, 24]); }
     (:background)
-    function complicationDisplay() as Lang.String { return text("complicationDisplay", "numericColor"); }
-    (:background)
     function complicationSlots() as Lang.Array { return list("complicationSlots", ["iob", "reservoir", "battery"]); }
-    function clockAnalog() as Lang.Boolean { return flag("clockAnalog", false); }
+    // Each slot's label names what it shows; off (the default), the value alone.
+    (:background)
+    function complicationLabels() as Lang.Boolean { return flag("complicationLabels", false); }
     (:background, :glance)
     function glucoseUnit() as Lang.String { return text("glucoseUnit", "mgdl"); }
     // Seconds after which glucose is shown marked as stale.

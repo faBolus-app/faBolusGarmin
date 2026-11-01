@@ -94,9 +94,8 @@ module ContractTest {
         Test.assert(Support.same(Prefs.details(),
                                  ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus"]));
         Test.assert(Support.same(Prefs.chartHours(), [3, 6, 12, 24]));
-        Support.eq(Prefs.complicationDisplay(), "numericColor");
         Test.assert(Support.same(Prefs.complicationSlots(), ["iob", "reservoir", "battery"]));
-        Test.assert(!Prefs.clockAnalog());
+        Test.assert(!Prefs.complicationLabels());
         Support.eq(Prefs.glucoseUnit(), "mgdl");
         Support.eq(Prefs.staleSeconds(), 360);
         Support.eq(Prefs.hideDelaySeconds(), null);

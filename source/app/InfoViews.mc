@@ -1,10 +1,11 @@
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
-using Toybox.Math;
+using Toybox.Time;
+using Toybox.Time.Gregorian;
 using Toybox.System;
 using Toybox.WatchUi as Ui;
 
-// The clock with glucose under it.
+// The digital clock with glucose under it.
 class ClockView extends Ui.View {
     function initialize() { View.initialize(); }
 
@@ -16,13 +17,17 @@ class ClockView extends Ui.View {
         var h = dc.getHeight();
         var cx = w / 2;
         var t = System.getClockTime();
-        if (Prefs.clockAnalog()) {
-            drawAnalog(dc, cx, h * 0.40, (h < w ? h : w) * 0.40, t);
-            drawGlucose(dc, cx, h * 0.82, Gfx.FONT_SMALL, now);
-        } else {
-            drawDigital(dc, cx, h * 0.40, t);
-            drawGlucose(dc, cx, h * 0.70, Gfx.FONT_MEDIUM, now);
-        }
+        drawDate(dc, cx, h * 0.18);
+        drawDigital(dc, cx, h * 0.35, t);
+        drawGlucose(dc, cx, h * 0.62, Gfx.FONT_NUMBER_MILD, h * 0.79, now);
+    }
+
+    // The day and date in small caps above the time ("SAT 1").
+    private function drawDate(dc as Gfx.Dc, cx as Lang.Numeric, cy as Lang.Numeric) as Void {
+        var d = Gregorian.info(Time.now(), Time.FORMAT_MEDIUM);
+        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, cy, Gfx.FONT_XTINY, (d.day_of_week as Lang.String).toUpper() + " " + (d.day as Lang.Number).toString(),
+                    Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
     }
 
     // 12- or 24-hour as the watch is set.
@@ -39,55 +44,21 @@ class ClockView extends Ui.View {
         var text = digitalText(t.hour, t.min, System.getDeviceSettings().is24Hour);
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, cy, Gfx.FONT_NUMBER_HOT, text[0], vc);
+        // AM/PM small, beside the time's top right, so the time stays centred.
         if (!text[1].equals("")) {
+            var tw = dc.getTextWidthInPixels(text[0], Gfx.FONT_NUMBER_HOT);
+            var fh = dc.getFontHeight(Gfx.FONT_NUMBER_HOT);
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy + dc.getFontHeight(Gfx.FONT_NUMBER_HOT) / 2 + 6, Gfx.FONT_XTINY, text[1], vc);
+            dc.drawText(cx + tw / 2 + 4, cy - fh * 0.22, Gfx.FONT_XTINY, text[1].substring(1, 3),
+                        Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER);
         }
     }
 
-    private function drawAnalog(dc as Gfx.Dc, cx as Lang.Numeric, cy as Lang.Numeric, r as Lang.Numeric,
-                                t as System.ClockTime) as Void {
-        var vc = Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER;
-        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.setPenWidth(2);
-        dc.drawCircle(cx, cy, r);
-        for (var i = 0; i < 12; i += 1) {
-            var a = i * Math.PI / 6.0;
-            var major = (i % 3 == 0);
-            var inner = major ? r * 0.80 : r * 0.90;
-            dc.setColor(major ? Gfx.COLOR_WHITE : Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.setPenWidth(major ? 3 : 1);
-            dc.drawLine(cx + inner * Math.sin(a), cy - inner * Math.cos(a), cx + r * Math.sin(a), cy - r * Math.cos(a));
-        }
-        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-        for (var n = 1; n <= 12; n += 1) {
-            var na = n * Math.PI / 6.0;
-            dc.drawText(cx + r * 0.66 * Math.sin(na), cy - r * 0.66 * Math.cos(na), Gfx.FONT_XTINY, n.toString(), vc);
-        }
-        drawHand(dc, cx, cy, ((t.hour % 12) + t.min / 60.0) * Math.PI / 6.0, r * 0.50, 6);
-        drawHand(dc, cx, cy, t.min * Math.PI / 30.0, r * 0.80, 4);
-        dc.fillCircle(cx, cy, 4);
-        dc.setPenWidth(1);
-    }
-
-    private function drawHand(dc as Gfx.Dc, cx as Lang.Numeric, cy as Lang.Numeric, ang as Lang.Numeric,
-                              len as Lang.Numeric, half as Lang.Numeric) as Void {
-        var sn = Math.sin(ang);
-        var cs = Math.cos(ang);
-        var px = cs * half;
-        var py = sn * half;
-        dc.fillPolygon([[cx + px, cy + py], [cx + len * sn, cy - len * cs], [cx - px, cy - py],
-                        [cx - len * 0.14 * sn, cy + len * 0.14 * cs]]);
-    }
-
+    // The reading, and its age in the same chip as the glance.
     private function drawGlucose(dc as Gfx.Dc, cx as Lang.Numeric, cy as Lang.Numeric, font as Gfx.FontType,
-                                 now as Lang.Number) as Void {
+                                 chipY as Lang.Numeric, now as Lang.Number) as Void {
         Screens.drawGlucose(dc, cx, cy, font, now);
-        if (!Glucose.isHidden(now)) {
-            dc.setColor(Glucose.stale(now) ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy + dc.getFontHeight(font) / 2 + 6, Gfx.FONT_XTINY, Display.ago(Glucose.age(now)),
-                        Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
-        }
+        if (!Glucose.isHidden(now)) { Screens.drawAgeChip(dc, cx, chipY, now); }
     }
 }
 

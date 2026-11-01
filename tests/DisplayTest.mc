@@ -50,8 +50,10 @@ module DisplayTest {
         Support.eq(BgComplication.glucoseLabel("124", "^", true), "--");
         Support.eq(BgComplication.glucoseLabel("124", "^", false), "124 ^");
         Support.eq(BgComplication.glucoseLabel("124", "", false), "124");
-        Support.eq(BgComplication.glucoseLabel(Display.glucose(124, "mmol"), "->", false), "6.9 ->");
+        Support.eq(BgComplication.glucoseLabel(Display.glucose(124, "mmol"), "x", false), "6.9 x");
         Support.eq(BgComplication.arrowFor("up45"), "/");
+        Support.eq(BgComplication.arrowFor("downdown"), "vv");
+        Support.eq(BgComplication.arrowFor("bogus"), "");
         Support.eq(BgComplication.arrowFor(null), "");
         return true;
     }
@@ -61,6 +63,11 @@ module DisplayTest {
     (:test)
     function slotsGoStaleAfterFifteenMinutes(logger as Test.Logger) as Lang.Boolean {
         Support.connected();
+        // Names on, as the user may set them.
+        var named = Support.payloadOf(Rez.JsonData.fixture_config);
+        var namedComplication = named["complication"] as Lang.Dictionary;
+        namedComplication["labels"] = true;
+        Test.assert(Prefs.accept(named, NOW));
         var fresh = BgComplication.slot("iob", NOW);
         Support.eq(fresh[1] as Lang.Object?, "IOB 1.25");
         Support.eq(fresh[2] as Lang.Object?, "U");
@@ -73,6 +80,15 @@ module DisplayTest {
         Support.eq(BgComplication.slot("reservoir", NOW)[1] as Lang.Object?, "Res 143");
         Support.eq(BgComplication.slot("reservoir", NOW)[0] as Lang.Object?, 143);
         Support.eq(BgComplication.slot("basal", NOW)[1] as Lang.Object?, "Basal 0.85");
+        // With the names off, the default, the value alone.
+        var config = Support.payloadOf(Rez.JsonData.fixture_config);
+        var complication = config["complication"] as Lang.Dictionary;
+        complication["labels"] = false;
+        Test.assert(Prefs.accept(config, NOW));
+        Support.eq(BgComplication.slot("iob", NOW)[1] as Lang.Object?, "1.25 U");
+        Support.eq(BgComplication.slot("reservoir", NOW)[1] as Lang.Object?, "143 U");
+        Support.eq(BgComplication.slot("battery", NOW)[1] as Lang.Object?, "72%");
+        Support.eq(BgComplication.slot("basal", NOW)[1] as Lang.Object?, "0.85 U/h");
         // Unknown is "--", never zero.
         Support.fresh();
         Status.accept(Support.payloadOf(Rez.JsonData.fixture_status_minimal), NOW);

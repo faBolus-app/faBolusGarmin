@@ -590,7 +590,6 @@
       "required": [
         "bolus",
         "chartHours",
-        "clockAnalog",
         "complication",
         "details",
         "glucose",
@@ -717,16 +716,12 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "display",
+            "labels",
             "slots"
           ],
           "properties": {
-            "display": {
-              "type": "string",
-              "enum": [
-                "numericColor",
-                "stringTrend"
-              ]
+            "labels": {
+              "type": "boolean"
             },
             "slots": {
               "type": "array",
@@ -743,9 +738,6 @@
               "uniqueItems": true
             }
           }
-        },
-        "clockAnalog": {
-          "type": "boolean"
         },
         "glucose": {
           "type": "object",

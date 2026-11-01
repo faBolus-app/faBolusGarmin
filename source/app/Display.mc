@@ -7,8 +7,11 @@ module Display {
     (:background, :glance)
     const MGDL_PER_MMOL = 18.0182;
     // The Time-in-Range bands (Battelino 2019), as on the phone: below 70, 70–180, 181–250, above 250.
+    (:glance)
     const GLUCOSE_LOW = 70;
+    (:glance)
     const GLUCOSE_HIGH = 180;
+    (:glance)
     const GLUCOSE_VERY_HIGH = 250;
 
     (:background, :glance)
@@ -26,6 +29,7 @@ module Display {
         return unit.equals("mmol") ? "mmol/L/U" : "mg/dL/U";
     }
 
+    (:glance)
     function rangeColor(mgdl as Lang.Number) as Gfx.ColorValue {
         if (mgdl < GLUCOSE_LOW) { return Gfx.COLOR_RED; }
         if (mgdl <= GLUCOSE_HIGH) { return Gfx.COLOR_GREEN; }
