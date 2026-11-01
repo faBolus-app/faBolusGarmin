@@ -98,6 +98,7 @@ module ContractTest {
         Test.assert(!Prefs.complicationLabels());
         Support.eq(Prefs.iobStaleSeconds(), 300);
         Support.eq(Prefs.therapyStaleSeconds(), 900);
+        Support.eq(Prefs.pumpStatusStaleSeconds(), 900);
         Support.eq(Prefs.glucoseUnit(), "mgdl");
         Support.eq(Prefs.staleSeconds(), 360);
         Support.eq(Prefs.hideDelaySeconds(), null);

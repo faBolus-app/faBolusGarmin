@@ -193,8 +193,8 @@ class DetailsView extends Ui.View {
 
     static function mark(key as Lang.String, now as Lang.Number) as Lang.String {
         var age = Status.ageOf(key, now);
-        // Older than the phone's window (IOB's own, the pump settings' for the others), a value is marked old.
-        var window = key.equals("iob") ? Prefs.iobStaleSeconds() : Prefs.therapyStaleSeconds();
+        // Older than the phone's window (IOB's own, the pump status window for the others), a value is marked old.
+        var window = key.equals("iob") ? Prefs.iobStaleSeconds() : Prefs.pumpStatusStaleSeconds();
         return (age != null && age > window) ? " (old)" : "";
     }
 

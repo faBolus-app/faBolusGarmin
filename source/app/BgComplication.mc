@@ -38,12 +38,12 @@ module BgComplication {
 
     // A slot's value, label and unit: [value or null, label, unit or null]. Each label names what it shows
     // ("IOB 1.25"), because the face only knows the slot as "Pump Status 1–3", unless the user turned the
-    // names off ("1.25 U"). A value older than the phone's window (IOB's own, the pump settings' for the others)
+    // names off ("1.25 U"). A value older than the phone's window (IOB's own, the pump status window for the others)
     // shows as "--", like an unknown one.
     (:background)
     function slot(token as Lang.String, now as Lang.Number) as Lang.Array {
         var age = Status.ageOf(token, now);
-        var window = token.equals("iob") ? Prefs.iobStaleSeconds() : Prefs.therapyStaleSeconds();
+        var window = token.equals("iob") ? Prefs.iobStaleSeconds() : Prefs.pumpStatusStaleSeconds();
         if (age == null || age > window) { return [null, "--", null]; }
         if (token.equals("iob")) {
             var mU = Status.field("iob", "mU");

@@ -72,8 +72,8 @@ module DisplayTest {
         return true;
     }
 
-    // The slots show stale once their values are older than the phone's windows (IOB's own, the pump
-    // settings' for the rest), so a phone that went away shows on the face.
+    // The slots show stale once their values are older than the phone's windows (IOB's own, the pump status
+    // window for the rest), so a phone that went away shows on the face.
     (:test)
     function slotsGoStaleAfterThePhonesWindows(logger as Test.Logger) as Lang.Boolean {
         Support.connected();
