@@ -26,7 +26,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-XCCONFIG="${XCCONFIG:-${1:-../faBolus/Config.xcconfig}}"
+# On faBolus's rebuild branch the old app's xcconfig sits in legacy/ until the new app target lands.
+DEFAULT_XCCONFIG=../faBolus/Config.xcconfig
+[ -f "$DEFAULT_XCCONFIG" ] || DEFAULT_XCCONFIG=../faBolus/legacy/Config.xcconfig
+XCCONFIG="${XCCONFIG:-${1:-$DEFAULT_XCCONFIG}}"
 SRC="source/app/AppVersion.mc"
 STAMP="source/generated/AppRevision.mc"
 

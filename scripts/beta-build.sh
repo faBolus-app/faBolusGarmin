@@ -24,6 +24,8 @@ SDK_DEFAULT="$HOME/Library/Application Support/Garmin/ConnectIQ/Sdks/connectiq-s
 MONKEYC="${MONKEYC:-$SDK_DEFAULT}"
 KEY="${KEY:-$HOME/garmin_dev_key.der}"
 FABOLUS_DIR="${FABOLUS_DIR:-../faBolus}"
+# On faBolus's rebuild branch the old iPhone app (its xcconfigs and generate-project.sh) sits in legacy/.
+if [ -d "$FABOLUS_DIR/legacy" ] && [ ! -f "$FABOLUS_DIR/project.yml" ]; then FABOLUS_DIR="$FABOLUS_DIR/legacy"; fi
 BASE_ID="a1b2c3d4e5f600112233445566778899"   # the committed beta id in manifest.xml (what we replace)
 ID_FILE=".beta-app-id"
 OUT="bin/faBolus-beta-personal.iq"
