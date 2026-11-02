@@ -4,15 +4,17 @@ Notable changes to faBolusGarmin. The format follows [Keep a Changelog](https://
 
 faBolusGarmin has no version of its own: it moves with the faBolus app. The watch's Details screen shows
 `App: <version> · <commit>`. The version is faBolus's `MARKETING_VERSION`, kept in step by
-`scripts/check-version-sync.sh`. The commit is written at build time into the git-ignored
-`source/generated/AppRevision.mc` by `scripts/stamp-revision.sh`, with a trailing `+` when the tree had
-uncommitted changes. A build without the stamp doesn't compile, so a binary is never stamped with the
+`scripts/check-version-sync.sh`, which compares it with faBolus at `contract/PIN`. The commit is written
+at build time into the git-ignored `source/generated/AppRevision.mc` by `scripts/stamp-revision.sh`, with
+a trailing `+` when the tree had uncommitted changes. A build without the stamp doesn't compile, so a binary is never stamped with the
 wrong tree.
 
 ## [Unreleased]
 
-The watch app rebuilt for the new faBolus phone app, on the `rebuild` branch. The last build for the
-earlier phone app is tagged `v1-final`.
+## [v0.4.0] — 2026-11-01
+
+The watch app rebuilt for the new faBolus phone app, faBolus 0.4.0. The last build for the earlier phone
+app is tagged `v1-final`.
 
 ### Changed
 

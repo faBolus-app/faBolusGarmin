@@ -7,9 +7,9 @@ using Toybox.Lang;
 //
 // SCHEME — mirror faBolus's MARKETING_VERSION, plus the build commit:
 //   • NAME  tracks faBolus's `Config.xcconfig` MARKETING_VERSION EXACTLY, deliberately. faBolusGarmin
-//     ships in lockstep with the app (BRANCHES.md §1.3), so a Garmin-only product version would be a
-//     second, competing answer to "which release is this?". NAME is not independent and must not drift:
-//     scripts/check-version-sync.sh fails when it does not equal MARKETING_VERSION.
+//     ships in lockstep with the app, so a Garmin-only product version would be a second, competing
+//     answer to "which release is this?". NAME is not independent and must not drift:
+//     scripts/check-version-sync.sh fails when it does not equal MARKETING_VERSION at contract/PIN.
 //   • The build COMMIT is what actually distinguishes two watch builds of the same release, and it is
 //     DERIVED rather than remembered — AppRevision (source/generated/AppRevision.mc) is rewritten from
 //     `git` by scripts/stamp-revision.sh immediately before every compile. This deliberately replaced a
@@ -31,9 +31,9 @@ module AppVersion {
 
     // Keep EQUAL to faBolus Config.xcconfig MARKETING_VERSION (guarded by scripts/check-version-sync.sh).
     (:background)
-    const NAME = "0.1.0";
+    const NAME = "0.4.0";
 
-    // The Details row label, e.g. "App: 0.1.0 · 6f60fa9" — 20 chars at the current version, 21 with the
+    // The Details row label, e.g. "App: 0.4.0 · 6f60fa9" — 20 chars at the current version, 21 with the
     // dirty marker, comfortably inside the ~28-char FONT_XTINY row budget DetailsView documents. Pure →
     // unit-testable.
     //

@@ -42,7 +42,7 @@
 #   ./scripts/stamp-revision.sh            # write the stamp (idempotent; every build script calls this)
 #   ./scripts/stamp-revision.sh --check    # verify the stamp on disk describes THIS tree; never writes
 #
-# --check exists so scripts/check-version-sync.sh can assert freshness WITHOUT re-implementing the
+# --check exists so scripts/build-and-test.sh can assert freshness WITHOUT re-implementing the
 # derivation above. Both modes run the identical code path and differ only in what they do with the
 # result, so the generator and its guard cannot drift apart — which would be the one way this mechanism
 # could go quietly wrong.

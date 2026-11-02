@@ -17,6 +17,12 @@ Format per row: component · version/revision · SPDX license · source · how f
 |---|---|---|---|---|
 | faBolusGarmin app | in-repo | MIT | `source/app/` | The Monkey C remote: UI, the phone link, the bolus flow and calculator, BG complication and glance. Covered by the root `LICENSE`. |
 
+## Ported logic (no upstream source copied)
+
+| Component | Upstream | License (SPDX) | Source | Usage |
+|---|---|---|---|---|
+| Bolus calculator | jwoglom/pumpx2 `BolusCalculator.java` (© 2022 James Woglom), via faBolus's `BolusMath.swift`; LoopKit's bolus-volume round-down (© 2018, © 2020 LoopKit Authors), via faBolus's `BolusVolume.swift` | MIT | `source/app/Calculator.mc` | A Monkey C hand port of faBolus's two Swift ports, for the live units preview. Its test rows, `contract/bolus_oracle_fixtures.jsonl`, are the pumpX2 calculator's outputs (vendored from faBolus). |
+
 ## Required to build/run, but NOT vendored (license/credential-gated)
 
 | Component | Version | License (SPDX) | Source | Usage |

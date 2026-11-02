@@ -87,8 +87,9 @@ The source of truth is faBolus's `Packages/RemoteProtocol`: its Swift types writ
 3. A change older watches can't read is a new protocol version: each side shows a message of another
    version as "update", never reads it.
 
-CI's contract gate checks `contract/` against faBolus at `contract/PIN`, so the pinned commit must be
-pushed.
+CI's contract gate checks `contract/` against faBolus at `contract/PIN`, and that
+`AppVersion.NAME` (`source/app/AppVersion.mc`) equals faBolus's `MARKETING_VERSION` there, so the pinned
+commit must be pushed. A release bumps both and syncs the pin to the faBolus release commit.
 
 ## Before a pull request
 

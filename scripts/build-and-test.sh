@@ -50,11 +50,12 @@ FAIL=0
 # --- version stamp ----------------------------------------------------------
 # The Details "App:" row names the exact tree a binary came from, and the value is DERIVED so that no
 # one has to remember to bump anything. Regenerating it here — before anything compiles — is what makes
-# it impossible to forget, and check-version-sync.sh then confirms the generator actually did its job
-# (and that NAME still matches the app's MARKETING_VERSION). A bare `monkeyc` that skips this step does
-# not produce a mis-stamped binary; it fails to compile on the missing AppRevision symbol.
+# it impossible to forget, `stamp-revision.sh --check` then confirms the generator actually did its job,
+# and check-version-sync.sh that NAME still matches the app's MARKETING_VERSION. A bare `monkeyc` that
+# skips this step does not produce a mis-stamped binary; it fails to compile on the missing AppRevision
+# symbol.
 echo "== version stamp + sync =="
-if ./scripts/stamp-revision.sh && ./scripts/check-version-sync.sh; then
+if ./scripts/stamp-revision.sh && ./scripts/stamp-revision.sh --check && ./scripts/check-version-sync.sh; then
   :
 else
   echo "  ❌ version stamp / sync check failed (see above)"; FAIL=1

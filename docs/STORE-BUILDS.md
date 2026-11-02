@@ -33,8 +33,12 @@ this exact upload later from a device report — and the app does not compile wi
 generated and git-ignored; see [`scripts/stamp-revision.sh`](../scripts/stamp-revision.sh)). A trailing
 `+` in its output means the tree was dirty, so the hash alone does not describe what you are uploading.
 
+Then check that the version matches the phone release the contract is pinned to (`contract/PIN` should
+be the faBolus release commit):
+
 ```sh
 ./scripts/stamp-revision.sh
+./scripts/check-version-sync.sh
 ```
 
 ```sh

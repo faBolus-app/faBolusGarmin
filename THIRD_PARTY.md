@@ -7,7 +7,7 @@ prose stays in `NOTICE.md`; the machine-checkable component table stays in `docs
 |---|---|
 | [`LICENSE`](LICENSE) | The project license — **MIT** (© 2026 the faBolus authors). Covers this repo's source code. |
 | [`NOTICE.md`](NOTICE.md) | Attribution prose: the faBolus™ trademark and the third-party trademarks. |
-| [`docs/SBOM.md`](docs/SBOM.md) | The component table: first-party app, and the license-gated Connect IQ SDK (not vendored). Checked by `scripts/check-sbom.sh`. |
+| [`docs/SBOM.md`](docs/SBOM.md) | The component table: first-party app, the ported calculator, and the license-gated Connect IQ SDK (not vendored). Checked by `scripts/check-sbom.sh`. |
 
 ## Summary
 
@@ -16,6 +16,11 @@ carries **no vendored third-party runtime source in the shipping build**. The on
 shipping build needs is **license-gated and not vendored** into this repo:
 
 - the **Garmin Connect IQ SDK / Monkey C runtime** (Garmin-proprietary, EULA-gated).
+
+One file ports third-party logic, by way of faBolus's Swift: `source/app/Calculator.mc`, the bolus
+calculator, from **pumpX2**'s `BolusCalculator` (MIT, © 2022 James Woglom) and **LoopKit**'s bolus-volume
+round-down (MIT, © 2018 and © 2020 LoopKit Authors). Its test rows in `contract/bolus_oracle_fixtures.jsonl`
+are that pumpX2 calculator's outputs.
 
 The **faBolus™** name is a trademark of Zev Granowitz — the MIT license covers the code, not the name or
 branding.

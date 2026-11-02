@@ -37,8 +37,8 @@ any other version is shown as "update", never read.
 - `tests/` — Monkey C unit suite (run locally; CI has no SDK). `scripts/gen-test-resources.sh` turns
   `contract/` into the suite's resources under `tests/generated/` (git-ignored).
 
-Sibling repos: `../faBolus`, `../TandemKit`. `scripts/beta-build.sh` and `scripts/sync-contract.sh`
-default to `../faBolus`.
+Sibling repos: `../faBolus`, `../TandemKit`. `scripts/beta-build.sh`, `scripts/sync-contract.sh`,
+`scripts/check-contract.sh` and `scripts/check-version-sync.sh` default to `../faBolus`.
 
 ## Build + test
 

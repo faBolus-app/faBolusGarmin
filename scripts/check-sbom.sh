@@ -6,7 +6,7 @@
 #   (1) the licensing/attribution files all exist (LICENSE, NOTICE.md, THIRD_PARTY.md, docs/SBOM.md);
 #   (2) every barrel a shipping manifest depends on (<iq:depends name="…">) has a row in the SBOM —
 #       catches a new bundled barrel slipping in undocumented;
-#   (3) each third-party upstream attributed in NOTICE.md (pumpX2, G7SensorKit) also appears in the SBOM
+#   (3) each third-party upstream attributed in NOTICE.md (pumpX2, LoopKit) also appears in the SBOM
 #       — keeps the prose and the machine-checkable table in step.
 #
 # Reads only local files (no network, no sibling checkout), so it is independent of the contract check
@@ -39,7 +39,7 @@ for b in $barrels; do
 done
 
 # (3) third-party upstreams attributed in NOTICE.md must also be in the SBOM
-for upstream in pumpX2 G7SensorKit; do
+for upstream in pumpX2 LoopKit; do
   if grep -q "$upstream" NOTICE.md 2>/dev/null && ! grep -q "$upstream" "$SBOM"; then
     echo "DRIFT: NOTICE.md attributes '$upstream' but it has no row in $SBOM"; fail=1
   fi
