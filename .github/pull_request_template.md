@@ -1,31 +1,20 @@
 <!--
-faBolusGarmin is the experimental Garmin remote for faBolus, an insulin-pump app. The delivery
-disposition is NO-GO for real insulin delivery; keep it that way unless changing it is the explicit
-subject of this PR. The watch never doses on its own — it requests, the phone host confirms + clamps.
-Fill in what applies; delete what doesn't. See CONTRIBUTING.md, AGENTS.md, and BRANCHES.md.
+faBolusGarmin is the Garmin watch app for faBolus, an experimental insulin-pump app (not a medical device,
+not FDA-cleared). The watch never doses on its own: it requests, and the phone checks every request.
+Fill in what applies; delete what doesn't. See CONTRIBUTING.md, AGENTS.md and BRANCHES.md.
 -->
 
 ## What & why
 
 <!-- One or two sentences. What changes, and the problem it solves. -->
 
-## Branch target
-
-- [ ] `main` — meets every §1.4 promotion criterion (see BRANCHES.md → faBolus/BRANCHES.md)
-- [ ] `experimental` — fires on a threshold / automates a decision / produces output not verifiable
-      against the pump (§1.2), or otherwise not yet promotable
-
 ## Safety
 
-- [ ] Does **not** weaken the bolus-confirm gesture (touch 1-2-3 / two-button hold). The watch
-      gesture is one explicit confirmation; the phone recomputes/clamps (not a second human confirm)
-- [ ] Delivery disposition unchanged (**NO-GO for real insulin delivery**) — or this PR's explicit
-      subject is changing it, and says so
-- [ ] Preserves the honest-staleness signal: an unknown-age or stale reading stays `--` / flagged
-      stale, never shown as "now" and never a fabricated value (group A / A1)
-- [ ] The paused direct-pump/direct-cgm BLE engines are NOT reintroduced to main and no manifest gains a
-      BLE permission (P0-c; narrow-main — they live on dev/direct-ble + experimental) — or this PR's
-      explicit subject is that hold, and says so
+- [ ] Does **not** weaken the bolus confirm (touch 1-2-3 / two-button hold). It is one explicit
+      confirmation; the phone's checks are not a second human confirm
+- [ ] Keeps the staleness signal: a stale or unknown-age value stays `--` or marked stale, never shown as
+      current, never a made-up value
+- [ ] Adds no direct-to-pump or direct-to-CGM link, and no manifest gains a Bluetooth permission
 
 ## Contract
 
@@ -35,17 +24,14 @@ Fill in what applies; delete what doesn't. See CONTRIBUTING.md, AGENTS.md, and B
 
 ## Verification
 
-<!-- CI's Garmin coverage is the contract check, the SBOM check, and an advisory
-     Semgrep pass (the SDK/simulator can't run in cloud CI — see .github/workflows/ci.yml). The
-     build + unit suite is a LOCAL gate; paste what you ran. -->
+<!-- CI runs ShellCheck, actionlint, markdownlint, the contract check and the SBOM check. The build and
+     unit suite need the Connect IQ SDK and simulator, so they run locally: paste what you ran. -->
 
-- [ ] `./scripts/build-and-test.sh` (compiles every jungle + runs the Monkey C unit suite in the sim)
-- [ ] `./scripts/check-contract.sh` passes (with the sibling faBolus checkout)
-- [ ] `./scripts/check-sbom.sh` passes
-- [ ] Hardware-tested vs. compile-only noted (venu3s is the only hardware-validated device)
+- [ ] `./scripts/check.sh` (its `build` gate compiles the jungles and runs the unit suite in the simulator)
+- [ ] Tested on a watch, or only in the simulator: say which (venu3s is the only device tested on hardware)
 
 ## Cross-repo
 
-- [ ] N/A — single repo
-- [ ] Touches the contract or a shared constant → sibling faBolus PR linked, and the branch-aware CI
-      resolved the matching faBolus branch (check the `fbref` log line for the ref **and SHA**)
+- [ ] N/A — this repo only
+- [ ] Touches the contract or a shared constant → the faBolus pull request is linked, and `contract/PIN`
+      names a pushed faBolus commit
