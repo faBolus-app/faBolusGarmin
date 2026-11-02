@@ -96,4 +96,7 @@ pushed.
   and the simulator, so it runs locally, not in CI; `./scripts/setup.sh` makes the pre-push hook run it.
 - Keep the confirm deliberate: at least two distinct, sustained actions, in sync between the touch and
   button flows in `source/app/BolusViews.mc`.
+- A dosing change (the calculator, the bolus request, its fields) gets extra review. The phone
+  recomputes the dose and refuses one that differs from the watch's estimate; keep the watch's preview
+  and request in step with that.
 - Say what was tested on a watch and what only in the simulator.

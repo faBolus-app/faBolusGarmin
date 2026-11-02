@@ -45,7 +45,9 @@ preview, tested against the same calculator rows as the phone's.
 every jungle, fails on any compiler warning and runs the unit suite in the simulator. Run
 `./scripts/setup.sh` once per clone so the pre-push hook runs the gates.
 
-By hand, for a sideload build:
+By hand, for a sideload build, with the SDK's `bin/` on your PATH (or `$SDK/bin/monkeyc`, as the build
+guide does) and your signing key in the repository as `developer_key.der`, where `build-and-test.sh`
+looks for it (`CIQ_KEY=<path>` points it elsewhere):
 
 ```sh
 ./scripts/stamp-revision.sh   # the commit the watch's Details screen shows; the build fails without it
