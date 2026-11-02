@@ -6,7 +6,8 @@ prose stays in `NOTICE.md`; the machine-checkable component table stays in `docs
 | Where | What it covers |
 |---|---|
 | [`LICENSE`](LICENSE) | The project license — **MIT** (© 2026 the faBolus authors). Covers this repo's source code. |
-| [`NOTICE.md`](NOTICE.md) | Attribution prose: the faBolus™ trademark and the third-party trademarks. |
+| [`NOTICE.md`](NOTICE.md) | Attribution prose: the faBolus™ trademark, the ported calculator's upstreams, and the third-party trademarks. |
+| [`LICENSES/`](LICENSES) | The upstream license texts the port carries: pumpX2 and LoopKit. |
 | [`docs/SBOM.md`](docs/SBOM.md) | The component table: first-party app, the ported calculator, and the license-gated Connect IQ SDK (not vendored). Checked by `scripts/check-sbom.sh`. |
 
 ## Summary

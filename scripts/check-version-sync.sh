@@ -25,7 +25,8 @@ SRC="source/app/AppVersion.mc"
 STAMP="source/generated/AppRevision.mc"
 
 [ -f "$SRC" ] || { echo "❌ $SRC not found" >&2; exit 2; }
-code_name=$(grep -oE 'const[[:space:]]+NAME[[:space:]]*=[[:space:]]*"[^"]+"' "$SRC" \
+# Anchored to the start of a line, so a commented-out `// const NAME = …` can't be read instead.
+code_name=$(grep -oE '^[[:space:]]*const[[:space:]]+NAME[[:space:]]*=[[:space:]]*"[^"]+"' "$SRC" \
             | grep -oE '"[^"]+"' | tr -d '"' | head -1 || true)
 [ -n "$code_name" ] || { echo "❌ could not read NAME from $SRC" >&2; exit 2; }
 
