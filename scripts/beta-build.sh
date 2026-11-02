@@ -16,16 +16,19 @@
 #   • Upload the .iq at the Connect IQ dashboard and install it to your watch from the Garmin app.
 #
 # Prereqs (both are Garmin requirements, one-time): the Connect IQ SDK, and your Garmin store signing
-# key at ~/garmin_dev_key.der. Override paths with:  MONKEYC=… KEY=… FABOLUS_DIR=… ./scripts/beta-build.sh
+# key at ~/garmin_dev_key.der. The compiler is the newest SDK the SDK Manager installed. Override paths
+# with:  MONKEYC=… KEY=… FABOLUS_DIR=… ./scripts/beta-build.sh
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-SDK_DEFAULT="$HOME/Library/Application Support/Garmin/ConnectIQ/Sdks/connectiq-sdk-mac-9.2.0-2026-06-09-92a1605b2/bin/monkeyc"
-MONKEYC="${MONKEYC:-$SDK_DEFAULT}"
+# The newest SDK the Connect IQ SDK Manager installed, unless MONKEYC names a compiler.
+SDK_ROOT="$HOME/Library/Application Support/Garmin/ConnectIQ/Sdks"
+if [ -z "${MONKEYC:-}" ]; then
+  SDK_DIR="$(find "$SDK_ROOT" -maxdepth 1 -name 'connectiq-sdk-*' 2>/dev/null | sort -V | tail -1 || true)"
+  MONKEYC="${SDK_DIR:-$SDK_ROOT/<none installed>}/bin/monkeyc"
+fi
 KEY="${KEY:-$HOME/garmin_dev_key.der}"
 FABOLUS_DIR="${FABOLUS_DIR:-../faBolus}"
-# On faBolus's rebuild branch the old iPhone app (its xcconfigs and generate-project.sh) sits in legacy/.
-if [ -d "$FABOLUS_DIR/legacy" ] && [ ! -f "$FABOLUS_DIR/project.yml" ]; then FABOLUS_DIR="$FABOLUS_DIR/legacy"; fi
 BASE_ID="a1b2c3d4e5f600112233445566778899"   # the committed beta id in manifest.xml (what we replace)
 ID_FILE=".beta-app-id"
 OUT="bin/faBolus-beta-personal.iq"
@@ -34,8 +37,8 @@ OUT="bin/faBolus-beta-personal.iq"
 if [ ! -f "$MONKEYC" ]; then
   echo "❌ Connect IQ SDK not found. Expected the compiler at:"
   echo "     $MONKEYC"
-  echo "   Install the Connect IQ SDK (developer.garmin.com/connect-iq/sdk), then either use its path"
-  echo "   or re-run with:  MONKEYC=/path/to/bin/monkeyc ./scripts/beta-build.sh"
+  echo "   Install it with the Connect IQ SDK Manager (developer.garmin.com/connect-iq/sdk), or re-run with"
+  echo "   MONKEYC=/path/to/bin/monkeyc ./scripts/beta-build.sh"
   exit 1
 fi
 if [ ! -f "$KEY" ]; then
