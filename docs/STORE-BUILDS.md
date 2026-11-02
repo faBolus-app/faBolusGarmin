@@ -12,9 +12,8 @@ There are **two store listings of the same app**, built from the same source wit
 - **Official** → a fresh version of the main "faBolus" listing.
 - **Beta** → a fresh version of the existing "faBolus (Beta)" listing.
 
-The iPhone app's developer panel (Settings → About → tap disclaimer 7× → Debug → Garmin target app)
-selects which one it pairs with; it **defaults to Beta** (the official listing is dormant for now —
-select Official there only if you specifically need it).
+The iPhone app talks to the beta listing's app id unless its build sets `GARMIN_BETA_APP_ID` to a
+personal beta's (below). The official listing is dormant for now.
 
 ## Prerequisites
 
@@ -47,7 +46,7 @@ generated and git-ignored; see [`scripts/stamp-revision.sh`](../scripts/stamp-re
 ```
 
 Both bundle exactly one device on `main`: `venu3s` (add a device back by adding its `<iq:product>` to
-**both** manifests — additional devices are build-verified on the `dev/garmin-devices` branch).
+**both** manifests — builds for other devices are on the `archive/dev/garmin-devices` tag).
 
 ## Personal beta (a unique app id per person) — one command
 

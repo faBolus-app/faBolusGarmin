@@ -2,15 +2,13 @@
 
 Working notes for agents and humans. Garmin (Connect IQ / Monkey C) remote for faBolus — a thin
 remote that relays confirmed commands to the iPhone host, which owns the pump. Experimental, not
-FDA-cleared. Companion map: [`llms.txt`](llms.txt). Branch policy is canonical in
-[faBolus `BRANCHES.md`](https://github.com/faBolus-app/faBolus/blob/main/BRANCHES.md); the local
-[`BRANCHES.md`](BRANCHES.md) is a pointer.
+FDA-cleared. Companion map: [`llms.txt`](llms.txt). Branches: [faBolus `BRANCHES.md`](https://github.com/faBolus-app/faBolus/blob/main/BRANCHES.md);
+the local [`BRANCHES.md`](BRANCHES.md) points there.
 
 ## Safety
 
 - The phone is the authority. This app **requests**; it does not dose on its own. There is **no**
-  direct-to-pump or direct-to-CGM engine on `main` (those trees live on `dev/direct-ble` /
-  `experimental`).
+  direct-to-pump or direct-to-CGM engine (an earlier one is on the `archive/dev/direct-ble` tag).
 - Bolus confirm is a deliberate gesture per device (touch 1-2-3 / two-button hold). Don't weaken it.
   It is one explicit gesture, not a second host confirmation. The phone recomputes the dose from carbs,
   refuses it if it differs from the watch's estimate, and the pump's own limits govern.
@@ -34,12 +32,13 @@ any other version is shown as "update", never read.
 - `contract/` — the vendored phone↔watch contract (see above).
 - Jungles: `monkey.jungle` + `manifest.xml` (Beta), `official.jungle` + `manifest-official.xml`
   (Official), `test.jungle`.
-- **venu3s** is the sole `main` build target and the sole hardware-validated device. Other devices
-  live on `dev/garmin-devices`.
+- **venu3s** is the sole build target and the sole hardware-validated device. Builds for other devices
+  are on the `archive/dev/garmin-devices` tag.
 - `tests/` — Monkey C unit suite (run locally; CI has no SDK). `scripts/gen-test-resources.sh` turns
   `contract/` into the suite's resources under `tests/generated/` (git-ignored).
 
-Sibling repos: `../faBolus`, `../TandemKit`.
+Sibling repos: `../faBolus`, `../TandemKit`. `scripts/beta-build.sh` and `scripts/sync-contract.sh`
+default to `../faBolus`.
 
 ## Build + test
 
@@ -58,7 +57,7 @@ Sibling repos: `../faBolus`, `../TandemKit`.
 
 ## Device floor
 
-venu3s only on `main`. Fail gracefully on a capability a device/display cannot provide — never
+venu3s only. Fail gracefully on a capability a device/display cannot provide — never
 fabricate a value. That is distinct from honest-staleness `--` (a safety signal). The complications
 are the standing example: a face can't show a value's age, so a stale value is published as no number
 and the label `--`, never as a value that could pass for a current one (`source/app/BgComplication.mc`).
@@ -91,7 +90,7 @@ Facts a reviewer needs that the diff doesn't show:
 
 Match the phone's semantics. Touch and button input branch on `Nav.isTouch()`. Comments
 explain why (confirm gesture, staleness, schema). Do not add phase/ticket IDs or describe deleted
-engines as if they were on `main`.
+engines as if they were in the tree.
 
 `semgrep --config <faBolus>/.semgrep/deslop.yml --metrics=off .` reports AI-process residue (ticket
 IDs, drifted line references) in the Monkey C sources and tests. It is a report, not a gate. Scan `.`,

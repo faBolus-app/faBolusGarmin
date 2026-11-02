@@ -1,27 +1,11 @@
-# Branch model, promotion, and the experimental gate
+# Branches
 
-The canonical branch-governance document for all three code repos — **faBolus**, **TandemKit**, and
-**faBolusGarmin** — lives in **faBolus** and governs this repo too:
+faBolusGarmin moves with faBolus and TandemKit. The branches, the tags and what changes when `rebuild`
+merges are described once, in faBolus's
+[`BRANCHES.md`](https://github.com/faBolus-app/faBolus/blob/main/BRANCHES.md).
 
-**→ [`faBolus/BRANCHES.md`](https://github.com/faBolus-app/faBolus/blob/main/BRANCHES.md)**
-&nbsp;(local sibling checkout: [`../faBolus/BRANCHES.md`](../faBolus/BRANCHES.md))
-
-This repo deliberately keeps **no full copy** — a single source of truth avoids drift. This file is the
-pointer. Read the canonical doc before opening a PR. In brief, as it applies here:
-
-- **Two branches** — `main` (CI-green baseline) and `experimental` (§1.2: default-off /
-  threshold-firing / not-verifiable-against-the-pump work). See §1.2 for what belongs on
-  `experimental` and §1.4 for the promotion criteria. There is no `deprecated` BRANCH on any remote;
-  the frozen pre-fix snapshot is the `deprecated/*` tag below.
-- **Lockstep (§1.3).** faBolusGarmin moves in lockstep with the app: a Garmin `main` release accompanies
-  every app `main` release and holds the **same quality bar**. Garmin work does not lag behind and does
-  **not ship separately**.
-- **Tags.** `safe-baseline/*` is the moving last-known-good pointer (the rollback target); `deprecated/*`
-  is the immovable pre-round-3 snapshot. Per-release detail is in [`CHANGELOG.md`](CHANGELOG.md).
-- **Branch-aware cross-repo CI.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) checks the
-  Monkey C mirror against faBolus's `schema/command.schema.json` at the **matching** branch (else
-  `main`), logging the resolved ref **and its SHA** so a silent fallback can't green a mismatch.
-
-See also [`CONTRIBUTING.md`](CONTRIBUTING.md) — it carries the §1.3/§1.4 cross-reference, the
-lockstep clause, and the published device floor. [`AGENTS.md`](AGENTS.md) links here rather than
-restating them.
+In short: `main` is the watch app for the earlier phone app, and `rebuild` is the watch app for the new
+one. The two don't talk to each other's phone apps, so build the watch app from the same branch as the
+phone app. After the three repositories merge, `main` is the only branch. `v1-final` tags the last `main`
+before the rebuild, and `archive/*` tags keep the deleted side branches, among them other devices
+(`archive/dev/garmin-devices`) and a watch face (`archive/experimental/2026-08-27`).

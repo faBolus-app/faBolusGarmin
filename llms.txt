@@ -6,12 +6,11 @@
 
 Thin map so it does not drift. Working guide: [`AGENTS.md`](AGENTS.md).
 
-- **`README.md`** — architecture and the venu3s device floor.
+- **`README.md`** — how it fits together, the venu3s device floor, build and test.
 - **`docs/STORE-BUILDS.md`** — sideload and store `.iq` builds.
-- **`docs/SECURITY.md`** — remote-bolus notes (GA-01 is open; do not call the watch gesture one of
-  two confirmations).
+- **`docs/SECURITY.md`** — remote-bolus notes. The watch gesture is one confirmation, not one of two.
 - Contract: protocol version 2, vendored in `contract/` from faBolus at `contract/PIN`. Update with
   `scripts/sync-contract.sh`; `scripts/check-contract.sh` verifies the copy.
 
-No `direct-pump/` or `direct-cgm/` on `main`. Sibling protocol repo is `../TandemKit`.
+No direct-to-pump or direct-to-CGM engine. Sibling protocol repo is `../TandemKit`.
 The phone is the authority; note anything unverified on-hardware.

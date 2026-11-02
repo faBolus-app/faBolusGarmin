@@ -1,101 +1,76 @@
 > [!CAUTION]
-> **Not a medical device — do not use it for treatment decisions.** faBolusGarmin is experimental
-> software under active development. It is **not FDA-cleared or approved** and has **not** been
-> clinically validated. **Do not rely on it to make or carry out any insulin-dosing, treatment, or other
-> clinical decision.** It is for software development and evaluation only — always confirm every reading
-> and dose directly on your pump and CGM, and talk to your healthcare provider about your therapy.
+> faBolusGarmin is experimental, in-development software — not a medical device and not FDA-cleared. It is
+> for experimental and demonstration use. Not medical advice — check every value against your pump and
+> your clinician. If you build or use it, you assume all responsibility.
 
 # faBolusGarmin
 
-A **Garmin (Connect IQ / Monkey C) remote** for bolusing and status viewing. It speaks a small,
-**pump- and host-agnostic** JSON contract, so it isn't tied to any one pump or companion app.
+The Garmin Connect IQ watch app for [faBolus](https://github.com/faBolus-app/faBolus). It shows the glucose
+and pump status the faBolus iPhone app sends it, and asks the phone to bolus, cancel or clear a pump alert.
+It never talks to the pump: the phone checks every request and is the only thing connected to it.
 
-- **Today** it runs as a **phone-relay remote for [faBolus](https://github.com/faBolus-app/faBolus)**,
-  whose iPhone host owns the pump connection (currently a Tandem t:slim X2 / Mobi via TandemKit).
-- Because the wire format is a generic contract (`faBolus/schema/command.schema.json`), **any host
-  that implements it can drive this same watch app** — a different pump backend, or a different
-  companion app (e.g. a future Loop integration). Nothing in the default phone-relay path is
-  Tandem-specific.
+**Supported device:** the Garmin **Venu 3S**, the one build target and the one device tested on
+hardware. The app adapts to touch or buttons at runtime, so another device is mostly a manifest entry;
+see [CONTRIBUTING.md](CONTRIBUTING.md#add-support-for-another-garmin-device).
 
-**Supported devices:** the **Garmin Venu 3S** is the sole build target on `main`, and the sole
-hardware-validated device. It adapts to touch vs. buttons **at runtime** (`DeviceProfile`), so a
-future device is usually just a manifest entry — additional touch/button watches and Edge cycling
-computers are build-verified on the `dev/garmin-devices` branch, not on `main`. See
-[CONTRIBUTING.md](CONTRIBUTING.md#add-support-for-another-garmin-device).
-
-> **Experimental — in development.** Not FDA-cleared; if you build or use it you assume all
-> responsibility. Not affiliated with, endorsed by, or a product of Tandem Diabetes Care, Dexcom,
-> or Garmin.
+> [!NOTE]
+> faBolusGarmin is an independent, open-source project. It is not affiliated with Tandem Diabetes Care,
+> Dexcom or Garmin.
 
 ## How it fits together
 
-The watch is a **thin remote**: it shows the status the phone sends and sends `poll`, `bolus`, `cancel`
-and `dismiss` messages (protocol version 2, the contract in `contract/`, vendored from faBolus); the phone
-answers them. The bolus is confirmed by **one explicit gesture on the watch** (1-2-3 / hold). The host
-does not add a separate confirmation gesture today; instead it independently **recomputes the dose from
-the carbs, rejects it if it diverges from the estimate the watch showed, and clamps to the max-bolus
-limit** (defense in depth, not a second human confirmation). The watch rounds its own estimate down to
-the pump's step, and says before the confirm when a CGM LOW or HIGH means a calculator dose can't be sent. A bound two-phase host-nonce confirmation
-is planned (see `reaudit-remediation-plan` GA-01); until it lands, do not describe the watch gesture as
-one of *two* confirmations.
+The watch and the phone speak protocol version 2, defined in faBolus's
+`Packages/RemoteProtocol/contract/` and vendored here in [`contract/`](contract/README.md) at the faBolus
+commit in `contract/PIN`. The phone sends status, the watch's settings (config) and history; the watch
+sends polls, bolus requests, cancels and alert clears.
 
-- `source/app/` — the UI. The swipeable screens are user-orderable from the phone: **glance** (glucose +
-  bolus), **glucose-only** (no button), **clock** (analog/digital + glucose, tap to switch, no button),
-  **bolus-only** (just the button), **history**, **alerts**, **details** — plus the bolus/confirm modal
-  flow, the complication and the `Nav` carousel. The state lives in one module per concern (`Status`,
-  `Prefs`, `History`, `Alerts`, `BolusFlow`, `Link`), each the only writer of its stored keys. Entry:
-  `FaBolusApp`.
-- Every screen reads `Nav.isTouch()` and adapts at runtime:
-  - **Touch** devices: tap the controls; confirm by tapping **1 → 2 → 3**.
-  - **Button** devices: **UP/DOWN** adjust the dose, **MENU** switches Units/Carbs, **START**
-    delivers; confirm is a deliberate **two-button hold** (hold UP to arm, then hold START to
-    deliver). No on-screen cursor.
-- `source/app/Link.mc` — the phone link: every message goes out through it, polls back off while the
-  phone is silent, and a bolus request is resent until the phone answers. Direct-to-pump is **not** in
-  this tree (preservation branches only).
+A bolus needs a deliberate gesture on the watch: tap **1 → 2 → 3** in order on a touch device, or hold
+UP then START on a button device. The phone then checks the request: it must be recent and is acted on at
+most once, and for carbs the phone works the dose out again from the pump's latest values and refuses it
+if it differs from the watch's estimate. The pump's own limits govern. The watch's calculator is only a
+preview, tested against the same calculator rows as the phone's.
 
-Beyond the remote, the repo also builds one more Connect IQ surface from the same BG feed:
+- `source/app/` holds the app: one module per concern, each the only writer of its stored keys (`Link`,
+  `Wire`, `Inbound`, `Status`, `Prefs`, `History`, `Alerts`, `BolusFlow`, `Calculator`, `Display`), the
+  views and delegates, the background service and complication (`BgService`, `BgComplication`) and the
+  glance (`FaBolusGlanceView`). Entry: `FaBolusApp`.
+- The screens, ordered from the phone: glance (glucose and bolus), glucose only, clock and glucose,
+  bolus button only, alerts, history and details, plus the bolus and confirm flow.
+- `Link.mc` is the phone link: every message goes out through it, polls back off while the phone is
+  silent, and a bolus request is resent until the phone answers.
 
-- a **glance** (compact BG in the glance carousel) — built into the app (`FaBolusGlanceView`, reads
-  the stored status directly and marks its age from the measurement time).
+## Build and test
 
-See [CONTRIBUTING.md](CONTRIBUTING.md#add-a-watch-face-or-another-connect-iq-app-type) for building
-and extending these. (A standalone watch-face app that consumed the complication previously lived on
-`main`; it has been removed and now lives only on the `experimental` branch.)
+`./scripts/check.sh` runs every gate. Its `build` gate is `./scripts/build-and-test.sh`, which compiles
+every jungle, fails on any compiler warning and runs the unit suite in the simulator. Run
+`./scripts/setup.sh` once per clone so the pre-push hook runs the gates.
 
-Direct-to-pump BLE and direct-to-watch CGM engines are **not** on `main`. They live only on the
-`dev/direct-ble` / `experimental` preservation branches.
+By hand, for a sideload build:
 
-## Build & test
+```sh
+./scripts/stamp-revision.sh   # the commit the watch's Details screen shows; the build fails without it
+monkeyc -f monkey.jungle -o bin/faBolus.prg -y developer_key.der -d venu3s
+```
 
-`./scripts/build-and-test.sh` is the gate and does all of the below for you. By hand:
+Unit tests, with the simulator running (`connectiq`):
 
-```text
-# stamp the build commit for the Details "App:" row — the app does not compile without it
-./scripts/stamp-revision.sh
-# release build (entry FaBolusApp); provide your own signing key as developer_key.der
-monkeyc -f monkey.jungle -o bin/faBolusGarmin.prg -y developer_key.der -d venu3s -w
-# unit tests (simulator must be running: `connectiq`)
-monkeyc -f test.jungle -o bin/faBolusGarmin-test.prg -y developer_key.der -d venu3s --unit-test -w
+```sh
+monkeyc -f test.jungle -o bin/faBolusGarmin-test.prg -y developer_key.der -d venu3s --unit-test
 monkeydo bin/faBolusGarmin-test.prg venu3s -t
 ```
 
-The stamp is generated and git-ignored, so a bare `monkeyc` on a fresh clone fails with
-`Undefined symbol ':AppRevision'` until you run the script. That is deliberate: a binary with **no**
-version is fine, a binary stamped with the **wrong** tree is not.
-Keep the Monkey C contract mirror in sync with `faBolus/schema/command.schema.json` — see
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Copy `bin/faBolus.prg` to `GARMIN/APPS` on the watch, or publish a private beta with
+`./scripts/beta-build.sh` ([`docs/STORE-BUILDS.md`](docs/STORE-BUILDS.md)). The step-by-step guide is
+faBolus's [Garmin watch](https://fabolus.org/build/garmin-build/) page.
 
 ## Related
 
-- [`faBolus`](https://github.com/faBolus-app/faBolus) — the iPhone host and the
-  contract (`schema/`) this remote speaks; its
-  [ARCHITECTURE.md](https://github.com/faBolus-app/faBolus/blob/master/ARCHITECTURE.md) explains how
-  remotes and hosts fit together and how to host the remotes from another app.
-- [`TandemKit`](https://github.com/faBolus-app/TandemKit) — the Swift Tandem protocol / auth / BLE
-  core used by the iPhone host.
+- [faBolus](https://github.com/faBolus-app/faBolus): the iPhone app and the contract this watch app
+  speaks. Its [ARCHITECTURE.md](https://github.com/faBolus-app/faBolus/blob/main/ARCHITECTURE.md)
+  explains how the phone and its remotes fit together.
+- [TandemKit](https://github.com/faBolus-app/TandemKit): the pump protocol library the phone uses.
 
-## License & trademark
+## License and trademark
 
-Code is MIT-licensed (see [LICENSE](LICENSE)). **faBolus™** is a trademark of Zev Granowitz — the license
-covers the source code, not the name or branding. See [NOTICE.md](NOTICE.md) for details.
+The code is MIT-licensed (see [LICENSE](LICENSE)). **faBolus™** is a trademark of Zev Granowitz; the
+license covers the source code, not the name or branding. See [NOTICE.md](NOTICE.md).

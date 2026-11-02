@@ -1,33 +1,22 @@
 # Contributing to faBolusGarmin
 
-faBolusGarmin is a **host- and pump-agnostic Garmin remote**. It speaks the JSON contract in
-[`faBolus`](https://github.com/faBolus-app/faBolus)'s `schema/command.schema.json`; any host that
-implements that contract can drive it. Contributions are welcome by **PR, not fork**. All work is
-for **experimental use only** (in development, not FDA-cleared). The delivery disposition is
-**NO-GO for real insulin delivery** — keep it so.
+faBolusGarmin is the Garmin watch app for faBolus, a remote that speaks the phone↔remote contract in
+`contract/`. Contributions are welcome by pull request. Until the rebuild merges, target `rebuild`;
+after that, `main` (see [BRANCHES.md](BRANCHES.md)).
 
-## Branch model, versioning & lockstep (§1.3 / §1.4)
+faBolusGarmin is experimental, in-development software — not a medical device and not FDA-cleared, for
+experimental and demonstration use.
 
-Branch governance is centralized in [`BRANCHES.md`](BRANCHES.md) (a stub) →
-[`faBolus/BRANCHES.md`](https://github.com/faBolus-app/faBolus/blob/main/BRANCHES.md): the three-branch
-model, the §1.2 experimental gate, and the §1.4 promotion criteria. Read it before opening a PR. The
-per-release history is in [`CHANGELOG.md`](CHANGELOG.md).
+## Device floor
 
-- **Lockstep (§1.3).** faBolusGarmin is a **base feature** of faBolus, not a separate product. A Garmin
-  `main` release accompanies every app `main` release and holds the **same quality bar**; Garmin work
-  does not lag behind and does **not ship separately**.
-- **Published device floor.** The **Garmin Venu 3S is the sole hardware-validated device, and the
-  sole build target on `main`.** The `manifest.xml` `<iq:products>` list on `main` contains only
-  `venu3s`; additional touch/button watches and Edge cycling computers are build-verified on the
-  `dev/garmin-devices` branch, not on `main`. This floor is also stated store-facing in
-  [`store/connectiq-listing.md`](store/connectiq-listing.md) — keep the two in sync (see "Add support
-  for another Garmin device" below for how a device graduates).
-- **Fail gracefully on unsupported hardware.** Where a device genuinely cannot provide a capability, the
-  app must degrade to an explicit, honest state — never a fabricated value or silent misbehavior. This
-  is separate from the deliberate honest-staleness `--` shown for a stale/absent reading (a safety
-  signal, which must be preserved). The complications are the standing example: a face can't show a
-  value's age, so a stale value is published as no number and the label `--` rather than a frozen
-  number that passes for current (`source/app/BgComplication.mc`).
+- **The Garmin Venu 3S is the one build target and the one device tested on hardware.** The
+  `<iq:products>` list in the manifests contains only `venu3s`. The store listing
+  ([`store/connectiq-listing.md`](store/connectiq-listing.md)) states the same; keep the two in sync.
+- **Fail gracefully on unsupported hardware.** Where a device can't provide a capability, show an
+  explicit, honest state, never a made-up value. This is separate from the `--` shown for a stale or
+  missing reading, which is a safety signal and stays. The complications are the standing example: a
+  face can't show a value's age, so a stale value is published as no number and the label `--`
+  (`source/app/BgComplication.mc`).
 
 ## Keep it host-agnostic
 
@@ -55,9 +44,8 @@ rewrite:
    device's actual input (buttons if it's button-only), then on hardware; keep the unit suite green. Add the device to the README's "Supported devices" list and note simulator-only vs.
    hardware-tested.
 
-Only the Venu 3S is hardware-validated today; the button-device and Edge paths are build-verified and
-sit behind the watch confirm gesture plus the phone's recompute + max-bolus clamp (the remote never
-delivers on its own), but they need on-device shakeout before a device is called "supported."
+Only the Venu 3S is tested on hardware. Builds for other watches and Edge computers are kept on the
+`archive/dev/garmin-devices` tag; each needs testing on the device before it's called supported.
 
 ### The two input models
 
@@ -79,9 +67,9 @@ sustained actions), and keep the touch and button flows in sync in `source/app/B
 Each Connect IQ app type is a separate app (its own manifest + jungle), so the repo keeps them side
 by side (like `monkey.jungle` / `test.jungle`):
 
-- **Watch face** — removed from `main`; it lives only on the `experimental` branch as its own
-  Connect IQ app (`watchface/` plus a dedicated manifest/jungle pair). Watches only — Edge has no
-  watch face.
+- **Watch face** — not in this app. An earlier one, its own Connect IQ app (`watchface/` plus a
+  manifest and jungle pair), is on the `archive/experimental/2026-08-27` tag. Watches only — Edge has
+  no watch face.
 - **Glance** — built into the remote app itself: `FaBolusApp.getGlanceView()` +
   `source/app/FaBolusGlanceView.mc`, both annotated `(:glance)`. Because it's the same app it reads
   the stored status directly, so it shows a real reading with no extra wiring.
@@ -90,26 +78,22 @@ by side (like `monkey.jungle` / `test.jungle`):
 ## The contract (don't let it drift)
 
 The source of truth is faBolus's `Packages/RemoteProtocol`: its Swift types write the golden fixtures in
-`contract/`, which this repo vendors at the faBolus commit in `contract/PIN`. If you change the contract:
+`contract/`, which this repo vendors at the faBolus commit in `contract/PIN`. To change the contract:
 
-1. Change it in faBolus, regenerate the fixtures there and commit.
-2. Run `./scripts/sync-contract.sh <that faBolus commit>` here, update the Monkey C to match, and run the
-   unit suite, which reads every fixture.
+1. Change it in faBolus, rewrite the fixtures there
+   (`UPDATE_CONTRACT=1 swift test --package-path Packages/RemoteProtocol`), commit and push.
+2. Run `./scripts/sync-contract.sh <that faBolus commit>` here, update the Monkey C to match, and run
+   the gates; the unit suite reads every fixture and runs the calculator on every oracle row.
 3. A change older watches can't read is a new protocol version: each side shows a message of another
    version as "update", never reads it.
 
-## Safety
+CI's contract gate checks `contract/` against faBolus at `contract/PIN`, so the pinned commit must be
+pushed.
 
-- Never weaken the interlocks: the bolus is confirmed by **one explicit gesture on the watch**
-  (1-2-3 / hold). The host independently **recomputes the dose from the carbs, rejects it if it
-  diverges from the estimate the watch showed, and clamps to the max-bolus limit** (defense in
-  depth, not a second human confirmation). Dosing changes get extra review.
+## Before a pull request
 
-## Before a PR
-
-- Run the gate: `./scripts/build-and-test.sh` (stamps the build commit, compiles every jungle, runs the
-  unit suite). By hand it is `./scripts/stamp-revision.sh` then
-  `monkeyc -f monkey.jungle -o bin/faBolusGarmin.prg -y developer_key.der -d venu3s -w` — without the
-  stamp the app does not compile, by design (see README → "Build & test").
-- Run the unit tests in the CIQ simulator (README → "Build & test").
-- Note anything only compiled vs. tested on hardware.
+- Run `./scripts/check.sh`. Its `build` gate (`./scripts/build-and-test.sh`) needs the Connect IQ SDK
+  and the simulator, so it runs locally, not in CI; `./scripts/setup.sh` makes the pre-push hook run it.
+- Keep the confirm deliberate: at least two distinct, sustained actions, in sync between the touch and
+  button flows in `source/app/BolusViews.mc`.
+- Say what was tested on a watch and what only in the simulator.
