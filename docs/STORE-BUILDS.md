@@ -68,7 +68,9 @@ That's it. The script:
 
 It checks the two Garmin prerequisites first (the Connect IQ SDK and your signing key at
 `~/garmin_dev_key.der`) with setup guidance if either is missing. Override paths with
-`MONKEYC=… KEY=… FABOLUS_DIR=… ./scripts/beta-build.sh`.
+`MONKEYC=… KEY=… FABOLUS_DIR=… ./scripts/beta-build.sh`. A personal beta can be signed with any developer
+key you keep (the faBolus build guide passes the one it makes, `KEY=../developer_key.der`); every later
+upload of the same beta must use the same key.
 
 **Two manual steps remain** (Garmin/Apple don't allow automating them):
 
