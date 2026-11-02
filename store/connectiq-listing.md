@@ -23,17 +23,18 @@ WHAT IT DOES
 • Cancel a running bolus or dismiss an alert.
 
 HOW IT WORKS
-The watch is a thin remote. Your iPhone running the faBolus app owns the connection to the pump and does the real work — every command sent from the watch is independently confirmed and clamped against your max-bolus limit on the phone before anything is delivered. The watch confirmation (tap 1 → 2 → 3 on touch watches, or a deliberate two-button hold on button watches) is a second safety factor, never the only one.
+The watch is a thin remote. Your iPhone running the faBolus app owns the connection to the pump and does the real work: it checks every request from the watch before anything is delivered, and your pump's own limits always apply. Bolusing from the watch is off until you turn it on in the phone app, and every bolus needs the confirm on the watch (tap 1 → 2 → 3 on touch watches, or a deliberate two-button hold on button watches).
 
 REQUIREMENTS
 • The faBolus iPhone app, paired with your pump.
+• The Garmin Connect app on the iPhone, with the watch paired to it.
 • A Bluetooth connection between the watch and the phone.
 
 SUPPORTED DEVICES
 The Garmin Venu 3S is the only supported device — hardware-validated and the sole build target.
 
 IMPORTANT — PLEASE READ
-faBolus is experimental software, in active development, and is NOT FDA-cleared or approved as a medical device. It is provided for personal, experimental use; if you build or use it, you assume all responsibility for its behavior. Always confirm every dose yourself and never rely on this app for medical decisions.
+faBolus is experimental, in-development software — not a medical device and not FDA-cleared. It is for experimental and demonstration use. Not medical advice — check every value against your pump and your clinician. If you build or use it, you assume all responsibility.
 
 faBolus is an independent, open-source project and is NOT affiliated with, endorsed by, or a product of Tandem Diabetes Care, Dexcom, or Garmin. "Tandem", "t:slim X2", "Mobi", "Dexcom", and "Garmin" are trademarks of their respective owners.
 
