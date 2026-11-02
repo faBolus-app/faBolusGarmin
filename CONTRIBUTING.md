@@ -10,8 +10,7 @@ experimental and demonstration use.
 ## Device floor
 
 - **The Garmin Venu 3S is the one build target and the one device tested on hardware.** The
-  `<iq:products>` list in the manifests contains only `venu3s`. The store listing
-  ([`store/connectiq-listing.md`](store/connectiq-listing.md)) states the same; keep the two in sync.
+  `<iq:products>` list in the manifests contains only `venu3s`.
 - **Fail gracefully on unsupported hardware.** Where a device can't provide a capability, show an
   explicit, honest state, never a made-up value. This is separate from the `--` shown for a stale or
   missing reading, which is a safety signal and stays. The complications are the standing example: a

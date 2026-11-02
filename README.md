@@ -62,7 +62,7 @@ monkeydo bin/faBolusGarmin-test.prg venu3s -t
 ```
 
 Copy `bin/faBolus.prg` to `GARMIN/APPS` on the watch, or publish a private beta with
-`./scripts/beta-build.sh` ([`docs/STORE-BUILDS.md`](docs/STORE-BUILDS.md)). The step-by-step guide is
+`./scripts/beta-build.sh` ([`docs/BUILDING.md`](docs/BUILDING.md)). The step-by-step guide is
 faBolus's [Garmin watch](https://fabolus.org/build/garmin-build/) page.
 
 ## Related

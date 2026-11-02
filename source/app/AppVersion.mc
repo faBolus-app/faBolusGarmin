@@ -23,9 +23,8 @@ using Toybox.Lang;
 //     misdescribe it. AppRevision.SHORT reads "unknown" outside a git checkout, which is honest about
 //     not knowing instead of guessing.
 //
-// Connect IQ manifests carry no version attribute (the store versions its Official/Beta listings
-// independently, which is why CHANGELOG.md tracks tags rather than SemVer), so these constants — not the
-// manifest — are the only place a version exists in the app. Format is pinned by tests/AppVersionTest.mc
+// Connect IQ manifests carry no version attribute, so these constants — not the manifest — are the only
+// place a version exists in the app. Format is pinned by tests/AppVersionTest.mc
 // so the Details row can never silently become "App: null".
 module AppVersion {
 

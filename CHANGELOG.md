@@ -40,6 +40,8 @@ app is tagged `v1-final`.
 
 - The bolus passcode. The 1 → 2 → 3 confirm, the read-only switch and the phone's checks remain.
 - The analog clock face and the complication display setting. The clock screen is digital.
+- The second build for a public store listing. There's one build, which you sideload or upload as your own
+  private beta, and the watch calls it "faBolus".
 
 ## [v0.1.0] — 2026-07-20
 

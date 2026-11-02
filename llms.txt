@@ -7,7 +7,7 @@
 Thin map so it does not drift. Working guide: [`AGENTS.md`](AGENTS.md).
 
 - **`README.md`** — how it fits together, the venu3s device floor, build and test.
-- **`docs/STORE-BUILDS.md`** — sideload and store `.iq` builds.
+- **`docs/BUILDING.md`** — the one build: sideload, a private beta, and the release binary.
 - **`docs/SECURITY.md`** — remote-bolus notes. The watch gesture is one confirmation, not one of two.
 - Contract: protocol version 2, vendored in `contract/` from faBolus at `contract/PIN`. Update with
   `scripts/sync-contract.sh`; `scripts/check-contract.sh` verifies the copy.

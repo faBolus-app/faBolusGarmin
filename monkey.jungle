@@ -1,4 +1,4 @@
-# Connect IQ build config for the shipping faBolus Garmin remote (phone-relay).
+# Connect IQ build config for the faBolus Garmin remote (phone-relay), the one build. See docs/BUILDING.md.
 # Build:  monkeyc -f monkey.jungle -o bin/faBolus.iq -y <dev_key.der> -e -r -w
 #
 # Portability: the app adapts to the device at runtime (touch or buttons, screen size), so supporting a

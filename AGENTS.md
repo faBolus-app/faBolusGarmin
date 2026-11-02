@@ -30,8 +30,8 @@ any other version is shown as "update", never read.
   `Display`; the views and delegates; `BgService`/`BgComplication` (background) and
   `FaBolusGlanceView` (glance).
 - `contract/` — the vendored phone↔watch contract (see above).
-- Jungles: `monkey.jungle` + `manifest.xml` (Beta), `official.jungle` + `manifest-official.xml`
-  (Official), `test.jungle`.
+- Jungles: `monkey.jungle` + `manifest.xml` (the app, the one build), `test.jungle` +
+  `manifest-test.xml` (the unit suite).
 - **venu3s** is the sole build target and the sole hardware-validated device. Builds for other devices
   are on the `archive/dev/garmin-devices` tag.
 - `tests/` — Monkey C unit suite (run locally; CI has no SDK). `scripts/gen-test-resources.sh` turns
@@ -53,7 +53,7 @@ Sibling repos: `../faBolus`, `../TandemKit`. `scripts/beta-build.sh`, `scripts/s
 - **Sideload:** `./scripts/stamp-revision.sh && monkeyc -f monkey.jungle -o bin/faBolus.prg -y developer_key.der -d venu3s`
   (the Details "App:" row's commit stamp is generated and git-ignored; skipping it fails the compile on
   `Undefined symbol ':AppRevision'` rather than shipping a wrongly-stamped binary)
-- Store builds: [`docs/STORE-BUILDS.md`](docs/STORE-BUILDS.md) (Connect IQ SDK 9.2.0).
+- Sideload and private-beta builds: [`docs/BUILDING.md`](docs/BUILDING.md) (Connect IQ SDK 9.2.0).
 
 ## Device floor
 

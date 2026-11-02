@@ -14,15 +14,14 @@ outright (see each surviving item's note below) — this register keeps only wha
 | # | Item | Evidence | Disp. | Note |
 |---|---|---|---|---|
 | 15 | Connect IQ **widget** app type "not built" | | **R** | Never started. |
-| 16 | Official Connect IQ listing dormant; the app defaults to Beta | `docs/STORE-BUILDS.md:15` | **R** | Standing hold. **Do not publish.** |
-| 17 | Only venu3s is hardware-validated | `store/connectiq-listing.md:31` | **F** | venu3s is also the **sole build target** on `main` — the published compatibility floor and the device *set* are identical (`AGENTS.md`/`CONTRIBUTING.md`/`BRANCHES.md`; the 5 non-venu3s devices removed from both shipping manifests, retained on `dev/garmin-devices`). |
+| 17 | Only venu3s is hardware-validated | `manifest.xml` | **F** | venu3s is also the **sole build target**: the tested device and the device *set* are identical (`AGENTS.md`/`CONTRIBUTING.md`; the other devices are on the `archive/dev/garmin-devices` tag). |
 
 ## Build-flag equivalents (recorded for completeness)
 
 Monkey C has no `#if`; the equivalents are jungle `excludeAnnotations`, per-device `resourcePath`, and
 manifest permissions. All are working as designed — **N**:
 
-- `base.excludeAnnotations = nocomplications` (`monkey.jungle`, `official.jungle`), with the real
+- `base.excludeAnnotations = nocomplications` (`monkey.jungle`, `test.jungle`), with the real
   publisher in `source/app/BgComplication.mc` `(:complications)` and its no-op stub
   `(:nocomplications)`. The per-device `excludeAnnotations`/resource-exclusion split for
   `fr245`/`edge540`/`edge1040` now lives only on `dev/garmin-devices` — `main`'s jungles no longer

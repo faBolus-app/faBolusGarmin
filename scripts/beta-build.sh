@@ -2,11 +2,11 @@
 #
 # One command to publish faBolus to YOUR OWN Garmin watch as a private beta.
 #
-# The Connect IQ store needs a unique app id for every beta listing — even a private one on your own
-# account — so nobody can reuse the shared beta id. This script does everything automatable:
+# The Connect IQ store needs a unique app id for every beta app — even a private one on your own
+# account — so nobody can reuse the app's default id. This script does everything automatable:
 #   1. Generates your personal app id the first time (saved in .beta-app-id; reused forever after, so
-#      your store listing and phone pairing stay stable).
-#   2. Builds a store-ready bin/faBolus-beta-personal.iq signed with your Garmin key.
+#      your beta and phone pairing stay stable).
+#   2. Builds bin/faBolus-beta-personal.iq from monkey.jungle with that id, signed with your Garmin key.
 #   3. Points the iPhone app at that id automatically (writes GARMIN_BETA_APP_ID into the faBolus repo's
 #      LocalConfig.xcconfig and regenerates its Xcode project) — no files to edit by hand.
 #   4. Reveals the .iq in Finder so you can upload it.
@@ -15,7 +15,7 @@
 #   • Rebuild the iPhone app in Xcode (Open faBolus.xcodeproj → Run) — it now targets your beta.
 #   • Upload the .iq at the Connect IQ dashboard and install it to your watch from the Garmin app.
 #
-# Prereqs (both are Garmin requirements, one-time): the Connect IQ SDK, and your Garmin store signing
+# Prereqs (both are Garmin requirements, one-time): the Connect IQ SDK, and your Garmin developer
 # key at ~/garmin_dev_key.der. The compiler is the newest SDK the SDK Manager installed. Override paths
 # with:  MONKEYC=… KEY=… FABOLUS_DIR=… ./scripts/beta-build.sh
 set -euo pipefail
@@ -56,12 +56,13 @@ fi
 DASHED=$(tr -d '[:space:]' < "$ID_FILE")     # 8-4-4-4-12, for the iPhone
 NODASH=$(echo "$DASHED" | tr -d '-')         # 32 hex, for the Garmin manifest
 
-# --- 2. Build the store .iq -----------------------------------------------------------------------
+# --- 2. Build the beta .iq ------------------------------------------------------------------------
 # Stamp the build commit first, so the watch's Details "App:" row names the exact tree this .iq came
-# from. A store upload is where that matters most: it is the build you will later be asked to identify
+# from. An upload is where that matters most: it is the build you will later be asked to identify
 # from a device report, long after the tree has moved on. A trailing "+" in the line below means the
 # tree was dirty, so the hash alone does not describe what you are about to upload.
 ./scripts/stamp-revision.sh
+./scripts/check-version-sync.sh "$FABOLUS_DIR"
 sed "s/id=\"$BASE_ID\"/id=\"$NODASH\"/" manifest.xml > manifest-beta-local.xml
 sed "s#project.manifest = manifest.xml#project.manifest = manifest-beta-local.xml#" monkey.jungle > beta-local.jungle
 mkdir -p bin

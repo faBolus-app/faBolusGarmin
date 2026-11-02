@@ -21,7 +21,7 @@
 #     barrelPath / personality / excludeAnnotations, i.e. PATHS and ANNOTATIONS, never string constants.
 #   * And Monkey C cannot read a file or shell out at runtime to discover it for itself.
 # That leaves exactly one mechanism: write a source file onto a path the jungle already compiles, before
-# monkeyc runs. This script is that write; the three app jungles carry `source/generated` on sourcePath.
+# monkeyc runs. This script is that write; the jungles carry `source/generated` on sourcePath.
 #
 # WHY THE VALUE IS NOT IN COMMITTED SOURCE
 # ----------------------------------------
