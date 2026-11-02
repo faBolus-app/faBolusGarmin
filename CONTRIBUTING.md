@@ -1,8 +1,8 @@
 # Contributing to faBolusGarmin
 
 faBolusGarmin is the Garmin watch app for faBolus, a remote that speaks the phone↔remote contract in
-`contract/`. Contributions are welcome by pull request. Until the rebuild merges, target `rebuild`;
-after that, `main` (see [BRANCHES.md](BRANCHES.md)).
+`contract/`. Contributions are welcome by pull request into `main` (see
+[BRANCHES.md](BRANCHES.md)).
 
 faBolusGarmin is experimental, in-development software — not a medical device and not FDA-cleared, for
 experimental and demonstration use.
