@@ -140,6 +140,62 @@ module ContractTest {
         Support.eq(BolusFlow.state(), "failed");
         Support.eq(BolusFlow.text(), "Remote control is turned off — remotes are read-only.");
         Support.eq(BolusFlow.headline(NOW), "Not delivered");
+        Test.assert(!BolusFlow.confirmable(NOW));
+        return true;
+    }
+
+    // The phone asks for confirmations before the dose goes: the watch arms the same dose again with them,
+    // the user confirms it as before, and the new request names them. Nothing is sent until then.
+    (:test)
+    function aDoseToConfirmIsSentAgainWithWhatWasConfirmed(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        BolusFlow.mode = "units";
+        BolusFlow.unitsMU = 4000;
+        Test.assert(BolusFlow.arm(NOW));
+        Test.assert(BolusFlow.send(NOW));
+        var first = BolusFlow.requestId() as Lang.String;
+        var p = Support.payloadOf(Rez.JsonData.fixture_bolusOutcome_confirm);
+        p["requestId"] = first;
+        Test.assert(BolusFlow.onOutcome(p, NOW + 2));
+        Support.eq(BolusFlow.state(), "failed");
+        Support.eq(BolusFlow.headline(NOW + 2), "Confirm");
+        Support.eq(BolusFlow.text(), "Too many boluses: the pump may not track IOB. Low insulin: 4.00 U left.");
+        Test.assert(BolusFlow.confirmable(NOW + 2));
+        var sentBefore = Link.testSent.size();
+        Test.assert(BolusFlow.armConfirmed(NOW + 3));
+        Support.eq(Link.testSent.size(), sentBefore);
+        Support.eq(BolusFlow.armedDose(), 4000);
+        Test.assert(BolusFlow.send(NOW + 4));
+        var sent = Wire.payload(Support.lastSent() as Lang.Dictionary);
+        Test.assert(!(sent["requestId"] as Lang.String).equals(first));
+        Support.eq(sent["mU"] as Lang.Object?, 4000);
+        Test.assert(Support.same(sent["confirmed"] as Lang.Object?, ["tooManyBoluses", "lowInsulin"]));
+        // What was confirmed goes with that request only.
+        Test.assert(!BolusFlow.confirmable(NOW + 4));
+        Support.eq(BolusFlow.armedConfirmed().size(), 0);
+        return true;
+    }
+
+    // Too late, or a request that went through, can't be confirmed again; a confirm list the phone can't
+    // send (unknown or repeated tokens, or on a delivered request) is ignored.
+    (:test)
+    function onlyAYoungUndeliveredRequestIsConfirmed(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        BolusFlow.mode = "units";
+        BolusFlow.unitsMU = 4000;
+        Test.assert(BolusFlow.arm(NOW));
+        Test.assert(BolusFlow.send(NOW));
+        var p = Support.payloadOf(Rez.JsonData.fixture_bolusOutcome_confirm);
+        p["requestId"] = BolusFlow.requestId() as Lang.String;
+        p["confirm"] = ["lowInsulin", "lowInsulin"];
+        Test.assert(BolusFlow.onOutcome(p, NOW + 2));
+        Test.assert(!BolusFlow.confirmable(NOW + 2));
+        BolusFlow._state = "sending";
+        p["confirm"] = ["lowInsulin"];
+        Test.assert(BolusFlow.onOutcome(p, NOW + 2));
+        Test.assert(BolusFlow.confirmable(NOW + 2));
+        Test.assert(!BolusFlow.confirmable(NOW + BolusFlow.ARM_SEC + 1));
+        Test.assert(!BolusFlow.armConfirmed(NOW + BolusFlow.ARM_SEC + 1));
         return true;
     }
 
@@ -184,18 +240,21 @@ module ContractTest {
         Test.assert(Support.same(Wire.poll(revision, "1793534390-7-118220", true, false),
                                  Support.fixture(Rez.JsonData.fixture_poll)));
         Test.assert(Support.same(Wire.poll(null, null, false, true), Support.fixture(Rez.JsonData.fixture_poll_empty)));
-        Test.assert(Support.same(Wire.bolusUnits("1793534390-7-118220", NOW - 10, 4000),
+        Test.assert(Support.same(Wire.bolusUnits("1793534390-7-118220", NOW - 10, 4000, []),
                                  Support.fixture(Rez.JsonData.fixture_bolus_units)));
-        Test.assert(Support.same(Wire.bolusCarbs("1793534390-9-118999", NOW - 10, 45, 6000, 142, false),
+        Test.assert(Support.same(Wire.bolusCarbs("1793534390-9-118999", NOW - 10, 45, 6000, 142, false, []),
                                  Support.fixture(Rez.JsonData.fixture_bolus_carbs)));
-        Test.assert(Support.same(Wire.bolusCarbs("1793534390-10-119500", NOW - 10, 30, 4000, 160, true),
+        Test.assert(Support.same(Wire.bolusCarbs("1793534390-10-119500", NOW - 10, 30, 4000, 160, true, []),
                                  Support.fixture(Rez.JsonData.fixture_bolus_carbs_stale)));
+        Test.assert(Support.same(Wire.bolusCarbs("1793534390-13-121520", NOW - 10, 45, 6000, 142, false,
+                                                 ["tooManyBoluses", "lowInsulin"]),
+                                 Support.fixture(Rez.JsonData.fixture_bolus_carbs_confirmed)));
         Test.assert(Support.same(Wire.cancel("1793534399-11-121000", "1793534390-7-118220"),
                                  Support.fixture(Rez.JsonData.fixture_cancel)));
         Test.assert(Support.same(Wire.dismiss("1793534395-r3-119001", "pump.alert.2"),
                                  Support.fixture(Rez.JsonData.fixture_dismiss)));
         // And a change to any field is caught.
-        Test.assert(!Support.same(Wire.bolusUnits("1793534390-7-118220", NOW - 10, 4050),
+        Test.assert(!Support.same(Wire.bolusUnits("1793534390-7-118220", NOW - 10, 4050, []),
                                   Support.fixture(Rez.JsonData.fixture_bolus_units)));
         return true;
     }
