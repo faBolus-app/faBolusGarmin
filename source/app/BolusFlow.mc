@@ -48,6 +48,8 @@ module BolusFlow {
     var _armedCarbs as Lang.Number = 0;
     var _armedGlucose as Lang.Number? = null;
     var _armedIncludeStale as Lang.Boolean = false;
+    // What the user confirmed, from the phone's answer to the request this dose was sent as before.
+    var _armedConfirmed as Lang.Array = [];
 
     function reset() as Void {
         mode = Prefs.defaultMode();
@@ -56,6 +58,7 @@ module BolusFlow {
         includeStale = false;
         _armedAt = 0;
         _armedMU = 0;
+        _armedConfirmed = [];
     }
 
     function toggleMode() as Void {
@@ -195,8 +198,46 @@ module BolusFlow {
         _armedCarbs = carbs;
         _armedGlucose = mode.equals("carbs") ? correctionGlucose(now) : null;
         _armedIncludeStale = mode.equals("carbs") && includeStale && _armedGlucose != null;
+        _armedConfirmed = [];
         return true;
     }
+
+    // The phone asks the user to confirm something about the pump before this request's dose goes: the
+    // same dose may be confirmed again, as a new request naming what was confirmed, while the first is
+    // young enough that the user is still at it.
+    function confirmable(now as Lang.Number) as Lang.Boolean {
+        // One test at a time: a long chain of them stalls the compiler's type checker.
+        if (_id == null || _msg == null || _confirm.size() == 0) { return false; }
+        if (!_state.equals("failed") && !_state.equals("refused")) { return false; }
+        var age = now - _sentAt;
+        return age >= 0 && age <= ARM_SEC;
+    }
+
+    // Arms the refused request's dose again, with what the phone asked confirmed, for the user's 1 → 2 → 3.
+    // False, arming nothing, when it can't be.
+    function armConfirmed(now as Lang.Number) as Lang.Boolean {
+        var msg = _msg;
+        if (!confirmable(now) || msg == null) { return false; }
+        var p = Wire.payload(msg);
+        var sentMode = Wire.token(p, "mode", ["units", "carbs"]);
+        if (sentMode == null) { return false; }
+        var armedMU = sentMode.equals("units") ? Wire.int(p, "mU", 0, Wire.MAX_MU) : Wire.int(p, "estimateMU", 0, Wire.MAX_MU);
+        if (armedMU == null || armedMU < Calculator.STEP_MU || armedMU > dialMax()) { return false; }
+        // The dose on the dial is still this one, so the change check at the last tap compares like with like.
+        if (!sentMode.equals(mode)) { return false; }
+        _armedMU = armedMU;
+        _armedAt = now;
+        _armedMode = sentMode;
+        var carbsG = Wire.int(p, "carbsG", 0, MAX_CARBS);
+        _armedCarbs = carbsG != null ? carbsG : 0;
+        _armedGlucose = Wire.int(p, "glucoseMgdl", 0, Wire.MAX_GLUCOSE);
+        var stale = Wire.bool(p, "includeStaleGlucose");
+        _armedIncludeStale = stale != null && stale;
+        _armedConfirmed = _confirm;
+        return true;
+    }
+
+    function armedConfirmed() as Lang.Array { return _armedConfirmed; }
 
     function armedDose() as Lang.Number { return _armedMU; }
 
@@ -236,6 +277,8 @@ module BolusFlow {
     var _deliveredMU as Lang.Number? = null;
     var _text as Lang.String? = null;
     var _cancelAt as Lang.Number = 0;
+    // What the phone asked to be confirmed before this request's dose goes; empty when nothing.
+    var _confirm as Lang.Array = [];
 
     // Sends the confirmed dose. False, with nothing sent, when it can't go (see armBlock).
     function send(now as Lang.Number) as Lang.Boolean {
@@ -245,8 +288,8 @@ module BolusFlow {
         // waits by its own.
         var stamp = Status.phoneNow(now);
         var msg = _armedMode.equals("units")
-            ? Wire.bolusUnits(id, stamp, _armedMU)
-            : Wire.bolusCarbs(id, stamp, _armedCarbs, _armedMU, _armedGlucose, _armedIncludeStale);
+            ? Wire.bolusUnits(id, stamp, _armedMU, _armedConfirmed)
+            : Wire.bolusCarbs(id, stamp, _armedCarbs, _armedMU, _armedGlucose, _armedIncludeStale, _armedConfirmed);
         _id = id;
         _sentAt = now;
         _lastSendAt = now;
@@ -256,7 +299,9 @@ module BolusFlow {
         _deliveredMU = null;
         _text = null;
         _cancelAt = 0;
+        _confirm = [];
         _armedAt = 0;
+        _armedConfirmed = [];
         if (Link.transmit(msg, new BolusListener())) {
             _state = "sending";
         } else {
@@ -314,6 +359,9 @@ module BolusFlow {
         if (requested != null) { _requestedMU = requested; }
         _deliveredMU = Wire.int(p, "deliveredMU", 0, Wire.MAX_MU);
         _text = Wire.str(p, "message", 256);
+        // Only a request that wasn't delivered can be confirmed and sent again.
+        var confirm = Wire.tokens(p, "confirm", Wire.CONFIRMATIONS);
+        _confirm = (confirm != null && (token.equals("failed") || token.equals("refused"))) ? confirm : [];
         save();
         return true;
     }
@@ -401,6 +449,7 @@ module BolusFlow {
         _requestedMU = null;
         _deliveredMU = null;
         _text = null;
+        _confirm = [];
         Storage.deleteValue(Store.BOLUS);
     }
 
@@ -415,6 +464,7 @@ module BolusFlow {
         if (requested != null) { rec["requestedMU"] = requested; }
         if (delivered != null) { rec["deliveredMU"] = delivered; }
         if (text != null) { rec["text"] = text; }
+        if (_confirm.size() > 0) { rec["confirm"] = _confirm; }
         Store.save(Store.BOLUS, rec);
     }
 
@@ -440,6 +490,8 @@ module BolusFlow {
         _requestedMU = Wire.int(rec, "requestedMU", 0, Wire.MAX_MU);
         _deliveredMU = Wire.int(rec, "deliveredMU", 0, Wire.MAX_MU);
         _text = Wire.str(rec, "text", 256);
+        var confirm = Wire.tokens(rec, "confirm", Wire.CONFIRMATIONS);
+        _confirm = confirm != null ? confirm : [];
     }
 
     // What the request screen says.
@@ -451,6 +503,7 @@ module BolusFlow {
         if (_state.equals("delivered")) { return "Delivered"; }
         if (_state.equals("stopped")) { return "Stopped"; }
         if (_state.equals("refused")) { return "Pump refused"; }
+        if (confirmable(now)) { return "Confirm"; }
         if (_state.equals("failed") || _state.equals("notSent")) { return "Not delivered"; }
         if (_state.equals("unknown")) { return "Outcome unknown"; }
         if (_state.equals("noAnswer")) { return "No answer"; }

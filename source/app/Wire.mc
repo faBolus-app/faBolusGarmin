@@ -148,24 +148,46 @@ module Wire {
         return { "version" => VERSION, "kind" => "poll", "payload" => body };
     }
 
-    function bolusUnits(requestId as Lang.String, sentAt as Lang.Number, milliunits as Lang.Number) as Lang.Dictionary {
-        return envelope("bolus", {
+    // What the phone may ask the user to confirm before a dose goes (a refused outcome's `confirm`), and a
+    // new request names once they went on (`confirmed`).
+    const CONFIRMATIONS = ["tooManyBoluses", "maxHourlyBolus", "lowInsulin"];
+
+    // `confirmed`, when not empty, names what the user confirmed for this dose.
+    function bolusUnits(requestId as Lang.String, sentAt as Lang.Number, milliunits as Lang.Number,
+                        confirmed as Lang.Array) as Lang.Dictionary {
+        var body = {
             "requestId" => requestId, "sentAt" => sentAt, "mode" => "units", "mU" => milliunits,
             "includeStaleGlucose" => false
-        });
+        };
+        if (confirmed.size() > 0) { body["confirmed"] = confirmed; }
+        return envelope("bolus", body);
     }
 
     // `glucose` is the reading the estimate used, absent when it used none; `includeStale` is the user's
     // choice, for this attempt, to correct from a stale reading.
     function bolusCarbs(requestId as Lang.String, sentAt as Lang.Number, carbs as Lang.Number,
                         estimateMilliunits as Lang.Number, glucose as Lang.Number?,
-                        includeStale as Lang.Boolean) as Lang.Dictionary {
+                        includeStale as Lang.Boolean, confirmed as Lang.Array) as Lang.Dictionary {
         var body = {
             "requestId" => requestId, "sentAt" => sentAt, "mode" => "carbs", "carbsG" => carbs,
             "estimateMU" => estimateMilliunits, "includeStaleGlucose" => includeStale
         };
         if (glucose != null) { body["glucoseMgdl"] = glucose; }
+        if (confirmed.size() > 0) { body["confirmed"] = confirmed; }
         return envelope("bolus", body);
+    }
+
+    // The confirmation tokens in a list, each once, or null when any isn't one.
+    function tokens(d as Lang.Dictionary, key as Lang.String, allowed as Lang.Array) as Lang.Array? {
+        var list = arr(d, key, allowed.size());
+        if (list == null) { return null; }
+        var out = [] as Lang.Array;
+        for (var i = 0; i < list.size(); i += 1) {
+            var e = list[i];
+            if (!(e instanceof Lang.String) || !contains(allowed, e) || contains(out, e)) { return null; }
+            out.add(e);
+        }
+        return out;
     }
 
     function cancel(requestId as Lang.String, bolusRequestId as Lang.String?) as Lang.Dictionary {

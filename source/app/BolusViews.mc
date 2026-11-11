@@ -324,6 +324,10 @@ class HoldView extends Ui.View {
     static function cancelRect(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
         return [w / 2 - w * 0.26, h * 0.66, w * 0.52, h * 0.15];
     }
+    // Wider than Cancel, for the dose it names.
+    static function goOnRect(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
+        return [w / 2 - w * 0.33, h * 0.66, w * 0.66, h * 0.15];
+    }
 
     function taps() as Lang.Number { return _taps; }
 
@@ -348,6 +352,21 @@ class HoldView extends Ui.View {
             armed = false;
             holdProgress = 0.0;
         }
+    }
+
+    // The phone asked for a confirmation before the dose goes: the same dose is armed again, with what it
+    // asked confirmed, and the user confirms it with 1 → 2 → 3 (or the holds) as before. Never sent here.
+    function reconfirm() as Void {
+        if (!sent) { return; }
+        if (BolusFlow.armConfirmed(Status.now())) {
+            sent = false;
+            _taps = 0;
+            armed = false;
+            holdProgress = 0.0;
+        } else {
+            Toast.show("Can't confirm — start over");
+        }
+        Ui.requestUpdate();
     }
 
     // Back to the first screen a moment after a delivered bolus.
@@ -417,6 +436,9 @@ class HoldView extends Ui.View {
     private function drawRequest(dc as Gfx.Dc, w as Lang.Number, h as Lang.Number, cx as Lang.Number,
                                  vc as Lang.Number) as Void {
         var state = BolusFlow.state();
+        var now = Status.now();
+        // Once per frame, so the headline, the text and the button agree at the 2-minute edge.
+        var asking = BolusFlow.confirmable(now);
         var color = Gfx.COLOR_BLUE;
         if (state.equals("delivered")) {
             color = Gfx.COLOR_GREEN;
@@ -427,21 +449,36 @@ class HoldView extends Ui.View {
             }
         } else if (state.equals("stopped")) {
             color = Gfx.COLOR_ORANGE;
+        } else if (asking) {
+            // A question, not a failure.
+            color = Gfx.COLOR_YELLOW;
         } else if (state.equals("refused") || state.equals("failed") || state.equals("notSent")) {
             color = Gfx.COLOR_RED;
         } else if (state.equals("unknown") || state.equals("noAnswer")) {
             color = Gfx.COLOR_YELLOW;
         }
+        // What the phone asks to confirm needs more room than a reason: the headline moves up for it.
         dc.setColor(color, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.30, Gfx.FONT_MEDIUM, BolusFlow.headline(Status.now()), vc);
+        dc.drawText(cx, asking ? h * 0.20 : h * 0.30, Gfx.FONT_MEDIUM, BolusFlow.headline(now), vc);
         var delivered = BolusFlow.deliveredMU();
         var line = BolusFlow.text();
         if (delivered != null) { line = Display.units(delivered) + " U delivered"; }
         if (line != null) {
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.47, Gfx.FONT_XTINY, Gfx.fitTextToArea(line, Gfx.FONT_XTINY, w * 0.80, h * 0.20, true), vc);
+            var y = asking ? h * 0.44 : h * 0.47;
+            var area = asking ? h * 0.36 : h * 0.20;
+            dc.drawText(cx, y, Gfx.FONT_XTINY, Gfx.fitTextToArea(line, Gfx.FONT_XTINY, w * 0.80, area, true), vc);
         }
-        if (BolusFlow.canCancel()) {
+        if (asking) {
+            var r = goOnRect(w, h);
+            dc.setColor(Gfx.COLOR_GREEN, Gfx.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(r[0], r[1], r[2], r[3], 10);
+            dc.setColor(Gfx.COLOR_BLACK, Gfx.COLOR_TRANSPARENT);
+            // The dose on the button: the phone's message can be cut short, and this is what going on sends.
+            var mu = BolusFlow.requestedMU();
+            var label = mu != null ? "Go on: " + Display.units(mu) + " U" : "Go on";
+            dc.drawText(cx, r[1] + r[3] / 2, Gfx.FONT_SMALL, Nav.isTouch() ? label : label + " (START)", vc);
+        } else if (BolusFlow.canCancel()) {
             var r = cancelRect(w, h);
             dc.setColor(Gfx.COLOR_RED, Gfx.COLOR_TRANSPARENT);
             dc.fillRoundedRectangle(r[0], r[1], r[2], r[3], 10);
@@ -472,7 +509,11 @@ class HoldDelegate extends Ui.BehaviorDelegate {
         var w = size[0];
         var h = size[1];
         if (_view.sent) {
-            if (BolusFlow.canCancel() && Nav.inRect(c[0], c[1], HoldView.cancelRect(w, h))) { cancel(); }
+            if (BolusFlow.confirmable(Status.now())) {
+                if (Nav.inRect(c[0], c[1], HoldView.goOnRect(w, h))) { _view.reconfirm(); }
+            } else if (BolusFlow.canCancel() && Nav.inRect(c[0], c[1], HoldView.cancelRect(w, h))) {
+                cancel();
+            }
             return true;
         }
         var r = HoldView.radius(w);
@@ -492,7 +533,10 @@ class HoldDelegate extends Ui.BehaviorDelegate {
         if (Nav.isTouch()) { return false; }
         var k = evt.getKey();
         if (_view.sent) {
-            if (BolusFlow.canCancel() && (k == Ui.KEY_ENTER || k == Ui.KEY_START)) { cancel(); }
+            if (k == Ui.KEY_ENTER || k == Ui.KEY_START) {
+                if (BolusFlow.confirmable(Status.now())) { _view.reconfirm(); }
+                else if (BolusFlow.canCancel()) { cancel(); }
+            }
             return true;
         }
         if (!_view.armed && k == Ui.KEY_UP) { begin(k); }
