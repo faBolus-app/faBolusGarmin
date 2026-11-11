@@ -54,9 +54,9 @@ module DisplayTest {
         Support.eq(Display.GLUCOSE_LOW, bands["low"] as Lang.Object?);
         Support.eq(Display.GLUCOSE_HIGH, bands["high"] as Lang.Object?);
         Support.eq(Display.GLUCOSE_VERY_HIGH, bands["veryHigh"] as Lang.Object?);
-        var plausible = c["plausibleGlucose"] as Lang.Dictionary;
-        Support.eq(Calculator.GLUCOSE_MIN, plausible["min"] as Lang.Object?);
-        Support.eq(Calculator.GLUCOSE_MAX, plausible["max"] as Lang.Object?);
+        var calculator = c["calculatorGlucose"] as Lang.Dictionary;
+        Support.eq(Calculator.GLUCOSE_MIN, calculator["min"] as Lang.Object?);
+        Support.eq(Calculator.GLUCOSE_MAX, calculator["max"] as Lang.Object?);
         return true;
     }
 

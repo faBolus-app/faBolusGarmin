@@ -106,7 +106,7 @@ module BolusFlow {
     }
 
     // Why the calculator can't give a dose now, or null. "waiting": the pump's settings or IOB haven't
-    // arrived fresh. "low"/"high": the CGM reads outside 40–400 mg/dL, and the phone refuses a calculated
+    // arrived fresh. "low"/"high": the CGM reads outside 20–600 mg/dL, and the phone refuses a calculated
     // dose then, so the watch says so before anything is sent.
     function calculatorBlock(now as Lang.Number) as Lang.String? {
         // The calculator's inputs count while younger than the phone's windows (CalcInputFreshness).
@@ -115,7 +115,7 @@ module BolusFlow {
             return "waiting";
         }
         var g = correctionGlucose(now);
-        if (g != null && !Calculator.plausible(g)) { return g < Calculator.GLUCOSE_MIN ? "low" : "high"; }
+        if (g != null && !Calculator.correctable(g)) { return g < Calculator.GLUCOSE_MIN ? "low" : "high"; }
         return null;
     }
 
@@ -131,17 +131,17 @@ module BolusFlow {
     }
 
     // The stale-reading question applies: a calculator dose with a reading that's stale. A reading outside
-    // 40–400 can only be left out.
+    // 20–600 can only be left out.
     function staleChoiceNeeded(now as Lang.Number) as Lang.Boolean {
         return mode.equals("carbs") && Status.glucose() != null && glucoseStale(now);
     }
 
     // A stale reading may be included only while it's young enough that the phone would include it, and
-    // within 40–400 mg/dL.
+    // within 20–600 mg/dL.
     function staleIncludable(now as Lang.Number) as Lang.Boolean {
         var g = Status.glucose();
         var age = Status.ageOf("glucose", now);
-        return g != null && Calculator.plausible(g) && age != null && age <= Prefs.includableSeconds();
+        return g != null && Calculator.correctable(g) && age != null && age <= Prefs.includableSeconds();
     }
 
     function dose(now as Lang.Number) as Lang.Number {

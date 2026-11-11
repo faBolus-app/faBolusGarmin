@@ -172,7 +172,7 @@ class BolusEntryDelegate extends Ui.BehaviorDelegate {
 }
 
 // The reading is stale: correct from it anyway, use the carbs only, or go back. A reading outside
-// 40–400 mg/dL can't be corrected from, so that choice isn't offered for one.
+// 20–600 mg/dL can't be corrected from, so that choice isn't offered for one.
 class StaleBolusView extends Ui.View {
     public var cursor as Lang.Number = 0;
 

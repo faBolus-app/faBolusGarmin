@@ -7,14 +7,17 @@ using Toybox.Lang;
 // A hand port of faBolusCore's BolusMath.estimate (pumpx2's bolus calculator) and BolusVolume.roundedDown
 // (LoopKit's round-down to the pump's 0.05 U step), in Double, from the integers the wire carries.
 module Calculator {
-    // The plausible CGM range, mg/dL (faBolusCore GlucosePlausibility). Dexcom reports LOW and HIGH
-    // outside it, and a calculated dose can't be sent then.
-    const GLUCOSE_MIN = 40;
-    const GLUCOSE_MAX = 400;
+    // The glucose the calculator corrects from, mg/dL (faBolusCore CalculatorGlucose). Outside it a
+    // calculated dose can't be sent.
+    const GLUCOSE_MIN = 20;
+    const GLUCOSE_MAX = 600;
+    // The target the pump's calculator can use, mg/dL; outside it there's no calculated dose at all.
+    const TARGET_MIN = 40;
+    const TARGET_MAX = 400;
     // The pump's step.
     const STEP_MU = 50;
 
-    function plausible(mgdl as Lang.Number) as Lang.Boolean {
+    function correctable(mgdl as Lang.Number) as Lang.Boolean {
         return mgdl >= GLUCOSE_MIN && mgdl <= GLUCOSE_MAX;
     }
 
@@ -32,16 +35,16 @@ module Calculator {
 
     // The pump calculator's total in units, unrounded to the step; null when its sanity checks fail (a
     // carb ratio of zero, or a target or correction factor the pump couldn't use with a reading). `glucose`
-    // is null for no correction. A reading outside 40–400 mg/dL gives no correction here, as in the
-    // pump's calculator; the caller refuses such a dose before getting this far.
+    // is null for no correction. A reading outside 20–600 mg/dL gives no correction here, as on the
+    // phone; the caller refuses such a dose before getting this far.
     function totalUnits(carbs as Lang.Number, glucose as Lang.Number?, carbRatioMg as Lang.Number,
                         isf as Lang.Number, target as Lang.Number, iobMU as Lang.Number) as Lang.Double? {
         if (carbRatioMg <= 0) { return null; }
         var fromCarbs = dp(carbs.toDouble() * 1000.0d / carbRatioMg.toDouble());
         var fromBG = 0.0d;
         if (glucose != null) {
-            if (target < GLUCOSE_MIN || target > GLUCOSE_MAX || isf <= 0) { return null; }
-            if (plausible(glucose)) {
+            if (target < TARGET_MIN || target > TARGET_MAX || isf <= 0) { return null; }
+            if (correctable(glucose)) {
                 fromBG = dp((glucose - target).toDouble() / isf.toDouble());
             }
         }
