@@ -42,8 +42,8 @@ module CalculatorTest {
                 var expected = (oracle / 50) * 50;
                 var label = "row " + rows.toString() + ": carbs=" + carbs + " bg=" + bg + " cr=" + ratio + " isf=" + isf
                     + " tgt=" + target + " iob=" + iob + " oracle=" + oracle;
-                // A reading outside 40–400 gives no correction, as in the pump's calculator (the flow then
-                // refuses to send it; lowAndHighAreSaidUpFront).
+                // A reading outside 20–600 gives no correction, as on the phone (the flow then refuses to
+                // send it; lowAndHighAreSaidUpFront).
                 var estimate = Calculator.estimate(carbs == null ? 0 : carbs, bg, ratio, isf, target, iob);
                 if (bg != null && (target < 40 || target > 400)) {
                     Support.eqm(estimate, -1, label + " (settings unusable)");
@@ -58,17 +58,17 @@ module CalculatorTest {
         return true;
     }
 
-    // A reading outside 40–400 blocks a calculator dose before anything is sent, and says which way.
+    // A reading outside 20–600 blocks a calculator dose before anything is sent, and says which way.
     (:test)
     function lowAndHighAreSaidUpFront(logger as Test.Logger) as Lang.Boolean {
         Support.connected();
         BolusFlow.mode = "carbs";
         BolusFlow.carbs = 30;
-        Status.accept(Support.status({ "glucose" => { "mgdl" => 38, "at" => Support.NOW - 60, "backup" => false } }), Support.NOW);
+        Status.accept(Support.status({ "glucose" => { "mgdl" => 19, "at" => Support.NOW - 60, "backup" => false } }), Support.NOW);
         Support.eq(BolusFlow.calculatorBlock(Support.NOW), "low");
         Support.eq(BolusFlow.estimate(Support.NOW), -1);
         Support.eq(BolusEntryView.previewLine(Support.NOW), "CGM LOW: use units");
-        Status.accept(Support.status({ "glucose" => { "mgdl" => 401, "at" => Support.NOW - 60, "backup" => false } }), Support.NOW);
+        Status.accept(Support.status({ "glucose" => { "mgdl" => 601, "at" => Support.NOW - 60, "backup" => false } }), Support.NOW);
         Support.eq(BolusFlow.calculatorBlock(Support.NOW), "high");
         // A dose dialed in units still goes.
         BolusFlow.mode = "units";
