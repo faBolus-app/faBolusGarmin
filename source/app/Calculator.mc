@@ -40,7 +40,18 @@ module Calculator {
     function totalUnits(carbs as Lang.Number, glucose as Lang.Number?, carbRatioMg as Lang.Number,
                         isf as Lang.Number, target as Lang.Number, iobMU as Lang.Number) as Lang.Double? {
         if (carbRatioMg <= 0) { return null; }
-        var fromCarbs = dp(carbs.toDouble() * 1000.0d / carbRatioMg.toDouble());
+        return fromFood(dp(carbs.toDouble() * 1000.0d / carbRatioMg.toDouble()), glucose, isf, target, iobMU);
+    }
+
+    // The same total with carbs off on the pump: the food entry is insulin, `foodMU`, the food's part as it
+    // is, with no carb ratio (faBolusCore BolusMath.estimate(foodUnits:)), as Tandem's apps take it then.
+    function foodTotalUnits(foodMU as Lang.Number, glucose as Lang.Number?, isf as Lang.Number,
+                            target as Lang.Number, iobMU as Lang.Number) as Lang.Double? {
+        return fromFood(dp((foodMU > 0 ? foodMU : 0).toDouble() / 1000.0d), glucose, isf, target, iobMU);
+    }
+
+    function fromFood(fromCarbs as Lang.Double, glucose as Lang.Number?, isf as Lang.Number, target as Lang.Number,
+                      iobMU as Lang.Number) as Lang.Double? {
         var fromBG = 0.0d;
         if (glucose != null) {
             if (target < TARGET_MIN || target > TARGET_MAX || isf <= 0) { return null; }
@@ -125,5 +136,20 @@ module Calculator {
                       isf as Lang.Number, target as Lang.Number, iobMU as Lang.Number) as Lang.Number {
         var total = totalUnits(carbs, glucose, carbRatioMg, isf, target, iobMU);
         return (total == null) ? -1 : roundDown(total);
+    }
+
+    // The same with carbs off: `foodMU` of insulin for the food.
+    function estimateFood(foodMU as Lang.Number, glucose as Lang.Number?, isf as Lang.Number, target as Lang.Number,
+                          iobMU as Lang.Number) as Lang.Number {
+        var total = foodTotalUnits(foodMU, glucose, isf, target, iobMU);
+        return (total == null) ? -1 : roundDown(total);
+    }
+
+    // The food's share and the total with carbs off, as `parts` gives them with carbs.
+    function foodParts(foodMU as Lang.Number, glucose as Lang.Number?, isf as Lang.Number, target as Lang.Number,
+                       iobMU as Lang.Number) as Lang.Array<Lang.Double>? {
+        var total = foodTotalUnits(foodMU, glucose, isf, target, iobMU);
+        if (total == null) { return null; }
+        return [dp((foodMU > 0 ? foodMU : 0).toDouble() / 1000.0d), total];
     }
 }

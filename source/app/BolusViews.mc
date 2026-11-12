@@ -61,6 +61,7 @@ class BolusEntryView extends Ui.View {
             // same screen, and under 20 the advice isn't to dose.
             if (block.equals("low")) { return "Too low for a carb dose"; }
             if (block.equals("high")) { return "Too high for a carb dose"; }
+            if (block.equals("redial")) { return Status.carbsOff() ? "Carbs now off: dial in U" : "Carbs now on: dial in g"; }
             return "Waiting for pump settings";
         }
         var est = BolusFlow.estimate(now);
@@ -88,7 +89,10 @@ class BolusEntryView extends Ui.View {
         dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.fillRoundedRectangle(cr[0], cr[1], cr[2], cr[3], 8);
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, cr[1] + cr[3] / 2, Gfx.FONT_TINY, (units ? "Units" : "Carbs") + (touch ? " (tap)" : " (MENU)"), vc);
+        // With carbs off on the pump the calculator's food entry is insulin units, as on the phone.
+        var carbsOff = Status.carbsOff();
+        var label = units ? "Units" : (carbsOff ? "Food" : "Carbs");
+        dc.drawText(cx, cr[1] + cr[3] / 2, Gfx.FONT_TINY, label + (touch ? " (tap)" : " (MENU)"), vc);
 
         var mc = minusCenter(w, h);
         var pc = plusCenter(w, h);
@@ -101,7 +105,8 @@ class BolusEntryView extends Ui.View {
         dc.drawText(pc[0], pc[1], Gfx.FONT_MEDIUM, "+", vc);
 
         dc.setColor(0x8AB4FF, Gfx.COLOR_TRANSPARENT);
-        var value = units ? Display.units(BolusFlow.unitsMU) + " U" : BolusFlow.carbs.toString() + " g";
+        var value = units ? Display.units(BolusFlow.unitsMU) + " U"
+            : (carbsOff ? Display.units(BolusFlow.foodMU) + " U" : BolusFlow.carbs.toString() + " g");
         dc.drawText(cx, h * 0.45, Gfx.FONT_NUMBER_MEDIUM, value, vc);
         if (!units) {
             // Why the dose is what it is, under the number, when there's something to say.
@@ -304,8 +309,9 @@ class CorrectionView extends Ui.View {
         dc.drawText(x + wHead, y, font, value, lv);
     }
 
+    // As wide as the round screen allows at this height, for the longest label ("No correction").
     static function halfRect(i as Lang.Number, w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
-        return [i == 0 ? w * 0.07 : w * 0.515, h * 0.45, w * 0.415, h * 0.28];
+        return [i == 0 ? w * 0.055 : w * 0.51, h * 0.45, w * 0.435, h * 0.28];
     }
 
     static function above() as Lang.Boolean { return BolusFlow.correctionAbove(); }
@@ -314,7 +320,7 @@ class CorrectionView extends Ui.View {
     // number under it is the whole dose, not an amount added.
     static function label(choice as Lang.String) as Lang.String {
         if (choice.equals("apply")) { return above() ? "Corrected" : "Reduced"; }
-        return above() ? "Carbs only" : "Not reduced";
+        return above() ? BolusFlow.noCorrectionTitle() : "Not reduced";
     }
 
     static function dose(choice as Lang.String) as Lang.String {
@@ -341,7 +347,9 @@ class CorrectionView extends Ui.View {
         if (block != null || est > BolusFlow.dialMax()) { return BolusEntryView.previewLine(now); }
         if (est < Calculator.STEP_MU) { return "No bolus"; }
         var g = Status.glucose();
-        if (g == null || BolusFlow.glucoseStale(now) || Status.glucoseCaution() != null) { return "Carbs only now"; }
+        if (g == null || BolusFlow.glucoseStale(now) || Status.glucoseCaution() != null) {
+            return BolusFlow.noCorrectionTitle() + " now";
+        }
         return g < Calculator.LOW_GLUCOSE ? "Dose reduced" : "No correction needed";
     }
 
@@ -543,7 +551,7 @@ class StaleBolusView extends Ui.View {
 
 
     static function label(choice as Lang.String) as Lang.String {
-        return choice.equals("include") ? "Include" : "Carbs only";
+        return choice.equals("include") ? "Include" : BolusFlow.noCorrectionTitle();
     }
 
     function onShow() as Void {

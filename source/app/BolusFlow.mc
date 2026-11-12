@@ -39,6 +39,9 @@ module BolusFlow {
     var mode as Lang.String = "carbs";
     var unitsMU as Lang.Number = 0;
     var carbs as Lang.Number = 0;
+    // The insulin for the food, milliunits, in place of carbs while carbs are off on the pump. Kept apart
+    // from the grams, so carbs turned on or off while one is dialed never reads grams as units.
+    var foodMU as Lang.Number = 0;
     // For this attempt only: the user chose to correct from a stale reading.
     var includeStale as Lang.Boolean = false;
     // For this attempt only: asked whether to correct from a reading of 70 or more, the user chose carbs only.
@@ -48,6 +51,9 @@ module BolusFlow {
     var _armedAt as Lang.Number = 0;
     var _armedMode as Lang.String = "units";
     var _armedCarbs as Lang.Number = 0;
+    // The armed dose's food was insulin units (carbs off), `_armedFoodMU` of it.
+    var _armedInsulin as Lang.Boolean = false;
+    var _armedFoodMU as Lang.Number = 0;
     var _armedGlucose as Lang.Number? = null;
     var _armedIncludeStale as Lang.Boolean = false;
     var _armedDecline as Lang.Boolean = false;
@@ -66,6 +72,7 @@ module BolusFlow {
         mode = Prefs.defaultMode();
         unitsMU = 0;
         carbs = 0;
+        foodMU = 0;
         includeStale = false;
         declineCorrection = false;
         _armedAt = 0;
@@ -85,12 +92,27 @@ module BolusFlow {
             if (unitsMU < 0) { unitsMU = 0; }
             var max = dialMax();
             if (unitsMU > max) { unitsMU = max; }
+        } else if (Status.carbsOff()) {
+            // Dialing one kind clears the other, so only what's dialed now can count.
+            carbs = 0;
+            foodMU += direction * Prefs.unitsStep();
+            if (foodMU < 0) { foodMU = 0; }
+            var top = dialMax();
+            if (foodMU > top) { foodMU = top; }
         } else {
+            foodMU = 0;
             carbs += direction * Prefs.carbStep();
             if (carbs < 0) { carbs = 0; }
             if (carbs > MAX_CARBS) { carbs = MAX_CARBS; }
         }
     }
+
+    // Carbs turned on or off on the pump after the food was dialed as the other kind: it's dialed again,
+    // never read as the new kind nor quietly dropped, as on the phone.
+    function foodNeedsRedial() as Lang.Boolean { return Status.carbsOff() ? carbs > 0 : foodMU > 0; }
+
+    // What the food entry holds: milliunits with carbs off, grams otherwise. Zero is a correction only.
+    function foodAmount() as Lang.Number { return Status.carbsOff() ? foodMU : carbs; }
 
     // The lower of the remote limit and the pump's max bolus, whichever are known.
     function dialMax() as Lang.Number {
@@ -160,6 +182,8 @@ module BolusFlow {
         var target = Status.field("calculator", "target");
         var iob = Status.field("iob", "mU");
         if (ratio == null || isf == null || target == null || iob == null) { return -1; }
+        // Carbs off: the food is insulin, with no carb ratio, as on the phone.
+        if (Status.carbsOff()) { return Calculator.estimateFood(foodMU, glucose, isf, target, iob); }
         return Calculator.estimate(carbs, glucose, ratio, isf, target, iob);
     }
 
@@ -169,17 +193,17 @@ module BolusFlow {
         if (!mode.equals("carbs") || calculatorBlock(now) != null || overLimit(now)) { return null; }
         if (correctionChoiceNeeded(now)) { return correctionAbove() ? "Correction asked next" : "Reduction asked next"; }
         // No reading at all: the dose shown has no correction, which the number alone doesn't say.
-        if (Status.glucose() == null) { return "No CGM: carbs only"; }
+        if (Status.glucose() == null) { return "No CGM: " + noCorrection(); }
         // One the pump flags: why, and carbs only.
         var caution = Status.glucoseCaution();
         if (caution != null) { return cautionText(caution); }
         // Stale and too old to include: carbs only, with no question.
-        if (glucoseStale(now) && !staleChoiceNeeded(now)) { return "Stale CGM: carbs only"; }
+        if (glucoseStale(now) && !staleChoiceNeeded(now)) { return "Stale CGM: " + noCorrection(); }
         var isf = Status.field("calculator", "isf");
         var target = Status.field("calculator", "target");
         var iob = Status.field("iob", "mU");
         if (isf == null || target == null || iob == null) { return null; }
-        var key = Calculator.message(correctionGlucose(now), isf, target, iob, carbs, estimate(now));
+        var key = Calculator.message(correctionGlucose(now), isf, target, iob, foodAmount(), estimate(now));
         return key != null ? Calculator.messageText(key) : null;
     }
 
@@ -197,15 +221,24 @@ module BolusFlow {
     // The dose screen's line for a flagged reading: why, and what the dose is. Out of range, check BG first.
     function cautionText(caution as Lang.String) as Lang.String {
         if (caution.equals("low") || caution.equals("high")) { return cautionTitle(caution) + ": check BG"; }
-        if (caution.equals("checkbg")) { return "Check BG: carbs only"; }
+        if (caution.equals("checkbg")) { return "Check BG: " + noCorrection(); }
         if (caution.equals("notread")) { return cautionTitle(caution); }
-        return cautionTitle(caution) + ": carbs only";
+        var title = cautionTitle(caution);
+        // The catch-all's title is the longest: shorter here, on a line that spans the watch.
+        if (title.equals("CGM can't be used")) { title = "CGM unusable"; }
+        return title + ": " + noCorrection();
     }
+
+    // A dose without the correction, in words: "carbs only", or with carbs off (no carbs in it) "no
+    // correction", as on the phone.
+    function noCorrection() as Lang.String { return Status.carbsOff() ? "no correction" : "carbs only"; }
+    function noCorrectionTitle() as Lang.String { return Status.carbsOff() ? "No correction" : "Carbs only"; }
 
     // Why the calculator can't give a dose now, or null. "waiting": the pump's settings or IOB haven't
     // arrived fresh. "low"/"high": the CGM reads outside 20–600 mg/dL, and the phone refuses a calculated
     // dose then, so the watch says so before anything is sent.
     function calculatorBlock(now as Lang.Number) as Lang.String? {
+        if (mode.equals("carbs") && foodNeedsRedial()) { return "redial"; }
         // The calculator's inputs count while younger than the phone's windows (CalcInputFreshness).
         if (Status.freshField("calculator", "carbRatioMg", Prefs.therapyStaleSeconds(), now) == null
             || Status.freshField("iob", "mU", Prefs.iobStaleSeconds(), now) == null) {
@@ -227,7 +260,7 @@ module BolusFlow {
     // screen says so instead.
     function staleChoiceNeeded(now as Lang.Number) as Lang.Boolean {
         return mode.equals("carbs") && Status.glucose() != null && glucoseStale(now) && staleIncludable(now)
-            && Status.glucoseCaution() == null;
+            && Status.glucoseCaution() == null && !foodNeedsRedial();
     }
 
     // A stale reading may be included only while it's young enough that the phone would include it, and
@@ -302,6 +335,8 @@ module BolusFlow {
         _armedAt = now;
         _armedMode = mode;
         _armedCarbs = carbs;
+        _armedInsulin = mode.equals("carbs") && Status.carbsOff();
+        _armedFoodMU = foodMU;
         var offered = mode.equals("carbs") ? offeredGlucose(now) : null;
         _armedDecline = declineCorrection && offered != null && offered >= Calculator.LOW_GLUCOSE;
         // The reading the estimate used, or the one the user declined to correct from: the phone holds the
@@ -313,10 +348,10 @@ module BolusFlow {
             var target = Status.field("calculator", "target");
             var above = offered != null && target != null && offered > target;
             // The words on the half the user chose, so the confirm screen matches it exactly.
-            _armedChoice = _armedDecline ? (above ? "Carbs only" : "Not reduced") : (above ? "Corrected" : "Reduced");
+            _armedChoice = _armedDecline ? (above ? noCorrectionTitle() : "Not reduced") : (above ? "Corrected" : "Reduced");
         }
         _armedConfirmed = [];
-        _armedSplit = splitFor(_armedMode, _armedCarbs, _armedDecline ? null : _armedGlucose, _armedMU);
+        _armedSplit = splitFor(_armedDecline ? null : _armedGlucose);
         return true;
     }
 
@@ -330,15 +365,18 @@ module BolusFlow {
     // A correction was part of the armed dose (one was computed from a reading).
     function armedCorrects() as Lang.Boolean { return _armedMode.equals("carbs") && !_armedDecline && _armedGlucose != null; }
 
-    function splitFor(armedMode as Lang.String, carbsG as Lang.Number, glucose as Lang.Number?, doseMU as Lang.Number)
-        as Lang.Array<Lang.Number>? {
-        if (!armedMode.equals("carbs")) { return null; }
+    // The armed dose's split, from the reading it corrects from (null for none).
+    function splitFor(glucose as Lang.Number?) as Lang.Array<Lang.Number>? {
+        if (!_armedMode.equals("carbs")) { return null; }
+        var doseMU = _armedMU;
         var ratio = Status.field("calculator", "carbRatioMg");
         var isf = Status.field("calculator", "isf");
         var target = Status.field("calculator", "target");
         var iob = Status.field("iob", "mU");
         if (ratio == null || isf == null || target == null || iob == null) { return null; }
-        var p = Calculator.parts(carbsG, glucose, ratio, isf, target, iob);
+        var p = _armedInsulin
+            ? Calculator.foodParts(_armedFoodMU, glucose, isf, target, iob)
+            : Calculator.parts(_armedCarbs, glucose, ratio, isf, target, iob);
         if (p == null) { return null; }
         var corrD = (p[1] - p[0]) * 1000.0d;
         // To the nearest milliunit: the parts are decimals of a hundredth, and truncating would lose one.
@@ -376,6 +414,14 @@ module BolusFlow {
         _armedMode = sentMode;
         var carbsG = Wire.int(p, "carbsG", 0, MAX_CARBS);
         _armedCarbs = carbsG != null ? carbsG : 0;
+        var food = Wire.int(p, "foodMU", 0, Wire.MAX_MU);
+        _armedInsulin = food != null;
+        _armedFoodMU = food != null ? food : 0;
+        // Carbs turned on or off since: the request's food means something else now.
+        if (sentMode.equals("carbs") && _armedInsulin != Status.carbsOff()) {
+            _armedAt = 0;
+            return false;
+        }
         _armedGlucose = Wire.int(p, "glucoseMgdl", 0, Wire.MAX_GLUCOSE);
         var stale = Wire.bool(p, "includeStaleGlucose");
         _armedIncludeStale = stale != null && stale;
@@ -383,7 +429,7 @@ module BolusFlow {
         _armedDecline = decline != null && decline;
         _armedConfirmed = _confirm;
         _armedChoice = _sentChoice;
-        _armedSplit = splitFor(_armedMode, _armedCarbs, _armedDecline ? null : _armedGlucose, _armedMU);
+        _armedSplit = splitFor(_armedDecline ? null : _armedGlucose);
         return true;
     }
 
@@ -400,7 +446,9 @@ module BolusFlow {
         if (!Link.phoneLive(now) || !Link.reachable()) { return "phone"; }
         if (!Status.canBolus()) { return "blocked"; }
         if (now - _armedAt > ARM_SEC) { return "expired"; }
-        if (_armedMode.equals("carbs") && dose(now) != _armedMU) { return "changed"; }
+        if (_armedMode.equals("carbs") && (_armedInsulin != Status.carbsOff() || dose(now) != _armedMU)) {
+            return "changed";
+        }
         return null;
     }
 
@@ -439,8 +487,8 @@ module BolusFlow {
         var stamp = Status.phoneNow(now);
         var msg = _armedMode.equals("units")
             ? Wire.bolusUnits(id, stamp, _armedMU, _armedConfirmed)
-            : Wire.bolusCarbs(id, stamp, _armedCarbs, _armedMU, _armedGlucose, _armedIncludeStale, _armedConfirmed,
-                              _armedDecline);
+            : Wire.bolusCalculator(id, stamp, _armedInsulin ? null : _armedCarbs, _armedInsulin ? _armedFoodMU : null,
+                                   _armedMU, _armedGlucose, _armedIncludeStale, _armedConfirmed, _armedDecline);
         _id = id;
         _sentChoice = _armedChoice;
         _sentAt = now;
