@@ -339,6 +339,13 @@ module FaultTest {
         for (var t = NOW + 4; t <= NOW + 60; t += 1) { BolusFlow.tick(t); }
         Support.eq(Link.testSent.size(), sent);
         Test.assert(BolusFlow.cancelling(NOW + 10));
+        // The button says the cancel is in hand; the headline stays what the request is doing.
+        Support.eq(BolusFlow.headline(NOW + 10), "Sending…");
+        // Shown through the phone's 60 s wait behind an unanswered request, then Cancel again; the hint to
+        // use the pump only once 5 s have gone with no end to the bolus.
+        Test.assert(!BolusFlow.cancelSlow(NOW + 3 + 4));
+        Test.assert(BolusFlow.cancelSlow(NOW + 3 + 5));
+        Test.assert(BolusFlow.cancelling(NOW + 3 + 170));
         Test.assert(!BolusFlow.cancelling(NOW + 3 + BolusFlow.CANCEL_SHOW_SEC));
         Test.assert(BolusFlow.canCancel());
         return true;
