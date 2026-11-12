@@ -45,8 +45,9 @@ class BolusEntryView extends Ui.View {
     static function chipRect(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
         return [w / 2 - w * 0.24, h * 0.09, w * 0.48, h * 0.14];
     }
+    // Lower on a touch watch, where no button hint sits under it, to give the lines above room.
     static function deliverRect(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
-        return [w / 2 - w * 0.28, h * 0.74, w * 0.56, h * 0.15];
+        return [w / 2 - w * 0.28, Nav.isTouch() ? h * 0.77 : h * 0.74, w * 0.56, h * 0.15];
     }
     static function minusCenter(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> { return [w * 0.17, h * 0.45]; }
     static function plusCenter(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> { return [w * 0.83, h * 0.45]; }
@@ -56,14 +57,20 @@ class BolusEntryView extends Ui.View {
     static function previewLine(now as Lang.Number) as Lang.String {
         var block = BolusFlow.calculatorBlock(now);
         if (block != null) {
-            if (block.equals("low")) { return "CGM LOW: use units"; }
-            if (block.equals("high")) { return "CGM HIGH: use units"; }
+            // Outside the calculator's 20–600 mg/dL: said plainly, as what happened. The units mode is on the
+            // same screen, and under 20 the advice isn't to dose.
+            if (block.equals("low")) { return "Too low for a carb dose"; }
+            if (block.equals("high")) { return "Too high for a carb dose"; }
             return "Waiting for pump settings";
         }
         var est = BolusFlow.estimate(now);
         if (est < 0) { return "Calculator unavailable"; }
         if (est > BolusFlow.dialMax()) { return "Over the " + Display.units(BolusFlow.dialMax()) + " U limit"; }
-        return "~ " + Display.units(est) + " U";
+        // Both doses the question will offer, in its order: with the correction, then without.
+        if (BolusFlow.correctionChoiceNeeded(now)) {
+            return Display.units(est) + " U or " + Display.units(BolusFlow.estimateFrom(null)) + " U";
+        }
+        return Display.units(est) + " U";
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {
@@ -97,14 +104,24 @@ class BolusEntryView extends Ui.View {
         var value = units ? Display.units(BolusFlow.unitsMU) + " U" : BolusFlow.carbs.toString() + " g";
         dc.drawText(cx, h * 0.45, Gfx.FONT_NUMBER_MEDIUM, value, vc);
         if (!units) {
+            // Why the dose is what it is, under the number, when there's something to say.
+            var message = BolusFlow.message(now);
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.63, Gfx.FONT_XTINY, previewLine(now), vc);
+            var touch2 = Nav.isTouch();
+            dc.drawText(cx, message != null ? (touch2 ? h * 0.615 : h * 0.605) : h * 0.63, Gfx.FONT_XTINY,
+                        previewLine(now), vc);
+            if (message != null) {
+                dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
+                dc.drawText(cx, touch2 ? h * 0.695 : h * 0.675, Gfx.FONT_XTINY, message, vc);
+            }
         }
 
         var dr = deliverRect(w, h);
-        dc.setColor(0x5C6BE6, Gfx.COLOR_TRANSPARENT);
+        // Grey while a press can't send anything, so it never looks ready when it isn't.
+        var ready = BolusFlow.canDeliver(now);
+        dc.setColor(ready ? 0x5C6BE6 : 0x333333, Gfx.COLOR_TRANSPARENT);
         dc.fillRoundedRectangle(dr[0], dr[1], dr[2], dr[3], 10);
-        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.setColor(ready ? Gfx.COLOR_WHITE : Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, dr[1] + dr[3] / 2, Gfx.FONT_SMALL, touch ? "Deliver" : "Deliver (START)", vc);
         if (!touch) {
             dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
@@ -158,44 +175,380 @@ class BolusEntryDelegate extends Ui.BehaviorDelegate {
 
     private function deliver() as Lang.Boolean {
         var now = Status.now();
+        // Asked again on every Deliver: an answer holds for the attempt it was given in.
+        BolusFlow.declineCorrection = false;
         if (BolusFlow.mode.equals("carbs")) {
             if (BolusFlow.staleChoiceNeeded(now)) {
-                var v = new StaleBolusView();
+                var v = new StaleBolusView(now);
                 Ui.pushView(v, new StaleBolusDelegate(v), Ui.SLIDE_LEFT);
                 return true;
             }
             if (BolusFlow.calculatorBlock(now) != null) { return true; }
+            if (BolusFlow.correctionChoiceNeeded(now)) {
+                var c = new CorrectionView(now);
+                Ui.pushView(c, new CorrectionDelegate(c), Ui.SLIDE_LEFT);
+                return true;
+            }
         }
         if (BolusFlow.arm(now)) { Nav.openConfirm(false); }
         return true;
     }
 }
 
-// The reading is stale: correct from it anyway, use the carbs only, or go back. A reading outside
-// 20–600 mg/dL can't be corrected from, so that choice isn't offered for one.
+// Add a correction? (above target) / Reduce the bolus? (below it), asked from 70 mg/dL up when correcting
+// changes the dose, as on the phone. Two halves, so a finger can't land one row off: correct on the left,
+// carbs only on the right; BACK cancels. The next screen names the choice, and BACK there returns here.
+// If the doses change while it shows (a new reading, IOB), a full screen says so, and a press
+// there only brings back the question with the new doses, so a press aimed at the old ones never picks one.
+// If the question no longer applies (under 70, stale, or correcting no longer changes the dose), a full
+// screen says that too, and any press goes back to the dose screen.
+class CorrectionView extends Ui.View {
+    // On a button watch, the half START picks: 0 left, 1 right. It starts on the right, carbs only.
+    public var cursor as Lang.Number = 1;
+    // What the screen shows: the doses and which question. A change is noticed against it.
+    private var _shown as Lang.String = "";
+    // The reading the screen showed, and the one before it when the last change was a new reading.
+    private var _shownGlucose as Lang.Number? = null;
+    private var _was as Lang.Number? = null;
+    // The doses changed and the user hasn't seen the new ones yet.
+    public var changed as Lang.Boolean = false;
+
+    function initialize(now as Lang.Number) {
+        View.initialize();
+        _shown = shownKey(BolusFlow.correctionDoses(now));
+        _shownGlucose = Status.glucose();
+    }
+
+    // The doses and question the screen would draw for `doses` (BolusFlow.correctionDoses).
+    static function shownKey(doses as Lang.Array<Lang.Number>?) as Lang.String {
+        return doses == null ? "" : (above() ? "a" : "b") + doses[0] + "/" + doses[1];
+    }
+
+    // Whether the doses changed since the screen last showed them; if so, the change screen shows until the
+    // user has seen it. True once per change.
+    function noticeChange(now as Lang.Number) as Lang.Boolean { return noticeChangeIn(BolusFlow.correctionDoses(now)); }
+
+    function noticeChangeIn(doses as Lang.Array<Lang.Number>?) as Lang.Boolean {
+        var key = shownKey(doses);
+        if (key.equals(_shown)) { return false; }
+        _shown = key;
+        var g = Status.glucose();
+        _was = g != _shownGlucose ? _shownGlucose : null;
+        _shownGlucose = g;
+        changed = true;
+        return true;
+    }
+
+    // The user saw the new doses: the question again.
+    function seen() as Void { changed = false; }
+
+    // The first line of a change screen: the BG the question showed and the one now, or `text` when it isn't
+    // the BG that changed (or there's none to show).
+    function drawWhatChanged(dc as Gfx.Dc, cx as Lang.Numeric, y as Lang.Numeric, old as Lang.Number?,
+                             text as Lang.String?) as Void {
+        if (text == null && old != null && Status.glucose() != null && old != Status.glucose()) {
+            drawChange(dc, cx, y, old);
+            return;
+        }
+        if (text == null) {
+            drawReading(dc, cx, y);
+            return;
+        }
+        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, y, Gfx.FONT_XTINY, text, Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
+    }
+
+    // "BG", the reading the question showed and the one now, centred at `y`: the old one grey, an arrow, the
+    // new one in its range's colour, the unit once. The arrow is drawn: the watch fonts have no arrow glyph.
+    static function drawChange(dc as Gfx.Dc, cx as Lang.Numeric, y as Lang.Numeric, old as Lang.Number) as Void {
+        var g = Status.glucose();
+        var unit = Prefs.glucoseUnit();
+        var font = Gfx.FONT_SMALL;
+        var head = "BG ";
+        var was = Display.glucose(old, unit) + " ";
+        var now = " " + (g != null ? Display.glucose(g, unit) : "--") + " " + Display.glucoseUnit(unit);
+        var arrow = (dc.getFontHeight(font) * 0.55).toNumber();
+        var total = dc.getTextWidthInPixels(head, font) + dc.getTextWidthInPixels(was, font) + arrow
+            + dc.getTextWidthInPixels(now, font);
+        var x = cx - total / 2;
+        var lv = Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER;
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(x, y, font, head, lv);
+        x += dc.getTextWidthInPixels(head, font);
+        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(x, y, font, was, lv);
+        x += dc.getTextWidthInPixels(was, font);
+        var tip = arrow / 3;
+        dc.setPenWidth(3);
+        dc.drawLine(x, y, x + arrow - tip, y);
+        dc.setPenWidth(1);
+        dc.fillPolygon([[x + arrow - tip, y - tip], [x + arrow, y], [x + arrow - tip, y + tip]]);
+        x += arrow;
+        dc.setColor(g != null ? Display.rangeColor(g) : Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(x, y, font, now, lv);
+    }
+
+    // "BG" and the reading, centred at `y`: the reading in its range's colour, as on the glucose screens.
+    static function drawReading(dc as Gfx.Dc, cx as Lang.Numeric, y as Lang.Numeric) as Void {
+        var g = Status.glucose();
+        var unit = Prefs.glucoseUnit();
+        var head = "BG ";
+        var value = (g != null ? Display.glucose(g, unit) : "--") + " " + Display.glucoseUnit(unit);
+        var font = Gfx.FONT_SMALL;
+        var wHead = dc.getTextWidthInPixels(head, font);
+        var x = cx - (wHead + dc.getTextWidthInPixels(value, font)) / 2;
+        var lv = Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER;
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(x, y, font, head, lv);
+        dc.setColor(g != null ? Display.rangeColor(g) : Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(x + wHead, y, font, value, lv);
+    }
+
+    static function halfRect(i as Lang.Number, w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
+        return [i == 0 ? w * 0.07 : w * 0.515, h * 0.45, w * 0.415, h * 0.28];
+    }
+
+    static function above() as Lang.Boolean { return BolusFlow.correctionAbove(); }
+
+    // The two answers, left then right: the dose each gives, named as the confirm screen names it. The
+    // number under it is the whole dose, not an amount added.
+    static function label(choice as Lang.String) as Lang.String {
+        if (choice.equals("apply")) { return above() ? "Corrected" : "Reduced"; }
+        return above() ? "Carbs only" : "Not reduced";
+    }
+
+    static function dose(choice as Lang.String) as Lang.String {
+        return doseText(BolusFlow.estimateFrom(choice.equals("apply") ? Status.glucose() : null));
+    }
+
+    static function doseText(mu as Lang.Number) as Lang.String { return Display.units(mu < 0 ? 0 : mu) + " U"; }
+
+    // With the question gone, there's no dose to go on to: a reduction took it all, or there's none to give
+    // (a CGM reading outside 20–600, the pump's settings not in, or a dose over the limit).
+    static function noDoseToSee(now as Lang.Number) as Lang.Boolean {
+        var est = BolusFlow.estimate(now);
+        return BolusFlow.calculatorBlock(now) != null || est > BolusFlow.dialMax() || est < Calculator.STEP_MU;
+    }
+
+    // What the question going means for the dose: the reduction may leave a smaller dose, or take it all,
+    // and with no dose to give at all, what the dose screen says.
+    static function goneMeaning(now as Lang.Number) as Lang.String {
+        var est = BolusFlow.estimate(now);
+        // No dose to give at all: what the dose screen says, shorter where its line wouldn't fit this font.
+        var block = BolusFlow.calculatorBlock(now);
+        if (block != null && block.equals("waiting")) { return "Waiting for the pump"; }
+        if (block == null && est < 0) { return "Can't calculate"; }
+        if (block != null || est > BolusFlow.dialMax()) { return BolusEntryView.previewLine(now); }
+        if (est < Calculator.STEP_MU) { return "No bolus"; }
+        var g = Status.glucose();
+        if (g == null || BolusFlow.glucoseStale(now) || Status.glucoseCaution() != null) { return "Carbs only now"; }
+        return g < Calculator.LOW_GLUCOSE ? "Dose reduced" : "No correction needed";
+    }
+
+    function onUpdate(dc as Gfx.Dc) as Void {
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_BLACK);
+        dc.clear();
+        var w = dc.getWidth();
+        var h = dc.getHeight();
+        var cx = w / 2;
+        var vc = Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER;
+        var now = Status.now();
+        // The question no longer applies (a reading under 70 or gone stale, or IOB that took the correction
+        // away): what changed, and the way back to the dose screen, which says why.
+        // A change while the question shows reads in order: what changed, what it means, then what to do.
+        var doses = BolusFlow.correctionDoses(now);
+        if (doses == null) {
+            // The question went: a low reduces the dose with no choice, IOB (or a BG now on target) leaves
+            // no correction to add, a reduction took the whole dose, there's no current reading to correct
+            // from, or no dose to give (a CGM reading outside 20–600, the pump's settings not in, or a dose
+            // over the limit).
+            var g = Status.glucose();
+            var caution = Status.glucoseCaution();
+            var noBG = g == null || BolusFlow.glucoseStale(now) || caution != null;
+            var low = !noBG && (g as Lang.Number) < Calculator.LOW_GLUCOSE;
+            // The question last showed `_shownGlucose`.
+            // The lines centred as a group: the change and what it means either side of the middle, and for a
+            // low the three (with what to do) about it.
+            var top = low ? 0.40 : 0.44;
+            if (caution != null) {
+                // Why the pump flags it, in yellow as the dose screen's line and the stale question's.
+                dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
+                dc.drawText(cx, h * top, Gfx.FONT_XTINY, BolusFlow.cautionTitle(caution as Lang.String), vc);
+            } else {
+                drawWhatChanged(dc, cx, h * top, _shownGlucose, noBG ? "No current BG" : null);
+            }
+            dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+            var none = noDoseToSee(now);
+            var meaning = goneMeaning(now);
+            // A size down for a line too wide for the round screen at this height.
+            var font = dc.getTextWidthInPixels(meaning, Gfx.FONT_SMALL) > w * 0.8 ? Gfx.FONT_TINY : Gfx.FONT_SMALL;
+            dc.drawText(cx, h * (top + 0.13), font, meaning, vc);
+            if (low) {
+                dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
+                dc.drawText(cx, h * 0.64, Gfx.FONT_XTINY, "Eat carbs", vc);
+            }
+            // At the bottom, where the other screens' hints are, apart from what the screen says.
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            // With no bolus there's no dose to see: the press just goes back.
+            var hint = none ? (Nav.isTouch() ? "Tap to go back" : "START to go back")
+                            : (Nav.isTouch() ? "Tap to see the dose" : "START to see the dose");
+            dc.drawText(cx, h * 0.82, Gfx.FONT_XTINY, hint, vc);
+            return;
+        }
+        noticeChangeIn(doses);
+        if (changed) {
+            // As prominent as the question: the doses moved under the user, and a press here picks nothing.
+            // `_was`: the reading before this change (the shown one is already the new one).
+            drawWhatChanged(dc, cx, h * 0.44, _was, _was == null ? "IOB or settings changed" : null);
+            dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.57, Gfx.FONT_SMALL, "Choose again", vc);
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.82, Gfx.FONT_XTINY, Nav.isTouch() ? "Tap to see the doses" : "START to see the doses", vc);
+            return;
+        }
+        var target = Status.field("calculator", "target");
+        var unit = Prefs.glucoseUnit();
+        // Low enough that the widest line clears the round edge.
+        drawReading(dc, cx, h * 0.185);
+        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.285, Gfx.FONT_XTINY,
+                    (above() ? "above" : "below") + " target " + (target != null ? Display.glucose(target, unit) : "--")
+                        + " " + Display.glucoseUnit(unit), vc);
+        // White, so the reading's colour is the only one above the answers.
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.37, Gfx.FONT_XTINY, above() ? "Add a correction?" : "Reduce the bolus?", vc);
+        var choices = ["apply", "carbsOnly"];
+        for (var i = 0; i < 2; i += 1) {
+            var r = halfRect(i, w, h);
+            dc.setColor(i == 0 ? 0x2E4A7A : 0x333333, Gfx.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(r[0], r[1], r[2], r[3], 12);
+            if (!Nav.isTouch() && i == cursor) {
+                dc.setPenWidth(3);
+                dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+                dc.drawRoundedRectangle(r[0], r[1], r[2], r[3], 12);
+                dc.setPenWidth(1);
+            }
+            var mx = r[0] + r[2] / 2;
+            dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(mx, r[1] + r[3] * 0.32, Gfx.FONT_XTINY, label(choices[i]), vc);
+            dc.drawText(mx, r[1] + r[3] * 0.66, Gfx.FONT_SMALL, doseText((doses as Lang.Array<Lang.Number>)[i]), vc);
+        }
+        dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.825, Gfx.FONT_XTINY, Nav.isTouch() ? "BACK to cancel" : "UP/DOWN · START", vc);
+    }
+}
+
+class CorrectionDelegate extends Ui.BehaviorDelegate {
+    private var _view as CorrectionView;
+
+    function initialize(view as CorrectionView) {
+        BehaviorDelegate.initialize();
+        _view = view;
+    }
+
+    function onTap(evt as Ui.ClickEvent) as Lang.Boolean {
+        // No question any more: any tap goes back to the dose screen. The change screen: any tap shows the
+        // question again, with the new doses.
+        if (!BolusFlow.correctionChoiceNeeded(Status.now())) { return choose("cancel"); }
+        if (_view.noticeChange(Status.now()) || _view.changed) { return acknowledge(); }
+        var c = evt.getCoordinates();
+        var size = Nav.screenSize();
+        if (Nav.inRect(c[0], c[1], CorrectionView.halfRect(0, size[0], size[1]))) { return choose("apply"); }
+        if (Nav.inRect(c[0], c[1], CorrectionView.halfRect(1, size[0], size[1]))) { return choose("carbsOnly"); }
+        return true;
+    }
+
+    function onPreviousPage() as Lang.Boolean { return Nav.isTouch() ? false : move(); }
+    function onNextPage() as Lang.Boolean { return Nav.isTouch() ? false : move(); }
+    function onSelect() as Lang.Boolean {
+        if (Nav.isTouch()) { return false; }
+        if (!BolusFlow.correctionChoiceNeeded(Status.now())) { return choose("cancel"); }
+        if (_view.noticeChange(Status.now()) || _view.changed) { return acknowledge(); }
+        return choose(_view.cursor == 0 ? "apply" : "carbsOnly");
+    }
+
+    private function acknowledge() as Lang.Boolean {
+        _view.seen();
+        Ui.requestUpdate();
+        return true;
+    }
+    function onBack() as Lang.Boolean { return choose("cancel"); }
+
+    private function move() as Lang.Boolean {
+        _view.cursor = 1 - _view.cursor;
+        Ui.requestUpdate();
+        return true;
+    }
+
+    // The answer holds for this attempt; the dose armed is the one the chosen half showed. Cancel sends
+    // nothing.
+    function choose(choice as Lang.String) as Lang.Boolean {
+        var now = Status.now();
+        if (choice.equals("cancel")) {
+            BolusFlow.declineCorrection = false;
+            Ui.popView(Ui.SLIDE_RIGHT);
+            return true;
+        }
+        if (!BolusFlow.correctionChoiceNeeded(now)) { return choose("cancel"); }
+        // Doses that changed since the screen showed them aren't what the user aimed at: the change screen
+        // shows instead, and nothing is armed.
+        if (_view.noticeChange(Status.now()) || _view.changed) {
+            Ui.requestUpdate();
+            return true;
+        }
+        BolusFlow.declineCorrection = choice.equals("carbsOnly");
+        if (BolusFlow.calculatorBlock(now) != null || !BolusFlow.arm(now)) {
+            BolusFlow.declineCorrection = false;
+            Ui.popView(Ui.SLIDE_RIGHT);
+            return true;
+        }
+        Nav.openConfirm(true);
+        return true;
+    }
+}
+
+// The reading is stale: correct from it anyway or use the carbs only, laid out as the correction question
+// so a finger can't land one row off: include on the left, carbs only on the right, each with the whole
+// dose it gives; BACK cancels. Asked only while the reading may be included: past that (or outside 20–600
+// mg/dL) the dose screen says carbs only instead. If the question goes while it shows (the reading ages past
+// it, or a fresh one arrives), a full screen says so, as the correction question's does, and any press goes
+// back to the dose screen. Doses that change while it shows are drawn again, and a press aimed at the old
+// ones picks nothing.
 class StaleBolusView extends Ui.View {
+    // On a button watch, the choice START picks. It starts on carbs only.
     public var cursor as Lang.Number = 0;
+    // The doses the screen showed, so a press is only taken for doses the user saw.
+    public var shown as Lang.String = "";
 
-    function initialize() { View.initialize(); }
-
-    // The choices on offer, in order.
-    static function choices() as Lang.Array<Lang.String> {
-        return BolusFlow.staleIncludable(Status.now()) ? ["include", "carbsOnly", "cancel"] : ["carbsOnly", "cancel"];
+    function initialize(now as Lang.Number) {
+        View.initialize();
+        shown = shownKey(now);
     }
 
-    static function rowRect(i as Lang.Number, w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
-        return [w * 0.14, h * (0.32 + 0.165 * i), w * 0.72, h * 0.145];
+    // The choices, left to right.
+    static function choices() as Lang.Array<Lang.String> { return ["include", "carbsOnly"]; }
+
+    // The dose a choice gives, in milliunits.
+    static function doseMU(choice as Lang.String) as Lang.Number {
+        return BolusFlow.estimateFrom(choice.equals("include") ? Status.glucose() : null);
     }
+
+    static function shownKey(now as Lang.Number) as Lang.String {
+        if (!BolusFlow.staleChoiceNeeded(now)) { return ""; }
+        var list = choices();
+        var key = "";
+        for (var i = 0; i < list.size(); i += 1) { key += list[i] + doseMU(list[i]) + "/"; }
+        return key;
+    }
+
 
     static function label(choice as Lang.String) as Lang.String {
-        if (choice.equals("include")) { return "Include reading"; }
-        if (choice.equals("carbsOnly")) { return "Carbs only"; }
-        return "Cancel";
+        return choice.equals("include") ? "Include" : "Carbs only";
     }
 
     function onShow() as Void {
         // Buttons start on the choice that doesn't correct from the old reading.
-        cursor = BolusFlow.staleIncludable(Status.now()) ? 1 : 0;
+        cursor = 1;
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {
@@ -206,29 +559,59 @@ class StaleBolusView extends Ui.View {
         var h = dc.getHeight();
         var cx = w / 2;
         var vc = Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER;
-        dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.10, Gfx.FONT_XTINY, "Stale CGM", vc);
+        shown = shownKey(now);
+        var unit = Prefs.glucoseUnit();
         var g = Status.glucose();
-        var head = (g != null ? Display.glucose(g, Prefs.glucoseUnit()) : "--") + " " + Display.glucoseUnit(Prefs.glucoseUnit())
-            + " · " + Display.ago(Glucose.age(now));
+        if (!BolusFlow.staleChoiceNeeded(now)) {
+            // The question went: what changed, what it means, and the way back to the dose screen, which
+            // says it too. Laid out as the correction question's.
+            var fresh = g != null && !BolusFlow.glucoseStale(now);
+            if (fresh) {
+                CorrectionView.drawReading(dc, cx, h * 0.44);
+            } else {
+                dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
+                dc.drawText(cx, h * 0.44, Gfx.FONT_XTINY,
+                            g == null ? "No CGM" : "Stale CGM · " + Display.ago(Glucose.age(now)), vc);
+            }
+            dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+            // What it means for the dose, as the correction question's gone screen says it ("Carbs only now",
+            // or no dose to give); with no dose to see, the press just goes back.
+            var meaning = fresh ? "New reading" : CorrectionView.goneMeaning(now);
+            var font = dc.getTextWidthInPixels(meaning, Gfx.FONT_SMALL) > w * 0.8 ? Gfx.FONT_TINY : Gfx.FONT_SMALL;
+            dc.drawText(cx, h * 0.57, font, meaning, vc);
+            var none = !fresh && CorrectionView.noDoseToSee(now);
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.82, Gfx.FONT_XTINY,
+                        none ? (Nav.isTouch() ? "Tap to go back" : "START to go back")
+                             : (Nav.isTouch() ? "Tap to see the dose" : "START to see the dose"), vc);
+            return;
+        }
+        // The old reading in grey: it isn't current, so it doesn't take its range's colour.
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.21, Gfx.FONT_XTINY, head, vc);
+        dc.drawText(cx, h * 0.185, Gfx.FONT_SMALL,
+                    "BG " + (g != null ? Display.glucose(g, unit) : "--") + " " + Display.glucoseUnit(unit), vc);
+        dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.285, Gfx.FONT_XTINY, "Stale CGM · " + Display.ago(Glucose.age(now)), vc);
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.37, Gfx.FONT_XTINY, "Include it?", vc);
         var list = choices();
         for (var i = 0; i < list.size(); i += 1) {
-            var r = rowRect(i, w, h);
-            dc.setColor(0x333333, Gfx.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(r[0], r[1], r[2], r[3], 8);
+            var r = CorrectionView.halfRect(i, w, h);
+            dc.setColor(list[i].equals("include") ? 0x2E4A7A : 0x333333, Gfx.COLOR_TRANSPARENT);
+            dc.fillRoundedRectangle(r[0], r[1], r[2], r[3], 12);
             if (!Nav.isTouch() && i == cursor) {
-                dc.setPenWidth(2);
+                dc.setPenWidth(3);
                 dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-                dc.drawRoundedRectangle(r[0], r[1], r[2], r[3], 8);
+                dc.drawRoundedRectangle(r[0], r[1], r[2], r[3], 12);
                 dc.setPenWidth(1);
             }
-            var choice = list[i];
-            dc.setColor(choice.equals("include") ? Gfx.COLOR_YELLOW : choice.equals("cancel") ? Gfx.COLOR_LT_GRAY : Gfx.COLOR_WHITE,
-                        Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, r[1] + r[3] / 2, Gfx.FONT_XTINY, label(choice), vc);
+            var mx = r[0] + r[2] / 2;
+            dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(mx, r[1] + r[3] * 0.32, Gfx.FONT_XTINY, label(list[i]), vc);
+            dc.drawText(mx, r[1] + r[3] * 0.66, Gfx.FONT_SMALL, CorrectionView.doseText(doseMU(list[i])), vc);
         }
+        dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.825, Gfx.FONT_XTINY, Nav.isTouch() ? "BACK to cancel" : "UP/DOWN · START", vc);
     }
 }
 
@@ -243,25 +626,25 @@ class StaleBolusDelegate extends Ui.BehaviorDelegate {
     function onTap(evt as Ui.ClickEvent) as Lang.Boolean {
         var c = evt.getCoordinates();
         var size = Nav.screenSize();
+        // No question any more: any tap goes back to the dose screen.
+        if (!BolusFlow.staleChoiceNeeded(Status.now())) { return choose("cancel"); }
         var list = StaleBolusView.choices();
         for (var i = 0; i < list.size(); i += 1) {
-            if (Nav.inRect(c[0], c[1], StaleBolusView.rowRect(i, size[0], size[1]))) { return choose(list[i]); }
+            if (Nav.inRect(c[0], c[1], CorrectionView.halfRect(i, size[0], size[1]))) { return choose(list[i]); }
         }
         return true;
     }
 
-    function onPreviousPage() as Lang.Boolean { return Nav.isTouch() ? false : move(-1); }
-    function onNextPage() as Lang.Boolean { return Nav.isTouch() ? false : move(1); }
+    function onPreviousPage() as Lang.Boolean { return Nav.isTouch() ? false : move(); }
+    function onNextPage() as Lang.Boolean { return Nav.isTouch() ? false : move(); }
     function onSelect() as Lang.Boolean {
         if (Nav.isTouch()) { return false; }
-        var list = StaleBolusView.choices();
-        return choose(list[_view.cursor % list.size()]);
+        return choose(StaleBolusView.choices()[_view.cursor % 2]);
     }
     function onBack() as Lang.Boolean { return choose("cancel"); }
 
-    private function move(d as Lang.Number) as Lang.Boolean {
-        var n = StaleBolusView.choices().size();
-        _view.cursor = (_view.cursor + d + n) % n;
+    private function move() as Lang.Boolean {
+        _view.cursor = 1 - _view.cursor;
         Ui.requestUpdate();
         return true;
     }
@@ -270,9 +653,16 @@ class StaleBolusDelegate extends Ui.BehaviorDelegate {
     // Cancel sends nothing.
     function choose(choice as Lang.String) as Lang.Boolean {
         var now = Status.now();
-        if (choice.equals("cancel")) {
+        // The question went (the reading aged past includable, or a fresh one came): back to the dose screen,
+        // which says what applies.
+        if (choice.equals("cancel") || !BolusFlow.staleChoiceNeeded(now)) {
             BolusFlow.includeStale = false;
             Ui.popView(Ui.SLIDE_RIGHT);
+            return true;
+        }
+        // Doses other than the ones shown: drawn again, and this press picks nothing.
+        if (!StaleBolusView.shownKey(now).equals(_view.shown)) {
+            Ui.requestUpdate();
             return true;
         }
         BolusFlow.includeStale = choice.equals("include") && BolusFlow.staleIncludable(now);
@@ -319,6 +709,42 @@ class HoldView extends Ui.View {
     static function center(i as Lang.Number, w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
         var xs = [0.23, 0.50, 0.77];
         return [(w * xs[i]).toNumber(), (h * 0.50).toNumber()];
+    }
+
+    // The dose as the phone's review splits it, in one line: the food, then what the glucose did to it, or
+    // null for a units dose. The parts add up to the dose; "-" for a reduction, as the watch fonts have no
+    // minus sign. The second part also names the answer when the dose came from the correction question.
+    static function splitParts() as Lang.Array<Lang.String>? {
+        var split = BolusFlow.armedSplit();
+        if (split == null) { return null; }
+        var food = Display.units(split[0]) + " food";
+        var choice = BolusFlow.armedChoice();
+        if (!BolusFlow.armedCorrects()) {
+            return [food, choice != null && choice.equals("Not reduced") ? " · not reduced" : " · no correction"];
+        }
+        var c = split[1];
+        if (c > -5 && c < 5) { return [food, " · no correction"]; }
+        return [food, c > 0 ? " + " + Display.units(c) + " correction" : " - " + Display.units(-c) + " reduction"];
+    }
+
+    static function splitText() as Lang.String? {
+        var parts = splitParts();
+        return parts == null ? null : parts[0] + parts[1];
+    }
+
+    // The split centred at `y`: the food grey, the rest yellow when it is the user's answer, so a mistap on
+    // the question shows before anything is sent.
+    static function drawSplit(dc as Gfx.Dc, cx as Lang.Numeric, y as Lang.Numeric) as Void {
+        var parts = splitParts();
+        if (parts == null) { return; }
+        var font = Gfx.FONT_XTINY;
+        var w0 = dc.getTextWidthInPixels(parts[0], font);
+        var x = cx - (w0 + dc.getTextWidthInPixels(parts[1], font)) / 2;
+        var lv = Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER;
+        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(x, y, font, parts[0], lv);
+        dc.setColor(BolusFlow.armedChoice() != null ? Gfx.COLOR_YELLOW : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(x + w0, y, font, parts[1], lv);
     }
     static function radius(w as Lang.Number) as Lang.Number { return (w * 0.11).toNumber(); }
     static function cancelRect(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
@@ -401,10 +827,18 @@ class HoldView extends Ui.View {
             return;
         }
         dc.setColor(0x8AB4FF, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.14, Gfx.FONT_SMALL, Display.units(BolusFlow.armedDose()) + " U", vc);
+        var choice = BolusFlow.armedChoice();
         if (Nav.isTouch()) {
+            // The dose and what it's made of (with the answer it came from) on top; how to send it under the
+            // circles.
+            dc.drawText(cx, h * 0.20, Gfx.FONT_MEDIUM, Display.units(BolusFlow.armedDose()) + " U", vc);
+            drawSplit(dc, cx, h * 0.31);
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.28, Gfx.FONT_XTINY, "Tap 1 - 2 - 3 in order", vc);
+            dc.drawText(cx, h * 0.69, Gfx.FONT_XTINY, "Tap 1 - 2 - 3 in order", vc);
+            // Always the way out: back to the question that gave the dose, or back to the dose screen. Nothing
+            // is sent either way.
+            dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.83, Gfx.FONT_XTINY, choice != null ? "BACK to change" : "BACK to cancel", vc);
             var r = radius(w);
             for (var i = 0; i < 3; i += 1) {
                 var c = center(i, w, h);
@@ -414,6 +848,8 @@ class HoldView extends Ui.View {
                 dc.drawText(c[0], c[1], Gfx.FONT_NUMBER_MEDIUM, (i + 1).toString(), vc);
             }
         } else {
+            dc.drawText(cx, h * 0.14, Gfx.FONT_SMALL, Display.units(BolusFlow.armedDose()) + " U", vc);
+            drawSplit(dc, cx, h * 0.22);
             dc.setColor(armed ? Gfx.COLOR_GREEN : Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.34, Gfx.FONT_XTINY, armed ? "1. armed" : "1. Hold UP to arm", vc);
             dc.setColor(armed ? Gfx.COLOR_WHITE : Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
@@ -429,7 +865,9 @@ class HoldView extends Ui.View {
                 dc.fillRoundedRectangle(bx, by, bw * holdProgress, bh, 4);
             }
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.76, Gfx.FONT_XTINY, "release cancels", vc);
+            dc.drawText(cx, h * 0.74, Gfx.FONT_XTINY, "release cancels", vc);
+            dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.84, Gfx.FONT_XTINY, BolusFlow.armedChoice() != null ? "BACK to change" : "BACK to cancel", vc);
         }
     }
 
@@ -550,9 +988,16 @@ class HoldDelegate extends Ui.BehaviorDelegate {
         return true;
     }
 
-    // Leaving: a settled request is forgotten; an open one is kept and still asked about.
+    // Leaving: a settled request is forgotten; an open one is kept and still asked about. Before sending, a
+    // dose that came from the correction question goes back to it, to change the answer.
     function onBack() as Lang.Boolean {
         stop();
+        if (!_view.sent && BolusFlow.armedChoice() != null) {
+            BolusFlow.declineCorrection = false;
+            var c = new CorrectionView(Status.now());
+            Ui.switchToView(c, new CorrectionDelegate(c), Ui.SLIDE_RIGHT);
+            return true;
+        }
         BolusFlow.forgetIfSettled();
         return false;
     }

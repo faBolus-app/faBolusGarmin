@@ -64,6 +64,15 @@ module Calculator {
         return (total > 0.0d) ? total : 0.0d;
     }
 
+    // The carbs' share and the total, before rounding down, or null: for the confirm screen's split, whose
+    // correction is the total less the carbs' share, as the phone's review shows it.
+    function parts(carbs as Lang.Number, glucose as Lang.Number?, carbRatioMg as Lang.Number,
+                   isf as Lang.Number, target as Lang.Number, iobMU as Lang.Number) as Lang.Array<Lang.Double>? {
+        var total = totalUnits(carbs, glucose, carbRatioMg, isf, target, iobMU);
+        if (total == null) { return null; }
+        return [dp(carbs.toDouble() * 1000.0d / carbRatioMg.toDouble()), total];
+    }
+
     // Down to the pump's step, in milliunits: never more than the calculator says. A value within a
     // millionth of a unit of a step is that step, so float noise doesn't cost a whole step.
     function roundDown(units as Lang.Double) as Lang.Number {
@@ -72,6 +81,43 @@ module Calculator {
         var nearest = (steps + 0.5d).toLong();
         var whole = ((nearest.toDouble() - steps).abs() <= 1.0e-6d * 20.0d) ? nearest : steps.toLong();
         return (whole * STEP_MU).toNumber();
+    }
+
+    // Under this the reduction always applies, with no question, and the screen says to eat carbs.
+    const LOW_GLUCOSE = 70;
+
+    // Why the dose is what it is, as the phone says it (faBolusCore CalculatorMessage), in a few words; null
+    // for nothing to say. Under 70, what the low did to the dose of `doseMU` for `carbs`: "lowNoCarbs",
+    // "lowNone" (no bolus) or "lowReduced". "reduced": below target, the dose reduced to nothing; "iobLow":
+    // on target with IOB, or IOB that may take the glucose under 70; "iobCovers": above target, IOB more
+    // than the correction. As Tandem's app chooses them.
+    function message(glucose as Lang.Number?, isf as Lang.Number, target as Lang.Number, iobMU as Lang.Number,
+                     carbs as Lang.Number, doseMU as Lang.Number) as Lang.String? {
+        if (glucose == null || !correctable(glucose) || isf <= 0 || target < TARGET_MIN || target > TARGET_MAX) {
+            return null;
+        }
+        if (glucose < LOW_GLUCOSE) {
+            if (carbs <= 0) { return "lowNoCarbs"; }
+            return doseMU <= 0 ? "lowNone" : "lowReduced";
+        }
+        if (glucose < target) { return doseMU <= 0 ? "reduced" : null; }
+        if (iobMU <= 0) { return null; }
+        if (glucose == target) { return "iobLow"; }
+        var fromBG = dp((glucose - target).toDouble() / isf.toDouble());
+        var fromIOB = dp(-(iobMU.toDouble() / 1000.0d));
+        if (fromBG + fromIOB > 0.0d) { return null; }
+        // The IOB would take the glucose under 70 once it acts.
+        var dropsLow = glucose.toDouble() - iobMU.toDouble() / 1000.0d * isf.toDouble() < LOW_GLUCOSE.toDouble();
+        return dropsLow ? "iobLow" : "iobCovers";
+    }
+
+    function messageText(key as Lang.String) as Lang.String {
+        if (key.equals("lowNoCarbs")) { return "Glucose low: eat carbs"; }
+        if (key.equals("lowNone")) { return "Glucose low: no bolus"; }
+        if (key.equals("lowReduced")) { return "Glucose low: dose reduced"; }
+        if (key.equals("reduced")) { return "Below target: no bolus"; }
+        if (key.equals("iobLow")) { return "IOB may drop you low"; }
+        return "IOB covers the correction";
     }
 
     // The dose the phone will compute, in milliunits; -1 when the calculator can't give one.

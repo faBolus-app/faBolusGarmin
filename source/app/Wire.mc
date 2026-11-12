@@ -163,17 +163,20 @@ module Wire {
         return envelope("bolus", body);
     }
 
-    // `glucose` is the reading the estimate used, absent when it used none; `includeStale` is the user's
+    // `glucose` is the reading the estimate used, absent when it used none, or with `declineCorrection` the
+    // one the user chose carbs only for when asked whether to correct from it; `includeStale` is the user's
     // choice, for this attempt, to correct from a stale reading.
     function bolusCarbs(requestId as Lang.String, sentAt as Lang.Number, carbs as Lang.Number,
                         estimateMilliunits as Lang.Number, glucose as Lang.Number?,
-                        includeStale as Lang.Boolean, confirmed as Lang.Array) as Lang.Dictionary {
+                        includeStale as Lang.Boolean, confirmed as Lang.Array,
+                        declineCorrection as Lang.Boolean) as Lang.Dictionary {
         var body = {
             "requestId" => requestId, "sentAt" => sentAt, "mode" => "carbs", "carbsG" => carbs,
             "estimateMU" => estimateMilliunits, "includeStaleGlucose" => includeStale
         };
         if (glucose != null) { body["glucoseMgdl"] = glucose; }
         if (confirmed.size() > 0) { body["confirmed"] = confirmed; }
+        if (declineCorrection) { body["declineCorrection"] = true; }
         return envelope("bolus", body);
     }
 

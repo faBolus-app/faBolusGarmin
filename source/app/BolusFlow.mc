@@ -41,6 +41,8 @@ module BolusFlow {
     var carbs as Lang.Number = 0;
     // For this attempt only: the user chose to correct from a stale reading.
     var includeStale as Lang.Boolean = false;
+    // For this attempt only: asked whether to correct from a reading of 70 or more, the user chose carbs only.
+    var declineCorrection as Lang.Boolean = false;
 
     var _armedMU as Lang.Number = 0;
     var _armedAt as Lang.Number = 0;
@@ -48,6 +50,15 @@ module BolusFlow {
     var _armedCarbs as Lang.Number = 0;
     var _armedGlucose as Lang.Number? = null;
     var _armedIncludeStale as Lang.Boolean = false;
+    var _armedDecline as Lang.Boolean = false;
+    // The user's answer to the correction question, in words for the confirm screen, or null when none
+    // was asked: a mistapped row shows here before anything is sent.
+    var _armedChoice as Lang.String? = null;
+    // The answer the request sent carried, so the confirm screen still names it when the phone asks for a
+    // confirmation and the same dose is armed again.
+    var _sentChoice as Lang.String? = null;
+    // The armed carb dose's split, [food, correction] in milliunits, or null; worked out when it was armed.
+    var _armedSplit as Lang.Array<Lang.Number>? = null;
     // What the user confirmed, from the phone's answer to the request this dose was sent as before.
     var _armedConfirmed as Lang.Array = [];
 
@@ -56,6 +67,7 @@ module BolusFlow {
         unitsMU = 0;
         carbs = 0;
         includeStale = false;
+        declineCorrection = false;
         _armedAt = 0;
         _armedMU = 0;
         _armedConfirmed = [];
@@ -64,6 +76,7 @@ module BolusFlow {
     function toggleMode() as Void {
         mode = mode.equals("units") ? "carbs" : "units";
         includeStale = false;
+        declineCorrection = false;
     }
 
     function adjust(direction as Lang.Number) as Void {
@@ -99,10 +112,94 @@ module BolusFlow {
     // The reading a calculator dose corrects from: a fresh one, or a stale one the user chose to include
     // this time. Null for carbs only.
     function correctionGlucose(now as Lang.Number) as Lang.Number? {
+        var g = offeredGlucose(now);
+        // Declining counts from 70 up, as on the phone; under it the reduction applies.
+        if (g != null && declineCorrection && g >= Calculator.LOW_GLUCOSE) { return null; }
+        return g;
+    }
+
+    // The reading a calculator dose would correct from before the user's answer to the correction question.
+    function offeredGlucose(now as Lang.Number) as Lang.Number? {
         var g = Status.glucose();
-        if (g == null) { return null; }
+        // One the pump flags corrects nothing: carbs only, as the phone composes it.
+        if (g == null || Status.glucoseCaution() != null) { return null; }
         if (!glucoseStale(now)) { return g; }
         return includeStale ? g : null;
+    }
+
+    // Whether to ask "Add a correction?" / "Reduce the bolus?": a fresh reading of 70 or more whose
+    // correction changes the dose to another dose, as on the phone. A stale reading the user chose to
+    // include was a choice already; with no carbs, or a reduction to nothing, there's no choice.
+    function correctionChoiceNeeded(now as Lang.Number) as Lang.Boolean { return correctionDoses(now) != null; }
+
+    // The question's two doses in milliunits, with the correction then without, or null when it isn't asked.
+    // Worked out once for a screen that draws both, as each is a full calculation.
+    function correctionDoses(now as Lang.Number) as Lang.Array<Lang.Number>? {
+        if (!mode.equals("carbs") || calculatorBlock(now) != null || glucoseStale(now)) { return null; }
+        var g = Status.glucose();
+        if (g == null || g < Calculator.LOW_GLUCOSE || Status.glucoseCaution() != null) { return null; }
+        var with = estimateFrom(g);
+        var without = estimateFrom(null);
+        // Over the limit there's nothing to send either way; the screen says so instead.
+        if (with > dialMax() || without > dialMax()) { return null; }
+        if (with < Calculator.STEP_MU || without < Calculator.STEP_MU || with == without) { return null; }
+        return [with, without];
+    }
+
+    // The reading is above the pump's target: the question is about adding a correction, not a reduction.
+    function correctionAbove() as Lang.Boolean {
+        var g = Status.glucose();
+        var target = Status.field("calculator", "target");
+        return g != null && target != null && g > target;
+    }
+
+    // The calculator's dose from `glucose` (null for carbs only), in milliunits; -1 when there isn't one.
+    function estimateFrom(glucose as Lang.Number?) as Lang.Number {
+        var ratio = Status.field("calculator", "carbRatioMg");
+        var isf = Status.field("calculator", "isf");
+        var target = Status.field("calculator", "target");
+        var iob = Status.field("iob", "mU");
+        if (ratio == null || isf == null || target == null || iob == null) { return -1; }
+        return Calculator.estimate(carbs, glucose, ratio, isf, target, iob);
+    }
+
+    // Why the dose is what it is, in a few words, or null. While the correction question is still to come,
+    // that it will be asked: it would otherwise say the dose was lowered before asking whether to lower it.
+    function message(now as Lang.Number) as Lang.String? {
+        if (!mode.equals("carbs") || calculatorBlock(now) != null || overLimit(now)) { return null; }
+        if (correctionChoiceNeeded(now)) { return correctionAbove() ? "Correction asked next" : "Reduction asked next"; }
+        // No reading at all: the dose shown has no correction, which the number alone doesn't say.
+        if (Status.glucose() == null) { return "No CGM: carbs only"; }
+        // One the pump flags: why, and carbs only.
+        var caution = Status.glucoseCaution();
+        if (caution != null) { return cautionText(caution); }
+        // Stale and too old to include: carbs only, with no question.
+        if (glucoseStale(now) && !staleChoiceNeeded(now)) { return "Stale CGM: carbs only"; }
+        var isf = Status.field("calculator", "isf");
+        var target = Status.field("calculator", "target");
+        var iob = Status.field("iob", "mU");
+        if (isf == null || target == null || iob == null) { return null; }
+        var key = Calculator.message(correctionGlucose(now), isf, target, iob, carbs, estimate(now));
+        return key != null ? Calculator.messageText(key) : null;
+    }
+
+    // Why the pump flags its reading, in a few words.
+    function cautionTitle(caution as Lang.String) as Lang.String {
+        if (caution.equals("low")) { return "CGM below range"; }
+        if (caution.equals("high")) { return "CGM above range"; }
+        if (caution.equals("sensor")) { return "CGM not ready"; }
+        if (caution.equals("checkbg")) { return "CGM says check BG"; }
+        if (caution.equals("autofilloff")) { return "Auto-fill off"; }
+        if (caution.equals("notread")) { return "Checking CGM state"; }
+        return "CGM can't be used";
+    }
+
+    // The dose screen's line for a flagged reading: why, and what the dose is. Out of range, check BG first.
+    function cautionText(caution as Lang.String) as Lang.String {
+        if (caution.equals("low") || caution.equals("high")) { return cautionTitle(caution) + ": check BG"; }
+        if (caution.equals("checkbg")) { return "Check BG: carbs only"; }
+        if (caution.equals("notread")) { return cautionTitle(caution); }
+        return cautionTitle(caution) + ": carbs only";
     }
 
     // Why the calculator can't give a dose now, or null. "waiting": the pump's settings or IOB haven't
@@ -114,7 +211,7 @@ module BolusFlow {
             || Status.freshField("iob", "mU", Prefs.iobStaleSeconds(), now) == null) {
             return "waiting";
         }
-        var g = correctionGlucose(now);
+        var g = offeredGlucose(now);
         if (g != null && !Calculator.correctable(g)) { return g < Calculator.GLUCOSE_MIN ? "low" : "high"; }
         return null;
     }
@@ -122,18 +219,15 @@ module BolusFlow {
     // The calculator's dose in milliunits, rounded down as the phone rounds; -1 when there isn't one.
     function estimate(now as Lang.Number) as Lang.Number {
         if (calculatorBlock(now) != null) { return -1; }
-        var ratio = Status.field("calculator", "carbRatioMg");
-        var isf = Status.field("calculator", "isf");
-        var target = Status.field("calculator", "target");
-        var iob = Status.field("iob", "mU");
-        if (ratio == null || isf == null || target == null || iob == null) { return -1; }
-        return Calculator.estimate(carbs, correctionGlucose(now), ratio, isf, target, iob);
+        return estimateFrom(correctionGlucose(now));
     }
 
-    // The stale-reading question applies: a calculator dose with a reading that's stale. A reading outside
-    // 20–600 can only be left out.
+    // The stale-reading question applies: a calculator dose with a reading that's stale and may still be
+    // included. One too old to include, or outside 20–600, leaves only carbs only: no question, the dose
+    // screen says so instead.
     function staleChoiceNeeded(now as Lang.Number) as Lang.Boolean {
-        return mode.equals("carbs") && Status.glucose() != null && glucoseStale(now);
+        return mode.equals("carbs") && Status.glucose() != null && glucoseStale(now) && staleIncludable(now)
+            && Status.glucoseCaution() == null;
     }
 
     // A stale reading may be included only while it's young enough that the phone would include it, and
@@ -151,6 +245,18 @@ module BolusFlow {
     // The calculator's dose is above the remote limit or the pump's max: the phone would refuse it, so it
     // isn't offered.
     function overLimit(now as Lang.Number) as Lang.Boolean { return dose(now) > dialMax(); }
+
+    // Deliver does something now: it opens the stale-reading or correction question, or arms a dose. Not
+    // with no dose, none the calculator can give, or one over the limit, so the button can say so.
+    function canDeliver(now as Lang.Number) as Lang.Boolean {
+        if (mode.equals("carbs")) {
+            if (staleChoiceNeeded(now)) { return true; }
+            if (calculatorBlock(now) != null) { return false; }
+            if (correctionChoiceNeeded(now)) { return true; }
+        }
+        var d = dose(now);
+        return d >= Calculator.STEP_MU && d <= dialMax();
+    }
 
     // MARK: Starting
 
@@ -196,10 +302,50 @@ module BolusFlow {
         _armedAt = now;
         _armedMode = mode;
         _armedCarbs = carbs;
-        _armedGlucose = mode.equals("carbs") ? correctionGlucose(now) : null;
+        var offered = mode.equals("carbs") ? offeredGlucose(now) : null;
+        _armedDecline = declineCorrection && offered != null && offered >= Calculator.LOW_GLUCOSE;
+        // The reading the estimate used, or the one the user declined to correct from: the phone holds the
+        // answer to that reading, and asks again if its own is another.
+        _armedGlucose = _armedDecline ? offered : (mode.equals("carbs") ? correctionGlucose(now) : null);
         _armedIncludeStale = mode.equals("carbs") && includeStale && _armedGlucose != null;
+        _armedChoice = null;
+        if (correctionChoiceNeeded(now)) {
+            var target = Status.field("calculator", "target");
+            var above = offered != null && target != null && offered > target;
+            // The words on the half the user chose, so the confirm screen matches it exactly.
+            _armedChoice = _armedDecline ? (above ? "Carbs only" : "Not reduced") : (above ? "Corrected" : "Reduced");
+        }
         _armedConfirmed = [];
+        _armedSplit = splitFor(_armedMode, _armedCarbs, _armedDecline ? null : _armedGlucose, _armedMU);
         return true;
+    }
+
+    function armedChoice() as Lang.String? { return _armedChoice; }
+
+    // The armed dose's split for the confirm screen, [food, correction] in milliunits, or null for a units
+    // dose: the correction the calculator's (less than zero for a reduction), the food's share the rest of
+    // the dose, so the rounding down is in it and the two add up to the dose, as on the phone's review.
+    function armedSplit() as Lang.Array<Lang.Number>? { return _armedSplit; }
+
+    // A correction was part of the armed dose (one was computed from a reading).
+    function armedCorrects() as Lang.Boolean { return _armedMode.equals("carbs") && !_armedDecline && _armedGlucose != null; }
+
+    function splitFor(armedMode as Lang.String, carbsG as Lang.Number, glucose as Lang.Number?, doseMU as Lang.Number)
+        as Lang.Array<Lang.Number>? {
+        if (!armedMode.equals("carbs")) { return null; }
+        var ratio = Status.field("calculator", "carbRatioMg");
+        var isf = Status.field("calculator", "isf");
+        var target = Status.field("calculator", "target");
+        var iob = Status.field("iob", "mU");
+        if (ratio == null || isf == null || target == null || iob == null) { return null; }
+        var p = Calculator.parts(carbsG, glucose, ratio, isf, target, iob);
+        if (p == null) { return null; }
+        var corrD = (p[1] - p[0]) * 1000.0d;
+        // To the nearest milliunit: the parts are decimals of a hundredth, and truncating would lose one.
+        var corr = (corrD >= 0.0d ? corrD + 0.5d : corrD - 0.5d).toNumber();
+        // The whole correction as the calculator has it (a total floored at zero takes the carbs' share).
+        var food = doseMU - corr;
+        return [food < 0 ? 0 : food, corr];
     }
 
     // The phone asks the user to confirm something about the pump before this request's dose goes: the
@@ -233,7 +379,11 @@ module BolusFlow {
         _armedGlucose = Wire.int(p, "glucoseMgdl", 0, Wire.MAX_GLUCOSE);
         var stale = Wire.bool(p, "includeStaleGlucose");
         _armedIncludeStale = stale != null && stale;
+        var decline = Wire.bool(p, "declineCorrection");
+        _armedDecline = decline != null && decline;
         _armedConfirmed = _confirm;
+        _armedChoice = _sentChoice;
+        _armedSplit = splitFor(_armedMode, _armedCarbs, _armedDecline ? null : _armedGlucose, _armedMU);
         return true;
     }
 
@@ -289,8 +439,10 @@ module BolusFlow {
         var stamp = Status.phoneNow(now);
         var msg = _armedMode.equals("units")
             ? Wire.bolusUnits(id, stamp, _armedMU, _armedConfirmed)
-            : Wire.bolusCarbs(id, stamp, _armedCarbs, _armedMU, _armedGlucose, _armedIncludeStale, _armedConfirmed);
+            : Wire.bolusCarbs(id, stamp, _armedCarbs, _armedMU, _armedGlucose, _armedIncludeStale, _armedConfirmed,
+                              _armedDecline);
         _id = id;
+        _sentChoice = _armedChoice;
         _sentAt = now;
         _lastSendAt = now;
         _heardAt = now;

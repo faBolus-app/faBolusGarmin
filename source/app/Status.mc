@@ -27,6 +27,9 @@ module Status {
     const LINKS = ["disconnected", "scanning", "connecting", "authenticating", "connected"];
     (:background)
     const TRENDS = ["flat", "up", "upup", "up45", "down", "downdown", "down45"];
+    // Why the pump says its reading shouldn't correct a dose (faBolus GlucoseCautionToken).
+    (:background)
+    const CAUTIONS = ["low", "high", "sensor", "checkbg", "autofilloff", "notread"];
     (:background)
     const SEVERITIES = ["info", "warning", "critical"];
     (:background)
@@ -79,6 +82,9 @@ module Status {
                 var clean = { "mgdl" => mgdl, "at" => at, "backup" => backup } as Lang.Dictionary;
                 var trend = Wire.token(g, "trend", TRENDS);
                 if (trend != null) { clean["trend"] = trend; }
+                // A caution this watch doesn't know still keeps the reading out of a dose.
+                var caution = Wire.token(g, "caution", CAUTIONS);
+                if (caution != null) { clean["caution"] = caution; } else if (g.hasKey("caution")) { clean["caution"] = "other"; }
                 out["glucose"] = clean;
             }
         }
@@ -330,6 +336,15 @@ module Status {
 
     (:background, :glance)
     function glucose() as Lang.Number? { return field("glucose", "mgdl"); }
+
+    // Why the pump says its reading shouldn't correct a dose, or null when it may: a dose is then carbs only,
+    // with no question, as on the phone.
+    function glucoseCaution() as Lang.String? {
+        var g = part("glucose");
+        if (g == null) { return null; }
+        var c = g["caution"];
+        return (c instanceof Lang.String) ? c : null;
+    }
 
     (:background, :glance)
     function trend() as Lang.String? {
