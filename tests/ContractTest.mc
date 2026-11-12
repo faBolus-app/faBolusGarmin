@@ -242,13 +242,15 @@ module ContractTest {
         Test.assert(Support.same(Wire.poll(null, null, false, true), Support.fixture(Rez.JsonData.fixture_poll_empty)));
         Test.assert(Support.same(Wire.bolusUnits("1793534390-7-118220", NOW - 10, 4000, []),
                                  Support.fixture(Rez.JsonData.fixture_bolus_units)));
-        Test.assert(Support.same(Wire.bolusCarbs("1793534390-9-118999", NOW - 10, 45, 6000, 142, false, []),
+        Test.assert(Support.same(Wire.bolusCarbs("1793534390-9-118999", NOW - 10, 45, 6000, 142, false, [], false),
                                  Support.fixture(Rez.JsonData.fixture_bolus_carbs)));
-        Test.assert(Support.same(Wire.bolusCarbs("1793534390-10-119500", NOW - 10, 30, 4000, 160, true, []),
+        Test.assert(Support.same(Wire.bolusCarbs("1793534390-10-119500", NOW - 10, 30, 4000, 160, true, [], false),
                                  Support.fixture(Rez.JsonData.fixture_bolus_carbs_stale)));
         Test.assert(Support.same(Wire.bolusCarbs("1793534390-13-121520", NOW - 10, 45, 6000, 142, false,
-                                                 ["tooManyBoluses", "lowInsulin"]),
+                                                 ["tooManyBoluses", "lowInsulin"], false),
                                  Support.fixture(Rez.JsonData.fixture_bolus_carbs_confirmed)));
+        Test.assert(Support.same(Wire.bolusCarbs("1793534390-14-121600", NOW - 10, 45, 6000, 142, false, [], true),
+                                 Support.fixture(Rez.JsonData.fixture_bolus_carbs_no_correction)));
         Test.assert(Support.same(Wire.cancel("1793534399-11-121000", "1793534390-7-118220"),
                                  Support.fixture(Rez.JsonData.fixture_cancel)));
         Test.assert(Support.same(Wire.dismiss("1793534395-r3-119001", "pump.alert.2"),
