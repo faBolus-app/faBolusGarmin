@@ -9,15 +9,18 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 FABOLUS="${1:-${FABOLUS:-../faBolus}}"
+# Git on the faBolus checkout. A git hook runs with GIT_DIR (and in a worktree, an absolute one) naming this
+# repository, which would point these commands here instead of at faBolus.
+fabolus_git() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_COMMON_DIR git -C "$FABOLUS" "$@"; }
 SRC="Packages/RemoteProtocol/contract"
 [ -f contract/PIN ] || { echo "❌ contract/PIN is missing" >&2; exit 1; }
 PIN="$(tr -d '[:space:]' < contract/PIN)"
 [[ "$PIN" =~ ^[0-9a-f]{40}$ ]] || { echo "❌ contract/PIN isn't a full commit hash: $PIN" >&2; exit 1; }
-git -C "$FABOLUS" cat-file -e "$PIN^{commit}" 2>/dev/null \
+fabolus_git cat-file -e "$PIN^{commit}" 2>/dev/null \
   || { echo "❌ faBolus checkout at $FABOLUS doesn't have $PIN (fetch it, or push it)" >&2; exit 1; }
 
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
-git -C "$FABOLUS" archive "$PIN" "$SRC" | tar -x -C "$WORK" --strip-components=3
+fabolus_git archive "$PIN" "$SRC" | tar -x -C "$WORK" --strip-components=3
 echo "$PIN" > "$WORK/PIN"
 if ! diff -r "$WORK" contract >/dev/null; then
   echo "❌ contract/ differs from faBolus $PIN:" >&2

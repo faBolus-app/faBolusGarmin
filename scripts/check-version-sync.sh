@@ -21,6 +21,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 FABOLUS="${1:-${FABOLUS:-../faBolus}}"
+# Git on the faBolus checkout. A git hook runs with GIT_DIR (and in a worktree, an absolute one) naming this
+# repository, which would point these commands here instead of at faBolus.
+fabolus_git() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_COMMON_DIR git -C "$FABOLUS" "$@"; }
 SRC="source/app/AppVersion.mc"
 STAMP="source/generated/AppRevision.mc"
 
@@ -43,9 +46,9 @@ fi
 [ -f contract/PIN ] || { echo "❌ contract/PIN is missing" >&2; exit 2; }
 PIN="$(tr -d '[:space:]' < contract/PIN)"
 [[ "$PIN" =~ ^[0-9a-f]{40}$ ]] || { echo "❌ contract/PIN isn't a full commit hash: $PIN" >&2; exit 2; }
-git -C "$FABOLUS" cat-file -e "$PIN^{commit}" 2>/dev/null \
+fabolus_git cat-file -e "$PIN^{commit}" 2>/dev/null \
   || { echo "❌ faBolus checkout at $FABOLUS doesn't have $PIN (fetch it, or set FABOLUS)" >&2; exit 2; }
-app_name=$(git -C "$FABOLUS" show "$PIN:Config.xcconfig" \
+app_name=$(fabolus_git show "$PIN:Config.xcconfig" \
            | grep -oE '^[[:space:]]*MARKETING_VERSION[[:space:]]*=[[:space:]]*[^[:space:]]+' \
            | tail -1 | sed -E 's/.*=[[:space:]]*//' || true)
 [ -n "$app_name" ] || { echo "❌ could not read MARKETING_VERSION from faBolus $PIN:Config.xcconfig" >&2; exit 2; }
