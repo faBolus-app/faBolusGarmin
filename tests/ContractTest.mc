@@ -251,6 +251,9 @@ module ContractTest {
                                  Support.fixture(Rez.JsonData.fixture_bolus_carbs_confirmed)));
         Test.assert(Support.same(Wire.bolusCarbs("1793534390-14-121600", NOW - 10, 45, 6000, 142, false, [], true),
                                  Support.fixture(Rez.JsonData.fixture_bolus_carbs_no_correction)));
+        Test.assert(Support.same(Wire.bolusCalculator("1793534390-15-121700", NOW - 10, null, 3000, 3800, 142, false, [],
+                                                      false),
+                                 Support.fixture(Rez.JsonData.fixture_bolus_insulin_food)));
         Test.assert(Support.same(Wire.cancel("1793534399-11-121000", "1793534390-7-118220"),
                                  Support.fixture(Rez.JsonData.fixture_cancel)));
         Test.assert(Support.same(Wire.dismiss("1793534395-r3-119001", "pump.alert.2"),

@@ -170,10 +170,21 @@ module Wire {
                         estimateMilliunits as Lang.Number, glucose as Lang.Number?,
                         includeStale as Lang.Boolean, confirmed as Lang.Array,
                         declineCorrection as Lang.Boolean) as Lang.Dictionary {
+        return bolusCalculator(requestId, sentAt, carbs, null, estimateMilliunits, glucose, includeStale, confirmed,
+                               declineCorrection);
+    }
+
+    // A calculator request: its food entry is `carbs` grams or, with carbs off on the pump, `foodMU`
+    // milliunits of insulin; one of the two goes.
+    function bolusCalculator(requestId as Lang.String, sentAt as Lang.Number, carbs as Lang.Number?,
+                             foodMU as Lang.Number?, estimateMilliunits as Lang.Number, glucose as Lang.Number?,
+                             includeStale as Lang.Boolean, confirmed as Lang.Array,
+                             declineCorrection as Lang.Boolean) as Lang.Dictionary {
         var body = {
-            "requestId" => requestId, "sentAt" => sentAt, "mode" => "carbs", "carbsG" => carbs,
+            "requestId" => requestId, "sentAt" => sentAt, "mode" => "carbs",
             "estimateMU" => estimateMilliunits, "includeStaleGlucose" => includeStale
         };
+        if (foodMU != null) { body["foodMU"] = foodMU; } else { body["carbsG"] = carbs != null ? carbs : 0; }
         if (glucose != null) { body["glucoseMgdl"] = glucose; }
         if (confirmed.size() > 0) { body["confirmed"] = confirmed; }
         if (declineCorrection) { body["declineCorrection"] = true; }

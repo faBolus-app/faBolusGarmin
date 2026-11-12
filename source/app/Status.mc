@@ -122,7 +122,11 @@ module Status {
             var max = Wire.int(c, "maxBolusMU", 0, Wire.MAX_MU);
             var at = timeOf(c);
             if (ratio != null && isf != null && target != null && max != null && at != null) {
-                out["calculator"] = { "carbRatioMg" => ratio, "isf" => isf, "target" => target, "maxBolusMU" => max, "at" => at };
+                var calc = { "carbRatioMg" => ratio, "isf" => isf, "target" => target, "maxBolusMU" => max, "at" => at };
+                // Carbs off on the pump: the food entry is insulin units. Anything but true is carbs on.
+                var off = Wire.bool(c, "carbsOff");
+                if (off != null && off) { calc["carbsOff"] = true; }
+                out["calculator"] = calc;
             }
         }
         var ciq = Wire.obj(p, "controlIQ");
@@ -270,6 +274,14 @@ module Status {
         if (p == null) { return null; }
         var v = p[key];
         return (v instanceof Lang.Dictionary) ? v : null;
+    }
+
+    // Carbs are off on the pump: the calculator's food entry is insulin units, and no carbs go.
+    function carbsOff() as Lang.Boolean {
+        var d = part("calculator");
+        if (d == null) { return false; }
+        var v = d["carbsOff"];
+        return (v instanceof Lang.Boolean) ? v as Lang.Boolean : false;
     }
 
     (:background, :glance)

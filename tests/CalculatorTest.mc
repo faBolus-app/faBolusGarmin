@@ -113,6 +113,7 @@ module CalculatorTest {
                       Support.NOW);
         BolusFlow.mode = "carbs";
         BolusFlow.carbs = 45;
+        BolusFlow.foodMU = 0;
     }
 
     // Asked from 70 up when correcting changes the dose; carbs only says so, with the reading it was for, so
@@ -371,6 +372,111 @@ module CalculatorTest {
         Status.accept(st, Support.NOW);
         Support.eq(Status.glucoseCaution(), "other");
         Support.eq(BolusFlow.estimate(Support.NOW), 6000);
+        return true;
+    }
+
+    // Carbs off on the pump: the food entry is insulin units, the reading still corrects and the question is
+    // still asked, and the request carries the food as foodMU with no carbs, as the phone takes it.
+    (:test)
+    function withCarbsOffTheFoodIsUnits(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        var calc = Support.payloadOf(Rez.JsonData.fixture_status_carbs_off)["calculator"];
+        Status.accept(Support.status({ "glucose" => { "mgdl" => 250, "at" => Support.NOW - 60, "backup" => false },
+                                       "calculator" => calc }), Support.NOW);
+        Test.assert(Status.carbsOff());
+        BolusFlow.mode = "carbs";
+        BolusFlow.carbs = 0;
+        BolusFlow.foodMU = 3000;
+        BolusFlow.declineCorrection = false;
+        // 3.00 U for the food, 140/40 is 3.50 U, less the 1.25 U of IOB; the 45 g aren't counted.
+        Support.eq(BolusFlow.estimate(Support.NOW), 5250);
+        var doses = BolusFlow.correctionDoses(Support.NOW) as Lang.Array<Lang.Number>;
+        Support.eq(doses[0], 5250);
+        Support.eq(doses[1], 3000);
+        Test.assert(BolusFlow.arm(Support.NOW));
+        Support.eq(HoldView.splitText(), "3.00 food + 2.25 correction");
+        Test.assert(BolusFlow.send(Support.NOW));
+        var p = Wire.payload(Support.lastSent() as Lang.Dictionary);
+        Support.eq(p["foodMU"] as Lang.Object?, 3000);
+        Support.eq(p["carbsG"] as Lang.Object?, null);
+        Support.eq(p["estimateMU"] as Lang.Object?, 5250);
+        Support.eq(p["glucoseMgdl"] as Lang.Object?, 250);
+        BolusFlow.foodMU = 0;
+        return true;
+    }
+
+    // With carbs off there are no carbs in the dose, so the dose without the correction is "No correction",
+    // on the question, the stale question and the dose screen's lines.
+    (:test)
+    function withCarbsOffTheDoseWithoutTheCorrectionIsNoCorrection(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        var calc = Support.payloadOf(Rez.JsonData.fixture_status_carbs_off)["calculator"];
+        Status.accept(Support.status({ "glucose" => { "mgdl" => 250, "at" => Support.NOW - 60, "backup" => false },
+                                       "calculator" => calc }), Support.NOW);
+        Support.eq(CorrectionView.label("carbsOnly"), "No correction");
+        Support.eq(StaleBolusView.label("carbsOnly"), "No correction");
+        Support.eq(BolusFlow.cautionText("sensor"), "CGM not ready: no correction");
+        Support.eq(BolusFlow.cautionText("other"), "CGM unusable: no correction");
+        var st = Support.status({ "calculator" => calc });
+        st.remove("glucose");
+        Status.accept(st, Support.NOW);
+        BolusFlow.mode = "carbs";
+        BolusFlow.carbs = 0;
+        BolusFlow.foodMU = 3000;
+        Support.eq(BolusFlow.message(Support.NOW), "No CGM: no correction");
+        BolusFlow.foodMU = 0;
+        // Carbs on, as before.
+        reading(250);
+        Support.eq(CorrectionView.label("carbsOnly"), "Carbs only");
+        Support.eq(BolusFlow.cautionText("other"), "CGM unusable: carbs only");
+        return true;
+    }
+
+    // Carbs turned off on the pump after a carb dose was armed: it isn't sent as it stood.
+    (:test)
+    function carbsTurnedOffAfterArmingStopTheDose(logger as Test.Logger) as Lang.Boolean {
+        reading(250);
+        BolusFlow.foodMU = 0;
+        BolusFlow.declineCorrection = false;
+        Test.assert(BolusFlow.arm(Support.NOW));
+        Support.eq(BolusFlow.armBlock(Support.NOW), null);
+        var calc = Support.payloadOf(Rez.JsonData.fixture_status_carbs_off)["calculator"];
+        Status.accept(Support.status({ "glucose" => { "mgdl" => 250, "at" => Support.NOW - 60, "backup" => false },
+                                       "calculator" => calc }), Support.NOW);
+        Support.eq(BolusFlow.armBlock(Support.NOW), "changed");
+        Test.assert(!BolusFlow.send(Support.NOW));
+        return true;
+    }
+
+    // Carbs turned off on the pump with carbs dialed: nothing goes until the food is dialed again in units,
+    // and dialing it clears the grams.
+    (:test)
+    function carbsTurnedOffWithCarbsDialedAreDialedAgain(logger as Test.Logger) as Lang.Boolean {
+        reading(250);
+        BolusFlow.foodMU = 0;
+        var calc = Support.payloadOf(Rez.JsonData.fixture_status_carbs_off)["calculator"];
+        Status.accept(Support.status({ "glucose" => { "mgdl" => 250, "at" => Support.NOW - 60, "backup" => false },
+                                       "calculator" => calc }), Support.NOW);
+        Support.eq(BolusFlow.calculatorBlock(Support.NOW), "redial");
+        Test.assert(!BolusFlow.canDeliver(Support.NOW));
+        Test.assert(!BolusFlow.correctionChoiceNeeded(Support.NOW));
+        Support.eq(BolusEntryView.previewLine(Support.NOW), "Carbs now off: dial in U");
+        BolusFlow.adjust(1);
+        Support.eq(BolusFlow.carbs, 0);
+        Test.assert(BolusFlow.foodMU > 0);
+        Support.eq(BolusFlow.calculatorBlock(Support.NOW), null);
+        BolusFlow.foodMU = 0;
+        return true;
+    }
+
+    // With carbs off the food's insulin goes into the calculator as it is: reduced below target, never below
+    // nothing, as faBolusCore's BolusMath.estimate(foodUnits:).
+    (:test)
+    function theFoodsInsulinIsCorrectedAsCarbsAre(logger as Test.Logger) as Lang.Boolean {
+        Support.eq(Calculator.estimateFood(3000, 70, 40, 110, 0), 2000);
+        Support.eq(Calculator.estimateFood(500, 30, 40, 110, 0), 0);
+        Support.eq(Calculator.estimateFood(3000, null, 40, 110, 1250), 3000);
+        Support.eq(Calculator.estimateFood(3000, 250, 40, 110, 1250), 5250);
         return true;
     }
 
