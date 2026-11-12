@@ -601,8 +601,18 @@ module BolusFlow {
     function deliveredMU() as Lang.Number? { return _deliveredMU; }
     function text() as Lang.String? { return _text; }
     // A cancel went out for a bolus that's still going. Shown for CANCEL_SHOW_SEC: the watch hears nothing
-    // back about a cancel, so past that the button offers Cancel again rather than say it's in hand.
-    const CANCEL_SHOW_SEC = 15;
+    // back about a cancel, so past that the button offers Cancel again rather than say it's in hand. The
+    // phone sends one request at a time and gives each 60 s: a cancel can wait that long behind a request
+    // the pump hasn't answered, then for the bolus status when the phone has no bolus ID, then for its own
+    // answer.
+    const CANCEL_SHOW_SEC = 180;
+    // Said under the headline once the cancel has gone CANCEL_SLOW_SEC with the bolus still going, as the
+    // phone says it. The pump normally answers within a second or two.
+    const CANCEL_SLOW_SEC = 5;
+    const CANCEL_HINT = "No answer yet. To stop it now, use the pump.";
+    function cancelSlow(now as Lang.Number) as Lang.Boolean {
+        return cancelling(now) && now - _cancelAt >= CANCEL_SLOW_SEC;
+    }
     function cancelling(now as Lang.Number) as Lang.Boolean {
         return _cancelAt != 0 && busy() && now - _cancelAt >= 0 && now - _cancelAt < CANCEL_SHOW_SEC;
     }
@@ -695,8 +705,9 @@ module BolusFlow {
     }
 
     // What the request screen says.
+    // A cancel in hand shows on the button ("Cancelling"), as on the main screen; the headline stays what the
+    // bolus is doing.
     function headline(now as Lang.Number) as Lang.String {
-        if (cancelling(now)) { return "Cancelling…"; }
         if (_state.equals("sending")) { return "Sending…"; }
         if (_state.equals("received") || _state.equals("accepted")) { return "Starting…"; }
         if (_state.equals("delivering")) { return "Delivering…"; }

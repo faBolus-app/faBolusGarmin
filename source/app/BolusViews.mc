@@ -755,8 +755,9 @@ class HoldView extends Ui.View {
         dc.drawText(x + w0, y, font, parts[1], lv);
     }
     static function radius(w as Lang.Number) as Lang.Number { return (w * 0.11).toNumber(); }
+    // As wide as the main screen's bolus button, so "Cancelling" has room.
     static function cancelRect(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
-        return [w / 2 - w * 0.26, h * 0.66, w * 0.52, h * 0.15];
+        return [w / 2 - w * 0.29, h * 0.66, w * 0.58, h * 0.15];
     }
     // Wider than Cancel, for the dose it names.
     static function goOnRect(w as Lang.Number, h as Lang.Number) as Lang.Array<Lang.Numeric> {
@@ -909,6 +910,7 @@ class HoldView extends Ui.View {
         var delivered = BolusFlow.deliveredMU();
         var line = BolusFlow.text();
         if (delivered != null) { line = Display.units(delivered) + " U delivered"; }
+        if (BolusFlow.cancelSlow(now)) { line = BolusFlow.CANCEL_HINT; }
         if (line != null) {
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
             var y = asking ? h * 0.44 : h * 0.47;
@@ -929,7 +931,9 @@ class HoldView extends Ui.View {
             dc.setColor(Gfx.COLOR_RED, Gfx.COLOR_TRANSPARENT);
             dc.fillRoundedRectangle(r[0], r[1], r[2], r[3], 10);
             dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, r[1] + r[3] / 2, Gfx.FONT_SMALL, Nav.isTouch() ? "Cancel" : "Cancel (START)", vc);
+            // While a cancel is in hand the button says so, as the main screen's does; pressing it sends again.
+            var label = BolusFlow.cancelling(now) ? "Cancelling" : "Cancel";
+            dc.drawText(cx, r[1] + r[3] / 2, Gfx.FONT_SMALL, Nav.isTouch() ? label : label + " (START)", vc);
         } else {
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.80, Gfx.FONT_XTINY, "BACK to exit", vc);
