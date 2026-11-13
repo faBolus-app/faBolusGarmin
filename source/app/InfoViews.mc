@@ -77,6 +77,12 @@ class CgmView extends Ui.View {
         return lines;
     }
 
+    // Whether a reading falls on the plot, bounds included. A reading off it isn't drawn, never pinned to
+    // the edge, where it would read as a reading at the edge: the phone's plots follow the same rule.
+    static function onPlot(mgdl as Lang.Number, floor as Lang.Number, ceiling as Lang.Number) as Lang.Boolean {
+        return mgdl >= floor && mgdl <= ceiling;
+    }
+
     static function multiplesBetween(floor as Lang.Number, ceiling as Lang.Number, step as Lang.Number) as Lang.Array<Lang.Number> {
         var out = [] as Lang.Array<Lang.Number>;
         var v = (floor / step + 1) * step;
@@ -137,9 +143,8 @@ class CgmView extends Ui.View {
             if (!(at0 instanceof Lang.Number) || !(g instanceof Lang.Number)) { continue; }
             var t = at0 + offset;
             if (t < start || t > now) { continue; }
+            if (!onPlot(g, floor, ceiling)) { continue; }
             var v = g.toFloat();
-            if (v < vmin) { v = vmin; }
-            if (v > vmax) { v = vmax; }
             var x = left + (t - start).toFloat() / (now - start).toFloat() * (right - left);
             var y = bottom - ((v - vmin) / (vmax - vmin)) * (bottom - top);
             dc.setColor(Display.rangeColor(g), Gfx.COLOR_TRANSPARENT);
