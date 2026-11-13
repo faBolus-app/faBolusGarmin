@@ -325,6 +325,8 @@ module DisplayTest {
         Test.assert(CgmView.onPlot(120, 40, 300));
         Test.assert(!CgmView.onPlot(301, 40, 300));
         Test.assert(!CgmView.onPlot(39, 40, 300));
+        Test.assert(CgmView.emptyText(0).equals("no history"));
+        Test.assert(CgmView.emptyText(3).equals("all off the plot"));
         return true;
     }
 
