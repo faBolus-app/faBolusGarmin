@@ -47,6 +47,31 @@ module FaultTest {
         return true;
     }
 
+    // The watch's Bluetooth link to the phone drops for minutes: the polls missed meanwhile back the watch
+    // off to two minutes. They say nothing about the phone app, so once the watch sees the phone again it
+    // asks at once, not after the backed-off wait.
+    (:test)
+    function aPhoneBackInReachIsAskedAtOnce(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        var t = NOW;
+        Controller.tickAt(t);
+        Support.eq(Support.sentKinds(), ["poll"]);
+        Link.testReachable = false;
+        for (var i = 0; i < 300; i += 1) {
+            t += 1;
+            Controller.tickAt(t);
+        }
+        Support.eq(Link.delayMs(), Link.MAX_POLL_MS);
+        Link.testReachable = true;
+        t += 1;
+        Controller.tickAt(t);
+        Support.eq(Support.sentKinds(), ["poll", "poll"]);
+        // The phone answers, and the polls are back to their usual pace.
+        Controller.phoneData(Support.message("status", Support.status({ "sentAt" => t })));
+        Support.eq(Link.delayMs(), Link.POLL_MS);
+        return true;
+    }
+
     // An error for an earlier poll, arriving after the next went out, doesn't touch the next: it was
     // already counted when that poll timed out.
     (:test)

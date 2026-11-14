@@ -67,6 +67,8 @@ module Controller {
     const BEHIND_SEC = 30;
     // A view is on the stack, so an alert card can be pushed.
     var _foreground as Lang.Boolean = false;
+    // The watch's Bluetooth link to the phone was down at the last tick.
+    var _phoneAway as Lang.Boolean = false;
 
     function start() as Void {
         Store.migrate();
@@ -114,9 +116,18 @@ module Controller {
         }
     }
 
-    function tick() as Void {
-        var now = Status.now();
+    function tick() as Void { tickAt(Status.now()); }
+
+    // Separate from tick so tests can drive the clock.
+    function tickAt(now as Lang.Number) as Void {
         var changed = BolusFlow.tick(now);
+        // The phone is back in reach. The polls missed while it was away backed the watch off, but they say
+        // nothing about the phone app, so the watch asks at once rather than after the backed-off wait. The
+        // misses stand until the phone answers, and a poll still waiting holds the next, so a link that drops
+        // and returns every few seconds still gets at most one poll per REPLY_SEC.
+        var reachable = Link.reachable();
+        if (reachable && _phoneAway) { _nextPollAt = now; }
+        _phoneAway = !reachable;
         // A clock stepped back would hold the next poll until it caught up.
         if (_nextPollAt - now > Link.MAX_POLL_MS / 1000 + 4) { _nextPollAt = now; }
         if (now >= _nextPollAt && Link.pollDue(now)) {
@@ -159,6 +170,7 @@ module Controller {
         _nextPollAt = 0;
         _lastPublishAt = 0;
         _behindPollAt = 0;
+        _phoneAway = false;
     }
 
     // The background service saved a status or config: load it.

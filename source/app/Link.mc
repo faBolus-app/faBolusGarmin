@@ -12,7 +12,8 @@ using Toybox.WatchUi as Ui;
 // holds. Its state is three values: when the last poll went out (zero when none is outstanding), how many
 // polls in a row went unanswered, and when the phone was last heard from. Any message from the phone
 // answers. A transmit error counts as an unanswered poll. Every wait is bounded, so the link always
-// polls again and never stops for good.
+// polls again and never stops for good, and when the phone comes back in Bluetooth reach the app polls
+// at once (Controller.tickAt) rather than after the wait its misses set.
 module Link {
     const POLL_MS = 15000;
     const MAX_POLL_MS = 120000;
