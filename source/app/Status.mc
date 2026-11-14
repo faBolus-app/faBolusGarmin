@@ -110,8 +110,30 @@ module Status {
             var at = timeOf(basal);
             if (suspended != null && at != null && (suspended || rate != null)) {
                 var clean = { "suspended" => suspended, "at" => at } as Lang.Dictionary;
-                if (!suspended) { clean["mUPerHour"] = rate; }
+                if (!suspended) {
+                    clean["mUPerHour"] = rate;
+                    // Basal-IQ's stop isn't the pump's suspension: a bolus still goes.
+                    if (Wire.bool(basal, "basalIQ") == true) {
+                        clean["basalIQ"] = true;
+                    } else if (Wire.bool(basal, "tempRate") == true) {
+                        clean["tempRate"] = true;
+                        var pct = Wire.int(basal, "tempPercent", 0, 250);
+                        if (pct != null) { clean["tempPercent"] = pct; }
+                    }
+                }
                 out["basal"] = clean;
+            }
+        }
+        var session = Wire.obj(p, "cgmSession");
+        if (session != null) {
+            var at = timeOf(session);
+            if (at != null) {
+                var clean = { "at" => at } as Lang.Dictionary;
+                var started = Wire.int(session, "startedAt", Wire.EPOCH_MIN, Wire.EPOCH_MAX);
+                if (started != null) { clean["startedAt"] = started; }
+                var calibrated = Wire.int(session, "lastCalibrationAt", Wire.EPOCH_MIN, Wire.EPOCH_MAX);
+                if (calibrated != null) { clean["lastCalibrationAt"] = calibrated; }
+                out["cgmSession"] = clean;
             }
         }
         var c = Wire.obj(p, "calculator");
@@ -332,10 +354,7 @@ module Status {
     // How old the value under `key` is now, in seconds; null when there is no such value.
     (:background, :glance)
     function ageOf(key as Lang.String, now as Lang.Number) as Lang.Number? {
-        var at = field(key, "at");
-        if (at == null) { return null; }
-        var atPhone = sentAt() - at;
-        return (atPhone > 0 ? atPhone : 0) + elapsed(now);
+        return ageSince(field(key, "at"), now);
     }
 
     // The value under `key`.`name` while it's younger than `maxAge` seconds, else null.
@@ -413,6 +432,27 @@ module Status {
     function basalSuspended() as Lang.Boolean {
         var b = part("basal");
         return b != null && Wire.bool(b, "suspended") == true;
+    }
+
+    // Basal-IQ has stopped basal for a predicted low; a bolus still goes.
+    function basalIQSuspended() as Lang.Boolean {
+        var b = part("basal");
+        return b != null && Wire.bool(b, "basalIQ") == true;
+    }
+
+    // A temp rate set on the pump runs.
+    function tempRate() as Lang.Boolean {
+        var b = part("basal");
+        return b != null && Wire.bool(b, "tempRate") == true;
+    }
+
+    // Seconds from `at` (a phone epoch time in this status) to now: its age when the status was sent, plus
+    // the time since. Never negative.
+    (:background, :glance)
+    function ageSince(at as Lang.Number?, now as Lang.Number) as Lang.Number? {
+        if (at == null) { return null; }
+        var atPhone = sentAt() - at;
+        return (atPhone > 0 ? atPhone : 0) + elapsed(now);
     }
 
     function charging() as Lang.Boolean {

@@ -259,11 +259,26 @@ class DetailsView extends Ui.View {
             var maxBasal = Status.field("maxBasal", "mUPerHour");
             if (maxBasal == null || maxBasal <= 0) { return null; }
             if (Status.basalSuspended()) { return "Basal: suspended" + mark("basal", now); }
+            if (Status.basalIQSuspended()) { return "Basal: Basal-IQ suspended" + mark("basal", now); }
             var rate = Status.field("basal", "mUPerHour");
             if (rate == null) { return null; }
             var pct = (rate * 100 + maxBasal / 2) / maxBasal;
             if (pct > 100) { pct = 100; }
-            return "Basal " + Display.units(rate) + "/" + Display.units(maxBasal) + " U/hr · " + pct.toString() + "%" + mark("basal", now);
+            var temp = "";
+            if (Status.tempRate()) {
+                var tempPct = Status.field("basal", "tempPercent");
+                temp = " · Temp" + ((tempPct != null) ? " " + tempPct.toString() + "%" : "");
+            }
+            return "Basal " + Display.units(rate) + "/" + Display.units(maxBasal) + " U/hr · " + pct.toString() + "%" + temp + mark("basal", now);
+        }
+        // The CGM session's times, each left out while it isn't known.
+        if (id.equals("sensorStarted")) {
+            var age = Status.ageSince(Status.field("cgmSession", "startedAt"), now);
+            return (age == null) ? null : "Sensor started: " + Display.ago(age);
+        }
+        if (id.equals("lastCalibration")) {
+            var age = Status.ageSince(Status.field("cgmSession", "lastCalibrationAt"), now);
+            return (age == null) ? null : "Last calibration: " + Display.ago(age);
         }
         // Left out while none is known: no recent auto-correction is the usual case, not a missing value.
         if (id.equals("autoCorrection")) {

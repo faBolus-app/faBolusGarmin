@@ -7,6 +7,32 @@ using Toybox.Test;
 module ContractTest {
     const NOW = Support.NOW;
 
+    // A temp rate set on the pump, with its percent, and the CGM session's start and last calibration.
+    (:test)
+    function aTempRateAndTheSessionTimesRead(logger as Test.Logger) as Lang.Boolean {
+        Support.fresh();
+        Test.assert(Status.accept(Support.payloadOf(Rez.JsonData.fixture_status_temp_rate), NOW));
+        Test.assert(Status.tempRate() && !Status.basalSuspended() && !Status.basalIQSuspended());
+        Support.eq(Status.field("basal", "tempPercent"), 150);
+        Support.eq(DetailsView.row("maxBasal", NOW), "Basal 1.20/3.00 U/hr · 40% · Temp 150%");
+        Support.eq(DetailsView.row("sensorStarted", NOW), "Sensor started: 3d ago");
+        Support.eq(DetailsView.row("lastCalibration", NOW), "Last calibration: 5h ago");
+        return true;
+    }
+
+    // Basal-IQ's stop shows as its own, never as the pump's suspension, and a session with no calibration
+    // leaves that row out.
+    (:test)
+    function aBasalIQSuspensionReads(logger as Test.Logger) as Lang.Boolean {
+        Support.fresh();
+        Test.assert(Status.accept(Support.payloadOf(Rez.JsonData.fixture_status_basal_iq), NOW));
+        Test.assert(Status.basalIQSuspended() && !Status.basalSuspended() && !Status.tempRate());
+        Support.eq(DetailsView.row("maxBasal", NOW), "Basal: Basal-IQ suspended");
+        Support.eq(DetailsView.row("sensorStarted", NOW), "Sensor started: 1d ago");
+        Support.eq(DetailsView.row("lastCalibration", NOW), null);
+        return true;
+    }
+
     (:test)
     function statusReads(logger as Test.Logger) as Lang.Boolean {
         Support.fresh();
