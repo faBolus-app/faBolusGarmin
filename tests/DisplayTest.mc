@@ -319,6 +319,18 @@ module DisplayTest {
     }
 
     (:test)
+    function chartLeavesOutReadingsOffThePlot(logger as Test.Logger) as Lang.Boolean {
+        Test.assert(CgmView.onPlot(40, 40, 300));
+        Test.assert(CgmView.onPlot(300, 40, 300));
+        Test.assert(CgmView.onPlot(120, 40, 300));
+        Test.assert(!CgmView.onPlot(301, 40, 300));
+        Test.assert(!CgmView.onPlot(39, 40, 300));
+        Test.assert(CgmView.emptyText(0).equals("no history"));
+        Test.assert(CgmView.emptyText(3).equals("all off the plot"));
+        return true;
+    }
+
+    (:test)
     function clockText(logger as Test.Logger) as Lang.Boolean {
         Test.assert(Support.same(ClockView.digitalText(0, 5, false), ["12:05", "AM"]));
         Test.assert(Support.same(ClockView.digitalText(13, 0, false), ["1:00", "PM"]));

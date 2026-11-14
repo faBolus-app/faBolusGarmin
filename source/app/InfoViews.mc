@@ -77,6 +77,17 @@ class CgmView extends Ui.View {
         return lines;
     }
 
+    // Whether a reading falls on the plot, bounds included. A reading off it isn't drawn, never pinned to
+    // the edge, where it would read as a reading at the edge: the phone's plots follow the same rule.
+    static function onPlot(mgdl as Lang.Number, floor as Lang.Number, ceiling as Lang.Number) as Lang.Boolean {
+        return mgdl >= floor && mgdl <= ceiling;
+    }
+
+    // What the empty plot says: no readings in the range at all, or only ones off the plot.
+    static function emptyText(inWindow as Lang.Number) as Lang.String {
+        return inWindow == 0 ? "no history" : "all off the plot";
+    }
+
     static function multiplesBetween(floor as Lang.Number, ceiling as Lang.Number, step as Lang.Number) as Lang.Array<Lang.Number> {
         var out = [] as Lang.Array<Lang.Number>;
         var v = (floor / step + 1) * step;
@@ -131,15 +142,16 @@ class CgmView extends Ui.View {
         // The points' times are the phone's clock; placed on this watch's.
         var offset = Status.clockOffset();
         var drawn = 0;
+        var inWindow = 0;
         for (var k = 0; k < at.size() && k < mgdl.size(); k += 1) {
             var at0 = at[k];
             var g = mgdl[k];
             if (!(at0 instanceof Lang.Number) || !(g instanceof Lang.Number)) { continue; }
             var t = at0 + offset;
             if (t < start || t > now) { continue; }
+            inWindow += 1;
+            if (!onPlot(g, floor, ceiling)) { continue; }
             var v = g.toFloat();
-            if (v < vmin) { v = vmin; }
-            if (v > vmax) { v = vmax; }
             var x = left + (t - start).toFloat() / (now - start).toFloat() * (right - left);
             var y = bottom - ((v - vmin) / (vmax - vmin)) * (bottom - top);
             dc.setColor(Display.rangeColor(g), Gfx.COLOR_TRANSPARENT);
@@ -147,8 +159,9 @@ class CgmView extends Ui.View {
             drawn += 1;
         }
         if (drawn == 0) {
+            // Readings that are all off the plot are history all the same: say so, not that there is none.
             dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, (top + bottom) / 2, Gfx.FONT_XTINY, "no history", vc);
+            dc.drawText(cx, (top + bottom) / 2, Gfx.FONT_XTINY, emptyText(inWindow), vc);
         }
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, CgmView.hours().toString() + " Hours (tap)", vc);
