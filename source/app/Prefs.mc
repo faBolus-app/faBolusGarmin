@@ -10,6 +10,12 @@ module Prefs {
     var _c as Lang.Dictionary? = null;
     (:background, :glance)
     var _r as Lang.Number = 0;
+    // The config held was saved by another build: the one before an update. Its values are used, but this
+    // build doesn't claim its revision. The earlier build kept what its own rules read, which this one's
+    // may not match, and the phone resends a config only to a watch naming another revision; naming none
+    // gets the config again.
+    (:background, :glance)
+    var _inherited as Lang.Boolean = false;
 
     (:background)
     const SCREENS = ["glance", "glucose", "clock", "bolusonly", "alerts", "history", "details"];
@@ -29,6 +35,7 @@ module Prefs {
         if (clean == null) { return false; }
         _c = clean;
         _r = receivedAt;
+        _inherited = false;
         return true;
     }
 
@@ -113,7 +120,7 @@ module Prefs {
     (:background)
     function save(key as Lang.String) as Void {
         var c = _c;
-        if (c != null) { Store.save(key, { "c" => c, "r" => _r }); }
+        if (c != null) { Store.save(key, { "c" => c, "r" => _r, "b" => Store.build() }); }
     }
 
     // Loads the config matching the status's revision when one does, else the newer copy.
@@ -133,6 +140,7 @@ module Prefs {
         if (c instanceof Lang.Dictionary && r instanceof Lang.Number) {
             _c = c;
             _r = r;
+            _inherited = !Store.build().equals((rec as Lang.Dictionary)["b"] as Lang.Object?);
         }
     }
 
@@ -149,6 +157,7 @@ module Prefs {
     function clear() as Void {
         _c = null;
         _r = 0;
+        _inherited = false;
     }
 
     // MARK: Reading. Each has the default the watch uses before a config arrives.
@@ -156,7 +165,7 @@ module Prefs {
     (:background, :glance)
     function revision() as Lang.String? {
         var c = _c;
-        if (c == null) { return null; }
+        if (c == null || _inherited) { return null; }
         var v = c["revision"];
         return (v instanceof Lang.String) ? v : null;
     }

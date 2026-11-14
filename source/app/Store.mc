@@ -60,6 +60,11 @@ module Store {
         return (nb > na) ? b : a;
     }
 
+    // This build, as a record saved by it names it: a newer build can then tell that an earlier one kept
+    // the record, by that build's reading of the phone's message.
+    (:background, :glance)
+    function build() as Lang.String { return AppRevision.SHORT + (AppRevision.DIRTY ? "+" : ""); }
+
     // Saves, reporting whether it worked: Storage throws when it's full.
     (:background)
     function save(key as Lang.String, value as Lang.Object) as Lang.Boolean {
