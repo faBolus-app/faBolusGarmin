@@ -110,7 +110,7 @@ module Alerts {
     // Sends the dismiss. False when the phone isn't connected; nothing is hidden then.
     function dismiss(alertId as Lang.String, now as Lang.Number) as Lang.Boolean {
         var id = Link.newRoutineId(now);
-        var sent = Link.transmit(Wire.dismiss(id, alertId), new SendListener(new Lang.Method(Alerts, :sendFailed), id));
+        var sent = Link.transmit(Wire.dismiss(id, alertId), new SendListener(new Lang.Method(Alerts, :sendFailed), id), now);
         _dismissId = sent ? id : null;
         _dismissNote = sent ? "Clearing…" : "Phone not connected — not cleared";
         return sent;

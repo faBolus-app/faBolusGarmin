@@ -71,6 +71,12 @@ module Support {
         Link.testSuppressTransmit = true;
     }
 
+    // No phone at all: the watch's Bluetooth flag says none, and faBolus hasn't been heard from.
+    function phoneGone() as Void {
+        Link.testReachable = false;
+        Link._heardAt = 0;
+    }
+
     // The golden config and status, received at NOW, with the phone heard from.
     function connected() as Void {
         fresh();

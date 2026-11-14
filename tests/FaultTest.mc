@@ -47,6 +47,24 @@ module FaultTest {
         return true;
     }
 
+    // The watch's Bluetooth flag can say no phone while faBolus's messages still arrive (the glucose keeps
+    // updating). A message heard within LIVE_SEC shows the link works, so the watch still polls, sends and
+    // offers a bolus; the phone checks and answers every request as always.
+    (:test)
+    function aPhoneStillHeardFromCountsAsReachable(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        Link.testReachable = false;
+        Test.assert(Link.reachable(NOW + 10));
+        Test.assert(BolusFlow.startBlock(NOW + 10) == null);
+        Test.assert(!Display.linkLine(NOW + 10).equals("Phone not connected"));
+        Test.assert(Link.poll(NOW + 10));
+        Support.eq(Support.sentKinds(), ["poll"]);
+        // Nothing heard for longer than LIVE_SEC, and the flag still says no phone: not reachable.
+        Test.assert(!Link.reachable(NOW + Link.LIVE_SEC + 1));
+        Support.eq(BolusFlow.startBlock(NOW + Link.LIVE_SEC + 1), "Phone not connected");
+        return true;
+    }
+
     // The watch's Bluetooth link to the phone drops for minutes: the polls missed meanwhile back the watch
     // off to two minutes. They say nothing about the phone app, so once the watch sees the phone again it
     // asks at once, not after the backed-off wait.
@@ -56,7 +74,7 @@ module FaultTest {
         var t = NOW;
         Controller.tickAt(t);
         Support.eq(Support.sentKinds(), ["poll"]);
-        Link.testReachable = false;
+        Support.phoneGone();
         for (var i = 0; i < 300; i += 1) {
             t += 1;
             Controller.tickAt(t);
@@ -204,7 +222,7 @@ module FaultTest {
         BolusFlow.mode = "units";
         BolusFlow.unitsMU = 2000;
         BolusFlow.arm(NOW);
-        Link.testReachable = false;
+        Support.phoneGone();
         // The confirm itself refuses: the phone isn't there.
         Test.assert(!BolusFlow.send(NOW));
         Support.eq(BolusFlow.armBlock(NOW), "phone");
@@ -490,7 +508,7 @@ module FaultTest {
         Test.assert(Alerts.dismiss("pump.alert.2", NOW + 1));
         Test.assert(!Alerts.onDismissResult({ "requestId" => first, "alertId" => "pump.alert.2", "result" => "cleared" }, NOW));
         Support.eq(Alerts.shown().size(), 2);
-        Link.testReachable = false;
+        Support.phoneGone();
         Test.assert(!Alerts.dismiss("pump.alert.2", NOW + 2));
         Support.eq(Alerts.note(), "Phone not connected — not cleared");
         Support.eq(Alerts.shown().size(), 2);

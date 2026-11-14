@@ -128,7 +128,7 @@ module Link {
     function poll(now as Lang.Number) as Lang.Boolean {
         var msg = Wire.poll(Prefs.revision(), BolusFlow.awaitingId(now), _wantHistory, _wantFreshGlucose);
         _pollSentAt = now;
-        var sent = transmit(msg, new SendListener(new Lang.Method(Link, :pollFailed), now));
+        var sent = transmit(msg, new SendListener(new Lang.Method(Link, :pollFailed), now), now);
         if (sent) {
             _wantHistory = false;
             _wantFreshGlucose = false;
@@ -140,16 +140,20 @@ module Link {
 
     // MARK: Transmit.
 
-    function reachable() as Lang.Boolean {
+    // The phone can take a message: the watch's Bluetooth flag says a phone is connected, or faBolus was
+    // heard from within LIVE_SEC. The flag alone isn't enough: it can say no phone while faBolus's messages
+    // still arrive, and a message just heard shows the link works.
+    function reachable(now as Lang.Number) as Lang.Boolean {
+        if (phoneLive(now)) { return true; }
         var t = testReachable;
         if (t != null) { return t; }
         return System.getDeviceSettings().phoneConnected;
     }
 
-    // Hands a message to Connect IQ. False when the phone isn't connected or the transmit throws; a
+    // Hands a message to Connect IQ. False when the phone isn't reachable or the transmit throws; a
     // failure after it was handed over comes to the listener.
-    function transmit(msg as Lang.Dictionary, listener as Comm.ConnectionListener) as Lang.Boolean {
-        if (!reachable()) { return false; }
+    function transmit(msg as Lang.Dictionary, listener as Comm.ConnectionListener, now as Lang.Number) as Lang.Boolean {
+        if (!reachable(now)) { return false; }
         try {
             if (testTransmitFails) { throw new Lang.Exception(); }
             if (testSuppressTransmit) {
