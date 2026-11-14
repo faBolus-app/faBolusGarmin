@@ -300,7 +300,7 @@ module BolusFlow {
     function startBlock(now as Lang.Number) as Lang.String? {
         if (Link.phoneTooOld()) { return "Update faBolus on phone"; }
         if (Link.watchTooOld()) { return "Update the watch app"; }
-        if (!Link.reachable()) { return "Phone not connected"; }
+        if (!Link.reachable(now)) { return "Phone not connected"; }
         if (!Link.phoneLive(now)) { return "No reply from faBolus"; }
         if (!Prefs.bolusEnabled()) { return "Bolusing off (phone)"; }
         if (Prefs.readOnly()) { return "Read-only"; }
@@ -443,7 +443,7 @@ module BolusFlow {
         if (_armedAt == 0 || _armedMU < Calculator.STEP_MU) { return "expired"; }
         if (!Prefs.bolusEnabled() || Prefs.readOnly()) { return "off"; }
         if (busy()) { return "busy"; }
-        if (!Link.phoneLive(now) || !Link.reachable()) { return "phone"; }
+        if (!Link.phoneLive(now)) { return "phone"; }
         if (!Status.canBolus()) { return "blocked"; }
         if (now - _armedAt > ARM_SEC) { return "expired"; }
         if (_armedMode.equals("carbs") && (_armedInsulin != Status.carbsOff() || dose(now) != _armedMU)) {
@@ -502,7 +502,7 @@ module BolusFlow {
         _confirm = [];
         _armedAt = 0;
         _armedConfirmed = [];
-        if (Link.transmit(msg, new BolusListener())) {
+        if (Link.transmit(msg, new BolusListener(), now)) {
             _state = "sending";
         } else {
             // Nothing went out: the phone isn't connected.
@@ -529,7 +529,9 @@ module BolusFlow {
         if (_state.equals("sending") && _cancelAt == 0 && now - _sentAt <= FRESH_SEC
             && now - _lastSendAt >= RESEND_SEC) {
             _lastSendAt = now;
-            Link.transmit(msg, new BolusListener());
+            // Whatever the Bluetooth flag says, which can say no phone while the link works: a resend is
+            // the same request, which the phone never delivers twice.
+            Link.hand(msg, new BolusListener());
         }
         // Nothing heard after sending, or nothing more about this request partway (the phone went away, or
         // lost the request): the watch can't tell what happened. The poll keeps asking, and any answer
@@ -631,8 +633,9 @@ module BolusFlow {
     }
 
     function cancel(now as Lang.Number) as Lang.Boolean {
-        var sent = Link.transmit(Wire.cancel(Link.newRequestId(now), _id),
-                                 new SendListener(new Lang.Method(BolusFlow, :cancelFailed), now));
+        // Never gated, not even on the Bluetooth flag: a cancel that can't go comes back as an error.
+        var sent = Link.hand(Wire.cancel(Link.newRequestId(now), _id),
+                             new SendListener(new Lang.Method(BolusFlow, :cancelFailed), now));
         if (sent) { _cancelAt = now; }
         return sent;
     }

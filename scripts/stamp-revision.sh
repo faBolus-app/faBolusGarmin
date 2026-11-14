@@ -100,8 +100,11 @@ trap 'rm -f "$tmp"' EXIT
 HEADER
   printf 'module AppRevision {\n\n'
   printf '    // Seven leading hex characters of the build commit, or "unknown" outside a git checkout.\n'
+  printf '    // The background service and the glance read it too: a saved config names the build (Store.build).\n'
+  printf '    (:background, :glance)\n'
   printf '    const SHORT = "%s";\n\n' "$short"
   printf '    // True when the build tree carried uncommitted changes, so SHORT alone would misdescribe it.\n'
+  printf '    (:background, :glance)\n'
   printf '    const DIRTY = %s;\n' "$dirty"
   printf '}\n'
 } > "$tmp"

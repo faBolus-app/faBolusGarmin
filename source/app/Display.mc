@@ -59,7 +59,7 @@ module Display {
     function linkLine(now as Lang.Number) as Lang.String {
         if (Link.phoneTooOld()) { return "Update faBolus on phone"; }
         if (Link.watchTooOld()) { return "Update the watch app"; }
-        if (!Link.reachable()) { return "Phone not connected"; }
+        if (!Link.reachable(now)) { return "Phone not connected"; }
         if (!Status.present()) { return "Waiting for phone"; }
         if (!Link.phoneLive(now)) { return "No reply from faBolus"; }
         var link = Status.pumpLink();

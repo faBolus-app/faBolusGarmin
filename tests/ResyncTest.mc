@@ -79,6 +79,40 @@ module ResyncTest {
         return true;
     }
 
+    // After an update, the config the earlier build saved is still used, but its revision isn't claimed:
+    // that build kept what its own rules read, and the phone resends a config only to a watch that names
+    // another revision. The next poll names none, so the phone sends the config, and the watch is level.
+    (:test)
+    function aConfigSavedByAnEarlierBuildIsAskedForAgain(logger as Test.Logger) as Lang.Boolean {
+        var stamps = [null, "0000000"] as Lang.Array<Lang.String?>;
+        for (var i = 0; i < stamps.size(); i += 1) {
+            Support.connected();
+            Prefs.save(Store.CONFIG);
+            Status.save(Store.STATUS);
+            var rec = Storage.getValue(Store.CONFIG) as Lang.Dictionary;
+            // An earlier build's record: from before records named their build, or from another build.
+            var stamp = stamps[i];
+            if (stamp == null) { rec.remove("b"); } else { rec["b"] = stamp; }
+            Storage.setValue(Store.CONFIG, rec as Storage.ValueType);
+            Status.clear();
+            Prefs.clear();
+            Status.load();
+            Prefs.load(Status.revision());
+            Test.assert(Prefs.bolusEnabled());
+            Support.eq(Prefs.revision(), null);
+            Test.assert(Inbound.configBehind());
+            Link.poll(NOW);
+            Test.assert(!Wire.payload(Support.lastSent() as Lang.Dictionary).hasKey("configRevision"));
+            Controller.phoneData(Support.message("config", Support.payloadOf(Rez.JsonData.fixture_config)));
+            Support.eq(Prefs.revision(), revisionOfFixture());
+            // Saved as this build's: after a restart it keeps its revision.
+            Prefs.clear();
+            Prefs.load(Status.revision());
+            Support.eq(Prefs.revision(), revisionOfFixture());
+        }
+        return true;
+    }
+
     // What one process saved, the other loads; the config matching the status's revision wins.
     (:test)
     function theBackgroundsCopyIsLoadedWhenNewer(logger as Test.Logger) as Lang.Boolean {
