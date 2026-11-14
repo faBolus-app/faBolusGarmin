@@ -46,17 +46,28 @@ module Nav {
     }
 
     // The bolus button. With a bolus to cancel it cancels; otherwise it opens entry when a bolus may start.
-    function pressBolus() as Void {
-        var now = Status.now();
+    function pressBolus() as Void { pressBolusAt(Status.now()); }
+
+    // Separate from pressBolus so tests can drive the clock.
+    function pressBolusAt(now as Lang.Number) as Void {
         if (BolusFlow.canCancel()) {
             Toast.show(BolusFlow.cancel(now) ? "Cancel sent" : "Not sent — try again");
             Ui.requestUpdate();
             return;
         }
-        if (!BolusFlow.canStart(now)) { return; }
+        if (!BolusFlow.canStart(now)) {
+            // The phone hasn't answered lately: ask it now rather than at the next poll, which can be two
+            // minutes off, so the button opens as soon as it answers.
+            if (!Link.phoneLive(now)) {
+                Toast.show(Controller.checkPhone(now) ? "Checking phone…" : "Phone not connected");
+                Ui.requestUpdate();
+            }
+            return;
+        }
         BolusFlow.forgetIfSettled();
         BolusFlow.reset();
-        Link.wantFreshGlucose();
+        // The entry's dose and gate rest on what the phone says now: ask it at once, with a fresh CGM read.
+        Controller.checkPhone(now);
         if (!introShown()) {
             Store.save(Store.INTRO_SHOWN, true);
             Ui.pushView(new BolusIntroView(), new BolusIntroDelegate(), Ui.SLIDE_LEFT);

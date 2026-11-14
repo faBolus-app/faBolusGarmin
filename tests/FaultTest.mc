@@ -32,7 +32,9 @@ module FaultTest {
         return true;
     }
 
-    // A transmit error, or no phone at all, counts as a miss: the next poll still comes, later.
+    // A transmit error counts as a miss: the next poll still comes, later. A poll goes out even when the
+    // watch's Bluetooth flag says no phone, which it can while the phone's messages still arrive; with no
+    // phone, its error is the miss.
     (:test)
     function transmitErrorsCountAsMisses(logger as Test.Logger) as Lang.Boolean {
         Support.fresh();
@@ -41,9 +43,36 @@ module FaultTest {
         Support.eq(Link.misses(), 1);
         Test.assert(!Link.outstanding());
         Link.testReachable = false;
-        Test.assert(!Link.poll(NOW + 30));
+        Test.assert(Link.poll(NOW + 30));
+        Link.pollFailed(NOW + 30);
         Support.eq(Link.misses(), 2);
         Test.assert(Link.pollDue(NOW + 31));
+        Link.testTransmitFails = true;
+        Test.assert(!Link.poll(NOW + 60));
+        Support.eq(Link.misses(), 3);
+        return true;
+    }
+
+    // Pressing the bolus button while the phone hasn't answered lately asks it now, rather than at the
+    // next poll, which can be two minutes off: the button opens once it answers. Opening the bolus entry
+    // asks it now too, with a fresh CGM read.
+    (:test)
+    function theBolusButtonAsksThePhoneNow(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        var t = NOW + Link.LIVE_SEC + 1;
+        Test.assert(!BolusFlow.canStart(t));
+        Nav.pressBolusAt(t);
+        Support.eq(Support.sentKinds(), ["poll"]);
+        // A second press while that poll waits for its answer sends nothing more.
+        Nav.pressBolusAt(t + 1);
+        Support.eq(Support.sentKinds(), ["poll"]);
+        Controller.phoneData(Support.message("status", Support.status({ "sentAt" => t + 2 })));
+        Test.assert(BolusFlow.canStart(t + 2));
+        // The entry asks again at once, for a fresh reading.
+        Test.assert(Controller.checkPhone(t + 3));
+        var poll = Support.lastSent() as Lang.Dictionary;
+        Support.eq(Support.sentKinds(), ["poll", "poll"]);
+        Support.eq(Wire.payload(poll)["freshGlucose"] as Lang.Object?, true);
         return true;
     }
 
@@ -74,16 +103,21 @@ module FaultTest {
         var t = NOW;
         Controller.tickAt(t);
         Support.eq(Support.sentKinds(), ["poll"]);
+        // Gone: the flag says no phone, and a transmit fails as it's handed over.
         Support.phoneGone();
+        Link.testTransmitFails = true;
         for (var i = 0; i < 300; i += 1) {
             t += 1;
             Controller.tickAt(t);
         }
         Support.eq(Link.delayMs(), Link.MAX_POLL_MS);
+        var before = Link.testSent.size();
         Link.testReachable = true;
+        Link.testTransmitFails = false;
         t += 1;
         Controller.tickAt(t);
-        Support.eq(Support.sentKinds(), ["poll", "poll"]);
+        Support.eq(Link.testSent.size(), before + 1);
+        Support.eq(Support.sentKinds()[before], "poll");
         // The phone answers, and the polls are back to their usual pace.
         Controller.phoneData(Support.message("status", Support.status({ "sentAt" => t })));
         Support.eq(Link.delayMs(), Link.POLL_MS);

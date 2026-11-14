@@ -631,8 +631,9 @@ module BolusFlow {
     }
 
     function cancel(now as Lang.Number) as Lang.Boolean {
-        var sent = Link.transmit(Wire.cancel(Link.newRequestId(now), _id),
-                                 new SendListener(new Lang.Method(BolusFlow, :cancelFailed), now), now);
+        // Never gated, not even on the Bluetooth flag: a cancel that can't go comes back as an error.
+        var sent = Link.hand(Wire.cancel(Link.newRequestId(now), _id),
+                             new SendListener(new Lang.Method(BolusFlow, :cancelFailed), now));
         if (sent) { _cancelAt = now; }
         return sent;
     }

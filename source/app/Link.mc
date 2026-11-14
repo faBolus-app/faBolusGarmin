@@ -11,9 +11,10 @@ using Toybox.WatchUi as Ui;
 // The phone pushes a status on every change, so the poll is a backstop and a way to say what the watch
 // holds. Its state is three values: when the last poll went out (zero when none is outstanding), how many
 // polls in a row went unanswered, and when the phone was last heard from. Any message from the phone
-// answers. A transmit error counts as an unanswered poll. Every wait is bounded, so the link always
-// polls again and never stops for good, and when the phone comes back in Bluetooth reach the app polls
-// at once (Controller.tickAt) rather than after the wait its misses set.
+// answers. A poll goes out whatever the watch's Bluetooth flag says (it can say no phone while the
+// phone's messages arrive), and a transmit error counts as an unanswered poll. Every wait is bounded, so
+// the link always polls again and never stops for good, and when the phone comes back in Bluetooth reach
+// the app polls at once (Controller.tickAt) rather than after the wait its misses set.
 module Link {
     const POLL_MS = 15000;
     const MAX_POLL_MS = 120000;
@@ -128,7 +129,7 @@ module Link {
     function poll(now as Lang.Number) as Lang.Boolean {
         var msg = Wire.poll(Prefs.revision(), BolusFlow.awaitingId(now), _wantHistory, _wantFreshGlucose);
         _pollSentAt = now;
-        var sent = transmit(msg, new SendListener(new Lang.Method(Link, :pollFailed), now), now);
+        var sent = hand(msg, new SendListener(new Lang.Method(Link, :pollFailed), now));
         if (sent) {
             _wantHistory = false;
             _wantFreshGlucose = false;
@@ -154,6 +155,12 @@ module Link {
     // failure after it was handed over comes to the listener.
     function transmit(msg as Lang.Dictionary, listener as Comm.ConnectionListener, now as Lang.Number) as Lang.Boolean {
         if (!reachable(now)) { return false; }
+        return hand(msg, listener);
+    }
+
+    // Hands a message to Connect IQ whatever the Bluetooth flag says: for polls and cancels, which cost
+    // nothing to try. With no phone the listener hears the error. False when the transmit throws.
+    function hand(msg as Lang.Dictionary, listener as Comm.ConnectionListener) as Lang.Boolean {
         try {
             if (testTransmitFails) { throw new Lang.Exception(); }
             if (testSuppressTransmit) {

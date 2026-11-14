@@ -142,6 +142,16 @@ module Controller {
         if (changed || now % 5 == 0) { Ui.requestUpdate(); }
     }
 
+    // The user is about to bolus: ask the phone now, with a fresh CGM read, rather than at the next poll.
+    // True when a poll went, or one is already waiting for its answer (it asks for the reading next time).
+    function checkPhone(now as Lang.Number) as Lang.Boolean {
+        Link.wantFreshGlucose();
+        if (Link.outstanding()) { return true; }
+        var sent = Link.poll(now);
+        _nextPollAt = now + (Link.delayMs() + Link.jitterMs()) / 1000;
+        return sent;
+    }
+
     function phoneMessage(msg as Comm.PhoneAppMessage) as Void { phoneData(msg.data); }
 
     // Separate from phoneMessage so tests can drive it: a PhoneAppMessage can't be built in a test.
