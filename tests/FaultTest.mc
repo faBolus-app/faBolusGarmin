@@ -76,6 +76,22 @@ module FaultTest {
         return true;
     }
 
+    // A request's resends go whatever the Bluetooth flag says, even once the phone has been quiet for a
+    // while: the flag can say no phone while the link works, and a resend is the same request.
+    (:test)
+    function aRequestIsResentWhateverTheFlagSays(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        BolusFlow.mode = "units";
+        BolusFlow.unitsMU = 2000;
+        BolusFlow.arm(NOW);
+        Test.assert(BolusFlow.send(NOW));
+        Support.phoneGone();
+        var t = NOW + BolusFlow.RESEND_SEC;
+        BolusFlow.tick(t);
+        Support.eq(Support.sentKinds(), ["bolus", "bolus"]);
+        return true;
+    }
+
     // The watch's Bluetooth flag can say no phone while faBolus's messages still arrive (the glucose keeps
     // updating). A message heard within LIVE_SEC shows the link works, so the watch still polls, sends and
     // offers a bolus; the phone checks and answers every request as always.

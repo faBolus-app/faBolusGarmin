@@ -144,8 +144,10 @@ module Link {
     // The phone can take a message: the watch's Bluetooth flag says a phone is connected, or faBolus was
     // heard from within LIVE_SEC. The flag alone isn't enough: it can say no phone while faBolus's messages
     // still arrive, and a message just heard shows the link works.
-    function reachable(now as Lang.Number) as Lang.Boolean {
-        if (phoneLive(now)) { return true; }
+    function reachable(now as Lang.Number) as Lang.Boolean { return phoneLive(now) || phoneConnected(); }
+
+    // The watch's Bluetooth flag alone.
+    function phoneConnected() as Lang.Boolean {
         var t = testReachable;
         if (t != null) { return t; }
         return System.getDeviceSettings().phoneConnected;

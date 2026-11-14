@@ -59,7 +59,7 @@ module Nav {
             // The phone hasn't answered lately: ask it now rather than at the next poll, which can be two
             // minutes off, so the button opens as soon as it answers.
             if (!Link.phoneLive(now)) {
-                Toast.show(Controller.checkPhone(now) ? "Checking phone…" : "Phone not connected");
+                Toast.show(Controller.checkPhone(now) ? "Checking phone…" : "Not sent — try again");
                 Ui.requestUpdate();
             }
             return;

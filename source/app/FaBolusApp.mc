@@ -125,9 +125,10 @@ module Controller {
         // nothing about the phone app, so the watch asks at once rather than after the backed-off wait. The
         // misses stand until the phone answers, and a poll still waiting holds the next, so a link that drops
         // and returns every few seconds still gets at most one poll per REPLY_SEC.
-        var reachable = Link.reachable(now);
-        if (reachable && _phoneAway) { _nextPollAt = now; }
-        _phoneAway = !reachable;
+        // By the Bluetooth flag alone: a phone that's only been quiet isn't away.
+        var connected = Link.phoneConnected();
+        if (connected && _phoneAway) { _nextPollAt = now; }
+        _phoneAway = !connected;
         // A clock stepped back would hold the next poll until it caught up.
         if (_nextPollAt - now > Link.MAX_POLL_MS / 1000 + 4) { _nextPollAt = now; }
         if (now >= _nextPollAt && Link.pollDue(now)) {

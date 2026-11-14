@@ -443,7 +443,7 @@ module BolusFlow {
         if (_armedAt == 0 || _armedMU < Calculator.STEP_MU) { return "expired"; }
         if (!Prefs.bolusEnabled() || Prefs.readOnly()) { return "off"; }
         if (busy()) { return "busy"; }
-        if (!Link.phoneLive(now) || !Link.reachable(now)) { return "phone"; }
+        if (!Link.phoneLive(now)) { return "phone"; }
         if (!Status.canBolus()) { return "blocked"; }
         if (now - _armedAt > ARM_SEC) { return "expired"; }
         if (_armedMode.equals("carbs") && (_armedInsulin != Status.carbsOff() || dose(now) != _armedMU)) {
@@ -529,7 +529,9 @@ module BolusFlow {
         if (_state.equals("sending") && _cancelAt == 0 && now - _sentAt <= FRESH_SEC
             && now - _lastSendAt >= RESEND_SEC) {
             _lastSendAt = now;
-            Link.transmit(msg, new BolusListener(), now);
+            // Whatever the Bluetooth flag says, which can say no phone while the link works: a resend is
+            // the same request, which the phone never delivers twice.
+            Link.hand(msg, new BolusListener());
         }
         // Nothing heard after sending, or nothing more about this request partway (the phone went away, or
         // lost the request): the watch can't tell what happened. The poll keeps asking, and any answer
