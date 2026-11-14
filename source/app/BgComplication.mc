@@ -65,9 +65,10 @@ module BgComplication {
             var b = Status.part("basal");
             if (b == null) { return [null, "--", null]; }
             if (b["suspended"] == true) { return [0, Prefs.complicationLabels() ? "Basal off" : "Off", "U/h"]; }
+            if (b["basalIQ"] == true) { return [0, Prefs.complicationLabels() ? "Basal-IQ off" : "BIQ", "U/h"]; }
             var rate = Status.field("basal", "mUPerHour");
             if (rate == null) { return [null, "--", null]; }
-            return [rate.toFloat() / 1000.0, named("Basal", Display.units(rate), "U/h"), "U/h"];
+            return [rate.toFloat() / 1000.0, named(b["tempRate"] == true ? "Temp" : "Basal", Display.units(rate), "U/h"), "U/h"];
         }
         return [null, "--", null];
     }

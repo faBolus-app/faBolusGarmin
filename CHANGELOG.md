@@ -11,6 +11,14 @@ wrong tree.
 
 ## [Unreleased]
 
+### Added
+
+- Details shows a temp rate set on the pump, with its percent ("Basal 1.20/3.00 U/hr · 40% · Temp 150%"),
+  and Basal-IQ's stop for a predicted low ("Basal: Basal-IQ suspended"), which isn't the pump's suspension:
+  a bolus still goes. The basal complication says "Temp" or "Basal-IQ off" for them.
+- Details rows for when the CGM sensor started and was last calibrated, each left out while unknown.
+- Ages of a day or more read in days ("3d ago").
+
 ### Changed
 
 - The glucose chart leaves out a reading above its ceiling or below its floor instead of drawing it on the

@@ -43,13 +43,14 @@ module Display {
         return (mU.toFloat() / 1000.0).format("%.2f");
     }
 
-    // "now", "3 min ago", "1h 4m ago"; "" for an unknown age.
+    // "now", "3 min ago", "1h 4m ago", "3d ago"; "" for an unknown age.
     function ago(seconds as Lang.Number?) as Lang.String {
         if (seconds == null) { return ""; }
         var m = seconds / 60;
         if (m <= 0) { return "now"; }
         if (m < 60) { return m.toString() + " min ago"; }
         var h = m / 60;
+        if (h >= 24) { return (h / 24).toString() + "d ago"; }
         var mm = m % 60;
         return (mm == 0) ? h.toString() + "h ago" : h.toString() + "h " + mm.toString() + "m ago";
     }

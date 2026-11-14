@@ -15,7 +15,7 @@ module Prefs {
     const SCREENS = ["glance", "glucose", "clock", "bolusonly", "alerts", "history", "details"];
     (:background)
     const DETAILS = ["iob", "reservoir", "battery", "cgm", "lastBolus", "carbRatio", "isf", "target", "maxBolus",
-                     "maxBasal", "autoCorrection"];
+                     "maxBasal", "autoCorrection", "sensorStarted", "lastCalibration"];
     (:background)
     const SLOTS = ["iob", "reservoir", "battery", "basal"];
     (:background)
