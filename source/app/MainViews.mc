@@ -130,7 +130,7 @@ module Screens {
 
     // The reading's age in a small dark chip: light text while current, orange once stale.
     function drawAgeChip(dc as Gfx.Dc, cx as Lang.Numeric, cy as Lang.Numeric, now as Lang.Number) as Void {
-        var text = Display.ago(Glucose.age(now));
+        var text = Glucose.ageText(now);
         if (text.length() == 0) { return; }
         var stale = Glucose.stale(now);
         var tw = dc.getTextWidthInPixels(text, Gfx.FONT_XTINY);
@@ -153,10 +153,12 @@ module Screens {
         var labelColor = Gfx.COLOR_LT_GRAY;
         var label = "Bolus";
         var why = null as Lang.String?;
-        if (BolusFlow.canCancel()) {
+        if (BolusFlow.canCancel(now)) {
             fill = Gfx.COLOR_RED;
             labelColor = Gfx.COLOR_WHITE;
             label = BolusFlow.cancelling(now) ? "Cancelling" : "Cancel";
+            // Shown by an old status, with the phone silent since: it may have ended. Cancel still tries.
+            if (BolusFlow.activeBolusOld(now)) { why = "Cancel · bolus status old"; }
         } else if (Prefs.readOnly()) {
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
             dc.drawText(cx, r[1] + r[3] / 2, Gfx.FONT_XTINY, "Read-only", vc);

@@ -30,9 +30,11 @@ class FaBolusGlanceView extends Ui.GlanceView {
         Prefs.load(Status.revision());
         var g = Status.glucose();
         var age = Status.ageOf("glucose", now);
-        if (g == null || age == null) { return ["--", "", true, null]; }
-        var stale = age > Prefs.staleSeconds();
         var hide = Prefs.hideDelaySeconds();
+        if (g == null) { return ["--", "", true, null]; }
+        // An age that can't be told: shown as old, or hidden when old readings are.
+        if (age == null) { return (hide != null) ? ["--", "", true, null] : [Display.glucose(g, Prefs.glucoseUnit()), "old", true, null]; }
+        var stale = age > Prefs.staleSeconds();
         if (hide != null && age > Prefs.staleSeconds() + hide) { return ["--", "", true, null]; }
         var mins = age / 60;
         var ago = (mins <= 0) ? "now" : mins.toString() + "m ago";

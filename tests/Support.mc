@@ -65,6 +65,7 @@ module Support {
         BolusFlow.forget();
         BolusFlow.reset();
         Alerts.reset();
+        Inbound.reset();
         Link.reset();
         Controller.reset();
         Link.testReachable = true;

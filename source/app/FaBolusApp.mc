@@ -46,7 +46,7 @@ class FaBolusApp extends App.AppBase {
 
     // Before the first view the app hasn't started; it loads what the background saved when it does.
     function onBackgroundData(data as App.PersistableType) as Void {
-        if (_started) { Controller.backgroundData(); }
+        if (_started) { Controller.serviceData(data); }
     }
 }
 
@@ -76,7 +76,8 @@ module Controller {
         Prefs.load(Status.revision());
         History.load();
         BolusFlow.load(Status.now());
-        Comm.registerForPhoneAppMessages(new Lang.Method(Controller, :phoneMessage));
+        Inbound.applySavedResults(Status.now());
+        registerForMessages();
         registerBackground();
         BgComplication.publish(Status.now());
         Link.wantHistory();
@@ -96,6 +97,16 @@ module Controller {
     function initialView() as [Ui.Views, Ui.InputDelegates] {
         _foreground = true;
         return Nav.initialView();
+    }
+
+    // The background service registers its own listener to hear the answer to its poll, and the system has
+    // handed the service messages while the app was open; a service the system ends without exiting never
+    // tells the app. Registering again replaces the listener, and costs nothing if it was still in place, so
+    // the app does it with every poll and whenever the service has run.
+    var registrations as Lang.Number = 0;
+    function registerForMessages() as Void {
+        registrations += 1;
+        Comm.registerForPhoneAppMessages(new Lang.Method(Controller, :phoneMessage));
     }
 
     // Every five minutes, and whenever the phone sends a message while the app is closed. Registering
@@ -132,6 +143,7 @@ module Controller {
         // A clock stepped back would hold the next poll until it caught up.
         if (_nextPollAt - now > Link.MAX_POLL_MS / 1000 + 4) { _nextPollAt = now; }
         if (now >= _nextPollAt && Link.pollDue(now)) {
+            registerForMessages();
             Link.poll(now);
             _nextPollAt = now + (Link.delayMs() + Link.jitterMs()) / 1000;
         }
@@ -153,27 +165,34 @@ module Controller {
         return sent;
     }
 
-    function phoneMessage(msg as Comm.PhoneAppMessage) as Void { phoneData(msg.data); }
+    // What the system hands over isn't always a message (it has handed over null): Inbound.dataOf checks.
+    function phoneMessage(msg as Comm.PhoneAppMessage) as Void { phoneData(Inbound.dataOf(msg)); }
 
-    // Separate from phoneMessage so tests can drive it: a PhoneAppMessage can't be built in a test.
-    function phoneData(data as Lang.Object?) as Void {
-        var now = Status.now();
+    function phoneData(data as Lang.Object?) as Void { phoneDataAt(data, Status.now()); }
+
+    // Separate from phoneMessage so tests can drive it and the clock: a PhoneAppMessage can't be built in a
+    // test.
+    function phoneDataAt(data as Lang.Object?, now as Lang.Number) as Void {
         var kind = Inbound.handle(data, now);
         if (kind == Wire.STATUS || kind == Wire.CONFIG) {
             _lastPublishAt = now;
             BgComplication.publish(now);
         }
         if (kind == Wire.STATUS) {
-            // A status naming a config the watch doesn't hold: polling now, with its own revision, makes the
-            // phone send it.
-            if (Inbound.configBehind() && !Link.outstanding() && now - _behindPollAt >= BEHIND_SEC) {
-                _behindPollAt = now;
-                Link.poll(now);
-                _nextPollAt = now + Link.delayMs() / 1000;
-            }
+            pollIfConfigBehind(now);
             announce();
         }
         Ui.requestUpdate();
+    }
+
+    // A status naming a config the watch doesn't hold: polling now, with its own revision, makes the phone
+    // send it.
+    function pollIfConfigBehind(now as Lang.Number) as Void {
+        if (Inbound.configBehind() && !Link.outstanding() && now - _behindPollAt >= BEHIND_SEC) {
+            _behindPollAt = now;
+            Link.poll(now);
+            _nextPollAt = now + Link.delayMs() / 1000;
+        }
     }
 
     // For tests: as at launch.
@@ -184,21 +203,64 @@ module Controller {
         _phoneAway = false;
     }
 
-    // The background service saved a status or config: load it.
-    function backgroundData() as Void {
+    // What the background service exits with (BgServiceDelegate.exitData): when the phone sent the message it
+    // took and saved, or {} for one that doesn't say, or a message only the app acts on with when it was
+    // sent, or, for one too large to pass, its kind.
+    function serviceData(data as App.PersistableType) as Void { serviceDataAt(data, Status.now()); }
+
+    function serviceDataAt(data as App.PersistableType, now as Lang.Number) as Void {
+        if (!(data instanceof Lang.Dictionary)) {
+            backgroundData((data instanceof Lang.Number) ? data : null, now);
+            return;
+        }
+        var at = data["at"];
+        var m = data["m"];
+        var k = data["k"];
+        var kind = (m != null) ? Wire.kindOf(m) : ((k instanceof Lang.Number) ? k : Wire.UNRECOGNIZED);
+        // Taken just now, so it says what the phone is now, as a message to this process would.
+        var recent = at instanceof Lang.Number && at <= now && now - at <= Link.LIVE_SEC;
+        if (kind == Wire.HISTORY) {
+            if (m instanceof Lang.Dictionary) {
+                History.accept(Wire.payload(m as Lang.Dictionary));
+            } else {
+                Link.wantHistory();
+            }
+        } else if (recent && kind == Wire.LEGACY) {
+            Link.heardLegacy(now);
+        } else if (recent && (kind == Wire.NEWER || kind == Wire.INCOMPATIBLE)) {
+            Link.heardNewer(now);
+        }
+        backgroundData((kind == Wire.HISTORY && at instanceof Lang.Number) ? at : null, now);
+    }
+
+    // The background service saved a status, config or result: load it. `heardAt` is when the phone sent
+    // what the service took (Status.heardTime), which counts just as a message to this process does: the
+    // system decides which of them gets a message, and a live phone mustn't read as "No reply from faBolus"
+    // because of its choice. A status the service took is taken here too (the chart, the alerts), and a
+    // result it kept is applied, once.
+    function backgroundData(heardAt as Lang.Number?, now as Lang.Number) as Void {
+        var sent = Status.sentAt();
         Status.load();
         Prefs.load(Status.revision());
-        BgComplication.publish(Status.now());
+        Link.heardAt(heardAt, now);
+        registerForMessages();
+        Inbound.applySavedResults(now);
+        if (Status.sentAt() != sent) { Inbound.statusTaken(now); }
+        pollIfConfigBehind(now);
+        _lastPublishAt = now;
+        BgComplication.publish(now);
         announce();
         Ui.requestUpdate();
     }
 
     // Shows each alert the app hasn't shown yet, once, and vibrates for those the phone says to.
     function announce() as Void {
-        if (!_foreground) { return; }
         var list = Alerts.list();
-        var seen = Alerts.loadSet(Store.ALERTS_SEEN);
-        var fresh = Alerts.unseen(list, seen);
+        // Noted even in the background: an alert the service notified that has left the list is announced
+        // again when it comes back.
+        Alerts.noteGone(list);
+        if (!_foreground) { return; }
+        var fresh = Alerts.toAnnounce(list);
         var shown = [] as Lang.Array;
         if (fresh.size() > 0) {
             // One the background service already notified isn't vibrated for again.
@@ -211,7 +273,7 @@ module Controller {
                 if (pushAlert(a)) { shown.add(Alerts.idOf(a)); }
             }
         }
-        Store.save(Store.ALERTS_SEEN, Alerts.reconciled(list, seen, shown));
+        Alerts.recordShown(list, shown, Status.now());
     }
 
     // False when the card couldn't be shown, so the alert stays unseen and is shown next time.

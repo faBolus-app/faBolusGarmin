@@ -100,7 +100,7 @@ module ContractTest {
         Support.eq(active["deliveredMU"] as Lang.Object?, 1250);
         Support.eq(active["startedAt"] as Lang.Object?, NOW - 30);
         // A bolus the pump is delivering can always be cancelled from the watch.
-        Test.assert(BolusFlow.canCancel());
+        Test.assert(BolusFlow.canCancel(NOW));
         return true;
     }
 

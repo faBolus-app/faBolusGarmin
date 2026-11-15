@@ -66,12 +66,16 @@ class BolusEntryView extends Ui.View {
         }
         var est = BolusFlow.estimate(now);
         if (est < 0) { return "Calculator unavailable"; }
+        // Both doses the question will offer, in its order: with the correction, then without; one over the
+        // limit is named as that.
+        var doses = BolusFlow.correctionDoses(now);
+        if (doses != null) { return previewDose(doses[0]) + " or " + previewDose(doses[1]); }
         if (est > BolusFlow.dialMax()) { return "Over the " + Display.units(BolusFlow.dialMax()) + " U limit"; }
-        // Both doses the question will offer, in its order: with the correction, then without.
-        if (BolusFlow.correctionChoiceNeeded(now)) {
-            return Display.units(est) + " U or " + Display.units(BolusFlow.estimateFrom(null)) + " U";
-        }
         return Display.units(est) + " U";
+    }
+
+    static function previewDose(mu as Lang.Number) as Lang.String {
+        return mu > BolusFlow.dialMax() ? "over limit" : Display.units(mu) + " U";
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {
@@ -182,6 +186,7 @@ class BolusEntryDelegate extends Ui.BehaviorDelegate {
         var now = Status.now();
         // Asked again on every Deliver: an answer holds for the attempt it was given in.
         BolusFlow.declineCorrection = false;
+        BolusFlow.includeStale = false;
         if (BolusFlow.mode.equals("carbs")) {
             if (BolusFlow.staleChoiceNeeded(now)) {
                 var v = new StaleBolusView(now);
@@ -437,9 +442,12 @@ class CorrectionView extends Ui.View {
                 dc.setPenWidth(1);
             }
             var mx = r[0] + r[2] / 2;
-            dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+            var mu = (doses as Lang.Array<Lang.Number>)[i];
+            // A half over the limit can't be chosen: it says so in grey instead of a dose.
+            var over = mu > BolusFlow.dialMax();
+            dc.setColor(over ? Gfx.COLOR_LT_GRAY : Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
             dc.drawText(mx, r[1] + r[3] * 0.32, Gfx.FONT_XTINY, label(choices[i]), vc);
-            dc.drawText(mx, r[1] + r[3] * 0.66, Gfx.FONT_SMALL, doseText((doses as Lang.Array<Lang.Number>)[i]), vc);
+            dc.drawText(mx, r[1] + r[3] * 0.66, over ? Gfx.FONT_XTINY : Gfx.FONT_SMALL, over ? "Over limit" : doseText(mu), vc);
         }
         dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.825, Gfx.FONT_XTINY, Nav.isTouch() ? "BACK to cancel" : "UP/DOWN · START", vc);
@@ -502,6 +510,12 @@ class CorrectionDelegate extends Ui.BehaviorDelegate {
         // shows instead, and nothing is armed.
         if (_view.noticeChange(Status.now()) || _view.changed) {
             Ui.requestUpdate();
+            return true;
+        }
+        // The half over the limit can't be sent; the question stays for the other.
+        var doses = BolusFlow.correctionDoses(now) as Lang.Array<Lang.Number>;
+        if (doses[choice.equals("apply") ? 0 : 1] > BolusFlow.dialMax()) {
+            Toast.show("Over the " + Display.units(BolusFlow.dialMax()) + " U limit");
             return true;
         }
         BolusFlow.declineCorrection = choice.equals("carbsOnly");
@@ -926,7 +940,7 @@ class HoldView extends Ui.View {
             var mu = BolusFlow.requestedMU();
             var label = mu != null ? "Go on: " + Display.units(mu) + " U" : "Go on";
             dc.drawText(cx, r[1] + r[3] / 2, Gfx.FONT_SMALL, Nav.isTouch() ? label : label + " (START)", vc);
-        } else if (BolusFlow.canCancel()) {
+        } else if (BolusFlow.canCancel(Status.now())) {
             var r = cancelRect(w, h);
             dc.setColor(Gfx.COLOR_RED, Gfx.COLOR_TRANSPARENT);
             dc.fillRoundedRectangle(r[0], r[1], r[2], r[3], 10);
@@ -961,7 +975,7 @@ class HoldDelegate extends Ui.BehaviorDelegate {
         if (_view.sent) {
             if (BolusFlow.confirmable(Status.now())) {
                 if (Nav.inRect(c[0], c[1], HoldView.goOnRect(w, h))) { _view.reconfirm(); }
-            } else if (BolusFlow.canCancel() && Nav.inRect(c[0], c[1], HoldView.cancelRect(w, h))) {
+            } else if (BolusFlow.canCancel(Status.now()) && Nav.inRect(c[0], c[1], HoldView.cancelRect(w, h))) {
                 cancel();
             }
             return true;
@@ -985,7 +999,7 @@ class HoldDelegate extends Ui.BehaviorDelegate {
         if (_view.sent) {
             if (k == Ui.KEY_ENTER || k == Ui.KEY_START) {
                 if (BolusFlow.confirmable(Status.now())) { _view.reconfirm(); }
-                else if (BolusFlow.canCancel()) { cancel(); }
+                else if (BolusFlow.canCancel(Status.now())) { cancel(); }
             }
             return true;
         }
@@ -1004,6 +1018,8 @@ class HoldDelegate extends Ui.BehaviorDelegate {
     // dose that came from the correction question goes back to it, to change the answer.
     function onBack() as Lang.Boolean {
         stop();
+        // Leaving the confirm: a yes to a stale reading was for this confirm only.
+        BolusFlow.includeStale = false;
         if (!_view.sent && BolusFlow.armedChoice() != null) {
             BolusFlow.declineCorrection = false;
             var c = new CorrectionView(Status.now());
@@ -1071,7 +1087,10 @@ class HoldDelegate extends Ui.BehaviorDelegate {
     }
 
     private function cancel() as Void {
-        Toast.show(BolusFlow.cancel(Status.now()) ? "Cancel sent" : "Not sent — try again");
+        var now = Status.now();
+        var sent = BolusFlow.cancel(now);
+        Toast.show(BolusFlow.cancelToast(sent, now));
+        if (!Link.phoneLive(now)) { Controller.checkPhone(now); }
         Ui.requestUpdate();
     }
 }

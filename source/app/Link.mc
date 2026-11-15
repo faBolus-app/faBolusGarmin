@@ -10,8 +10,9 @@ using Toybox.WatchUi as Ui;
 //
 // The phone pushes a status on every change, so the poll is a backstop and a way to say what the watch
 // holds. Its state is three values: when the last poll went out (zero when none is outstanding), how many
-// polls in a row went unanswered, and when the phone was last heard from. Any message from the phone
-// answers. A poll goes out whatever the watch's Bluetooth flag says (it can say no phone while the
+// polls in a row went unanswered, and when the phone was last heard from, by the wall clock and by uptime.
+// A status, bolus outcome or chart answers, by when the phone sent it: one Connect IQ held on its way
+// here is as old as it is. A poll goes out whatever the watch's Bluetooth flag says (it can say no phone while the
 // phone's messages arrive), and a transmit error counts as an unanswered poll. Every wait is bounded, so
 // the link always polls again and never stops for good, and when the phone comes back in Bluetooth reach
 // the app polls at once (Controller.tickAt) rather than after the wait its misses set.
@@ -26,6 +27,8 @@ module Link {
     var _pollSentAt as Lang.Number = 0;
     var _misses as Lang.Number = 0;
     var _heardAt as Lang.Number = 0;
+    // The same moment by uptime (System.getTimer(), ms), which a wall clock stepped back can't move.
+    var _heardMs as Lang.Number = 0;
     // Set by a message from another protocol version, until a version 2 message arrives.
     var _phoneTooOld as Lang.Boolean = false;
     var _watchTooOld as Lang.Boolean = false;
@@ -45,6 +48,7 @@ module Link {
         _pollSentAt = 0;
         _misses = 0;
         _heardAt = 0;
+        _heardMs = 0;
         _phoneTooOld = false;
         _watchTooOld = false;
         _wantHistory = false;
@@ -79,9 +83,19 @@ module Link {
     function outstanding() as Lang.Boolean { return _pollSentAt != 0; }
 
     // The phone app has answered within the last minute: the Bluetooth link alone says nothing about
-    // whether faBolus is running on the phone.
+    // whether faBolus is running on the phone. Both clocks must say so; with the wall clock stepped back past
+    // the moment it was heard, uptime alone says, so a stepped-back clock neither makes a silent phone live
+    // nor a talking one dead.
     function phoneLive(now as Lang.Number) as Lang.Boolean {
-        return _heardAt > 0 && now - _heardAt <= LIVE_SEC;
+        return _heardAt > 0 && recent(now - _heardAt, System.getTimer() - _heardMs);
+    }
+
+    // Since the phone was last heard from, by the wall clock (s) and by uptime (ms). A wall clock behind the
+    // moment it was heard has been stepped back and says nothing, so uptime decides. A wrapped timer reads
+    // negative and is ignored, unless it's all there is: then nothing says the phone is live.
+    function recent(wallSec as Lang.Number, uptimeMs as Lang.Number) as Lang.Boolean {
+        if (wallSec < 0) { return uptimeMs >= 0 && uptimeMs <= LIVE_SEC * 1000; }
+        return wallSec <= LIVE_SEC && (uptimeMs < 0 || uptimeMs <= LIVE_SEC * 1000);
     }
 
     function phoneTooOld() as Lang.Boolean { return _phoneTooOld; }
@@ -89,13 +103,25 @@ module Link {
 
     // MARK: Events.
 
-    // A version 2 message from the phone.
+    // A version 2 message from the phone, sent just now.
     function heard(now as Lang.Number) as Void {
         _heardAt = now;
+        _heardMs = System.getTimer();
         _pollSentAt = 0;
         _misses = 0;
         _phoneTooOld = false;
         _watchTooOld = false;
+    }
+
+    // The phone was heard from at `at` (Status.heardTime), told now. A message Connect IQ held, or what the
+    // background service took, can arrive long after the phone sent it, so only a recent time counts, and it
+    // never moves the last-heard time back, unless the wall clock is now behind that time: it was stepped
+    // back (set from the phone), and the stored time means nothing on it any more.
+    function heardAt(at as Lang.Number?, now as Lang.Number) as Void {
+        if (at != null && at <= now && now - at <= LIVE_SEC && (at >= _heardAt || now < _heardAt)) {
+            heard(at);
+            _heardMs -= (now - at) * 1000;
+        }
     }
 
     // A message from the old phone app: it can't read this watch's messages.

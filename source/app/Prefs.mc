@@ -57,6 +57,8 @@ module Prefs {
         var carbStep = Wire.int(bolus, "carbStepG", 1, 50);
         var order = tokens(Wire.arr(screens, "order", 32), SCREENS);
         var first = Wire.token(screens, "default", SCREENS);
+        // A default this build doesn't know, or one left out of the order, is the first screen it does know.
+        if (order != null && order.size() > 0 && (first == null || !Wire.contains(order, first))) { first = order[0] as Lang.String; }
         var details = tokens(Wire.arr(p, "details", 32), DETAILS);
         var hours = numbers(Wire.arr(p, "chartHours", 4), CHART_HOURS);
         var slots = tokens(Wire.arr(complication, "slots", 3), SLOTS);
@@ -89,28 +91,28 @@ module Prefs {
         return out;
     }
 
-    // The strings of `list` that are in `allowed`, in order; null when `list` is null or holds anything
-    // else, or a value twice.
+    // The strings of `list` that are in `allowed`, in order, each once; null when `list` is null. Anything
+    // else is left out rather than refused: a screen, detail or slot a newer phone offers isn't a reason to
+    // refuse the whole config (which the phone would then send again on every poll).
     (:background)
     function tokens(list as Lang.Array?, allowed as Lang.Array) as Lang.Array? {
         if (list == null) { return null; }
         var out = [] as Lang.Array;
         for (var i = 0; i < list.size(); i += 1) {
             var v = list[i];
-            if (!(v instanceof Lang.String) || !Wire.contains(allowed, v) || Wire.contains(out, v)) { return null; }
-            out.add(v);
+            if (v instanceof Lang.String && Wire.contains(allowed, v) && !Wire.contains(out, v)) { out.add(v); }
         }
         return out;
     }
 
+    // The same for numbers.
     (:background)
     function numbers(list as Lang.Array?, allowed as Lang.Array) as Lang.Array? {
         if (list == null) { return null; }
         var out = [] as Lang.Array;
         for (var i = 0; i < list.size(); i += 1) {
             var v = list[i];
-            if (!(v instanceof Lang.Number) || allowed.indexOf(v) < 0 || out.indexOf(v) >= 0) { return null; }
-            out.add(v);
+            if (v instanceof Lang.Number && allowed.indexOf(v) >= 0 && out.indexOf(v) < 0) { out.add(v); }
         }
         return out;
     }
