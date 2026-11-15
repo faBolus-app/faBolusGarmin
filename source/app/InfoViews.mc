@@ -77,15 +77,18 @@ class CgmView extends Ui.View {
         return lines;
     }
 
-    // Whether a reading falls on the plot, bounds included. A reading off it isn't drawn, never pinned to
-    // the edge, where it would read as a reading at the edge: the phone's plots follow the same rule.
-    static function onPlot(mgdl as Lang.Number, floor as Lang.Number, ceiling as Lang.Number) as Lang.Boolean {
-        return mgdl >= floor && mgdl <= ceiling;
+    // The height a reading is drawn at: its own value, or the plot's edge when it is past it. The phone's
+    // plots follow the same rule (GlucosePlotScale.placement there).
+    static function pinned(mgdl as Lang.Number, floor as Lang.Number, ceiling as Lang.Number) as Lang.Number {
+        if (mgdl < floor) { return floor; }
+        if (mgdl > ceiling) { return ceiling; }
+        return mgdl;
     }
 
-    // What the empty plot says: no readings in the range at all, or only ones off the plot.
-    static function emptyText(inWindow as Lang.Number) as Lang.String {
-        return inWindow == 0 ? "no history" : "all off the plot";
+    // Whether a reading is past the plot's edge, bounds included on the plot. Such a reading is drawn at the
+    // edge as a ring, not a dot, so it never reads as a reading at the edge.
+    static function capped(mgdl as Lang.Number, floor as Lang.Number, ceiling as Lang.Number) as Lang.Boolean {
+        return pinned(mgdl, floor, ceiling) != mgdl;
     }
 
     static function multiplesBetween(floor as Lang.Number, ceiling as Lang.Number, step as Lang.Number) as Lang.Array<Lang.Number> {
@@ -142,26 +145,29 @@ class CgmView extends Ui.View {
         // The points' times are the phone's clock; placed on this watch's.
         var offset = Status.clockOffset();
         var drawn = 0;
-        var inWindow = 0;
+        dc.setPenWidth(2);
         for (var k = 0; k < at.size() && k < mgdl.size(); k += 1) {
             var at0 = at[k];
             var g = mgdl[k];
             if (!(at0 instanceof Lang.Number) || !(g instanceof Lang.Number)) { continue; }
             var t = at0 + offset;
             if (t < start || t > now) { continue; }
-            inWindow += 1;
-            if (!onPlot(g, floor, ceiling)) { continue; }
-            var v = g.toFloat();
+            var v = pinned(g, floor, ceiling).toFloat();
             var x = left + (t - start).toFloat() / (now - start).toFloat() * (right - left);
             var y = bottom - ((v - vmin) / (vmax - vmin)) * (bottom - top);
+            // Coloured by the reading's own value; a reading past the edge is a ring there, not a dot.
             dc.setColor(Display.rangeColor(g), Gfx.COLOR_TRANSPARENT);
-            dc.fillCircle(x, y, 2);
+            if (capped(g, floor, ceiling)) {
+                dc.drawCircle(x, y, 3);
+            } else {
+                dc.fillCircle(x, y, 2);
+            }
             drawn += 1;
         }
+        dc.setPenWidth(1);
         if (drawn == 0) {
-            // Readings that are all off the plot are history all the same: say so, not that there is none.
             dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, (top + bottom) / 2, Gfx.FONT_XTINY, emptyText(inWindow), vc);
+            dc.drawText(cx, (top + bottom) / 2, Gfx.FONT_XTINY, "no history", vc);
         }
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, CgmView.hours().toString() + " Hours (tap)", vc);

@@ -319,14 +319,21 @@ module DisplayTest {
     }
 
     (:test)
-    function chartLeavesOutReadingsOffThePlot(logger as Test.Logger) as Lang.Boolean {
-        Test.assert(CgmView.onPlot(40, 40, 300));
-        Test.assert(CgmView.onPlot(300, 40, 300));
-        Test.assert(CgmView.onPlot(120, 40, 300));
-        Test.assert(!CgmView.onPlot(301, 40, 300));
-        Test.assert(!CgmView.onPlot(39, 40, 300));
-        Test.assert(CgmView.emptyText(0).equals("no history"));
-        Test.assert(CgmView.emptyText(3).equals("all off the plot"));
+    function chartPinsReadingsOffThePlotToItsEdge(logger as Test.Logger) as Lang.Boolean {
+        // Past the ceiling or floor: drawn at that edge, marked capped.
+        Support.eq(CgmView.pinned(301, 40, 300), 300);
+        Support.eq(CgmView.pinned(450, 40, 300), 300);
+        Support.eq(CgmView.pinned(39, 40, 300), 40);
+        Support.eq(CgmView.pinned(20, 50, 250), 50);
+        Test.assert(CgmView.capped(301, 40, 300));
+        Test.assert(CgmView.capped(39, 40, 300));
+        // On the plot, bounds included: drawn as itself, not capped.
+        Support.eq(CgmView.pinned(40, 40, 300), 40);
+        Support.eq(CgmView.pinned(300, 40, 300), 300);
+        Support.eq(CgmView.pinned(120, 40, 300), 120);
+        Test.assert(!CgmView.capped(40, 40, 300));
+        Test.assert(!CgmView.capped(300, 40, 300));
+        Test.assert(!CgmView.capped(120, 40, 300));
         return true;
     }
 

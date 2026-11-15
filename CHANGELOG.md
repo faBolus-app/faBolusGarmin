@@ -21,8 +21,8 @@ wrong tree.
 
 ### Changed
 
-- The glucose chart leaves out a reading above its ceiling or below its floor instead of drawing it on the
-  edge, where it read as a reading at the edge. The phone's plots do the same.
+- The glucose chart draws a reading above its ceiling or below its floor at that edge as a ring, not a dot,
+  so it can't pass for a reading at the edge. The phone's plots do the same.
 
 ## [v0.4.0] — 2026-11-01
 
