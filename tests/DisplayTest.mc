@@ -338,6 +338,16 @@ module DisplayTest {
     }
 
     (:test)
+    function chartLineJoinsNeighboursButNotAGap(logger as Test.Logger) as Lang.Boolean {
+        Test.assert(CgmView.joined(NOW - 300, NOW));
+        // A missed reading or two is joined; a longer gap isn't.
+        Test.assert(CgmView.joined(NOW - 900, NOW));
+        Test.assert(!CgmView.joined(NOW - 901, NOW));
+        Test.assert(!CgmView.joined(NOW - 3600, NOW));
+        return true;
+    }
+
+    (:test)
     function clockText(logger as Test.Logger) as Lang.Boolean {
         Test.assert(Support.same(ClockView.digitalText(0, 5, false), ["12:05", "AM"]));
         Test.assert(Support.same(ClockView.digitalText(13, 0, false), ["1:00", "PM"]));

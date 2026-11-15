@@ -128,8 +128,25 @@ module ContractTest {
         Support.eq(Prefs.glucoseUnit(), "mgdl");
         Support.eq(Prefs.staleSeconds(), 360);
         Support.eq(Prefs.hideDelaySeconds(), null);
+        // A config without a plot style draws dots.
+        Support.eq(Prefs.plotStyle(), "dots");
         Support.eq(Prefs.plotFloor(), 40);
         Support.eq(Prefs.plotCeiling(), 300);
+        return true;
+    }
+
+    (:test)
+    function configPlotStyleReads(logger as Test.Logger) as Lang.Boolean {
+        Support.fresh();
+        var p = Support.payloadOf(Rez.JsonData.fixture_config_line);
+        Test.assert(Prefs.accept(p, NOW));
+        Support.eq(Prefs.plotStyle(), "line");
+        // A style this watch doesn't know: the whole config is refused, and the one it had stays.
+        var bad = Support.payloadOf(Rez.JsonData.fixture_config_line);
+        var glucose = bad["glucose"] as Lang.Dictionary;
+        glucose["plotStyle"] = "bars";
+        Test.assert(!Prefs.accept(bad, NOW + 1));
+        Support.eq(Prefs.plotStyle(), "line");
         return true;
     }
 

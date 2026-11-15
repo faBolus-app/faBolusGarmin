@@ -1,5 +1,6 @@
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
+using Toybox.Math;
 using Toybox.Time;
 using Toybox.Time.Gregorian;
 using Toybox.System;
@@ -86,9 +87,27 @@ class CgmView extends Ui.View {
     }
 
     // Whether a reading is past the plot's edge, bounds included on the plot. Such a reading is drawn at the
-    // edge as a ring, not a dot, so it never reads as a reading at the edge.
+    // edge marked, so it never reads as a reading at the edge: a ring among dots, a dotted segment in a line.
     static function capped(mgdl as Lang.Number, floor as Lang.Number, ceiling as Lang.Number) as Lang.Boolean {
         return pinned(mgdl, floor, ceiling) != mgdl;
+    }
+
+    // Whether the line joins two neighbouring readings: a missed reading or two is joined, a longer gap (a
+    // sensor change) isn't, so it never draws as readings. The phone's line plots use the same 15 minutes.
+    static function joined(t0 as Lang.Number, t1 as Lang.Number) as Lang.Boolean {
+        return t1 - t0 <= 15 * 60;
+    }
+
+    // A capped segment: dots about 5 pixels apart, since the screen has no dashed line.
+    static function drawDotted(dc as Gfx.Dc, x0 as Lang.Float, y0 as Lang.Float, x1 as Lang.Float, y1 as Lang.Float) as Void {
+        var dx = x1 - x0;
+        var dy = y1 - y0;
+        var n = (Math.sqrt(dx * dx + dy * dy) / 5).toNumber();
+        if (n < 1) { n = 1; }
+        for (var i = 0; i <= n; i += 1) {
+            var f = i.toFloat() / n;
+            dc.fillCircle(x0 + dx * f, y0 + dy * f, 1);
+        }
     }
 
     static function multiplesBetween(floor as Lang.Number, ceiling as Lang.Number, step as Lang.Number) as Lang.Array<Lang.Number> {
@@ -144,8 +163,11 @@ class CgmView extends Ui.View {
         var start = now - CgmView.hours() * 3600;
         // The points' times are the phone's clock; placed on this watch's.
         var offset = Status.clockOffset();
-        var drawn = 0;
-        dc.setPenWidth(2);
+        // In time order, as the phone sends them: each reading's place, its own value and whether it is capped.
+        var xs = [] as Lang.Array<Lang.Float>;
+        var ys = [] as Lang.Array<Lang.Float>;
+        var ts = [] as Lang.Array<Lang.Number>;
+        var gs = [] as Lang.Array<Lang.Number>;
         for (var k = 0; k < at.size() && k < mgdl.size(); k += 1) {
             var at0 = at[k];
             var g = mgdl[k];
@@ -153,16 +175,36 @@ class CgmView extends Ui.View {
             var t = at0 + offset;
             if (t < start || t > now) { continue; }
             var v = pinned(g, floor, ceiling).toFloat();
-            var x = left + (t - start).toFloat() / (now - start).toFloat() * (right - left);
-            var y = bottom - ((v - vmin) / (vmax - vmin)) * (bottom - top);
-            // Coloured by the reading's own value; a reading past the edge is a ring there, not a dot.
+            xs.add(left + (t - start).toFloat() / (now - start).toFloat() * (right - left));
+            ys.add(bottom - ((v - vmin) / (vmax - vmin)) * (bottom - top));
+            ts.add(t);
+            gs.add(g);
+        }
+        var line = Prefs.plotStyle().equals("line");
+        var drawn = xs.size();
+        dc.setPenWidth(2);
+        for (var k = 0; k < drawn; k += 1) {
+            var g = gs[k];
+            var cap = capped(g, floor, ceiling);
+            // Coloured by the reading's own value; a segment by the reading it ends at.
             dc.setColor(Display.rangeColor(g), Gfx.COLOR_TRANSPARENT);
-            if (capped(g, floor, ceiling)) {
-                dc.drawCircle(x, y, 3);
-            } else {
-                dc.fillCircle(x, y, 2);
+            var fromPrevious = line && k > 0 && joined(ts[k - 1], ts[k]);
+            var toNext = line && k + 1 < drawn && joined(ts[k], ts[k + 1]);
+            if (fromPrevious) {
+                if (cap || capped(gs[k - 1], floor, ceiling)) {
+                    drawDotted(dc, xs[k - 1], ys[k - 1], xs[k], ys[k]);
+                } else {
+                    dc.drawLine(xs[k - 1], ys[k - 1], xs[k], ys[k]);
+                }
             }
-            drawn += 1;
+            // A dot per reading; in a line, only for a reading no segment reaches, so none goes undrawn.
+            if (!fromPrevious && !toNext) {
+                if (cap) {
+                    dc.drawCircle(xs[k], ys[k], 3);
+                } else {
+                    dc.fillCircle(xs[k], ys[k], 2);
+                }
+            }
         }
         dc.setPenWidth(1);
         if (drawn == 0) {
