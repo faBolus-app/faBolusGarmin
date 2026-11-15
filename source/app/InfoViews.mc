@@ -138,7 +138,7 @@ class CgmView extends Ui.View {
         var gone = Glucose.isHidden(now);
 
         dc.setColor((stale && !gone) ? Gfx.COLOR_ORANGE : Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.11, Gfx.FONT_XTINY, gone ? "--" : Display.ago(Glucose.age(now)), vc);
+        dc.drawText(cx, h * 0.11, Gfx.FONT_XTINY, gone ? "--" : Glucose.ageText(now), vc);
         Screens.drawGlucose(dc, cx, h * 0.22, Gfx.FONT_NUMBER_MEDIUM, now);
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.32, Gfx.FONT_XTINY, Display.glucoseUnit(Prefs.glucoseUnit()), vc);
@@ -258,13 +258,14 @@ class DetailsView extends Ui.View {
     }
 
     // " (old)" once the value under `key` is older than the phone's window for it: IOB's own, the
-    // calculator's settings', and the pump status window for the rest.
+    // calculator's settings', and the pump status window for the rest. Also when its age can't be told.
     static function mark(key as Lang.String, now as Lang.Number) as Lang.String {
         var age = Status.ageOf(key, now);
         var window = Prefs.pumpStatusStaleSeconds();
         if (key.equals("iob")) { window = Prefs.iobStaleSeconds(); }
         if (key.equals("calculator")) { window = Prefs.therapyStaleSeconds(); }
-        return (age != null && age > window) ? " (old)" : "";
+        if (Status.part(key) == null) { return ""; }
+        return (age == null || age > window) ? " (old)" : "";
     }
 
     // A row's text, or null when the row has nothing to show.

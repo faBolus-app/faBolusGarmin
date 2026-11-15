@@ -184,8 +184,8 @@ module ResyncTest {
         Test.assert(Link.phoneTooOld());
         Support.eq(BolusFlow.startBlock(NOW), "Update faBolus on phone");
         Support.eq(Display.linkLine(NOW), "Update faBolus on phone");
-        // A version 2 message clears it.
-        Controller.phoneData(Support.message("status", Support.payloadOf(Rez.JsonData.fixture_status)));
+        // A version 2 message, sent just now, clears it.
+        Controller.phoneDataAt(Support.message("status", Support.payloadOf(Rez.JsonData.fixture_status)), NOW);
         Test.assert(!Link.phoneTooOld());
         return true;
     }

@@ -35,10 +35,11 @@ module Inbound {
         if (kind == Wire.UNRECOGNIZED || kind == Wire.MALFORMED) { return kind; }
         if (kind == Wire.STATUS || kind == Wire.CONFIG) {
             // One that doesn't read doesn't count as hearing from the phone, so a run of them can't keep the
-            // last good status's bolus gate in use.
+            // last good status's bolus gate in use. A config carries no sentAt, so it says nothing about when
+            // the phone was last there.
             if (!applyState(kind, data, now, Store.STATUS, Store.CONFIG)) { return kind; }
-            Link.heard(now);
             if (kind == Wire.STATUS) {
+                Link.heardAt(Status.heardTime(Status.sentAt(), now), now);
                 Alerts.onStatus(now);
                 var at = Status.field("glucose", "at");
                 var g = Status.glucose();
@@ -46,8 +47,9 @@ module Inbound {
             }
             return kind;
         }
-        Link.heard(now);
         var p = Wire.payload(data);
+        // A dismiss result carries no sentAt either.
+        if (kind == Wire.HISTORY || kind == Wire.OUTCOME) { Link.heardAt(sentTime(p, now), now); }
         if (kind == Wire.HISTORY) {
             History.accept(p);
         } else if (kind == Wire.OUTCOME) {
@@ -56,6 +58,11 @@ module Inbound {
             Alerts.onDismissResult(p, now);
         }
         return kind;
+    }
+
+    // When a chart or bolus outcome counts as hearing from the phone, by its sentAt.
+    function sentTime(p as Lang.Dictionary, now as Lang.Number) as Lang.Number? {
+        return Status.heardTime(Wire.int(p, "sentAt", Wire.EPOCH_MIN, Wire.EPOCH_MAX), now);
     }
 
     // The status names a config revision the watch doesn't hold: it missed a change, or lost its

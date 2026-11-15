@@ -51,7 +51,10 @@ module Nav {
     // Separate from pressBolus so tests can drive the clock.
     function pressBolusAt(now as Lang.Number) as Void {
         if (BolusFlow.canCancel()) {
-            Toast.show(BolusFlow.cancel(now) ? "Cancel sent" : "Not sent — try again");
+            var sent = BolusFlow.cancel(now);
+            Toast.show(BolusFlow.cancelToast(sent, now));
+            // The phone hasn't answered lately: ask it now, so the button shows what it says.
+            if (!Link.phoneLive(now)) { Controller.checkPhone(now); }
             Ui.requestUpdate();
             return;
         }
