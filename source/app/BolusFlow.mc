@@ -163,6 +163,10 @@ module BolusFlow {
         return Prefs.autoAcceptCorrection() && correctionDoses(now) != null;
     }
 
+    // The question applies, whether it's asked or the setting answered it: a question already showing when
+    // the setting arrives still takes the user's answer, rather than dropping it.
+    function correctionApplies(now as Lang.Number) as Lang.Boolean { return correctionDoses(now) != null; }
+
     // The question's two doses in milliunits, with the correction then without, or null when it isn't asked.
     // Worked out once for a screen that draws both, as each is a full calculation.
     function correctionDoses(now as Lang.Number) as Lang.Array<Lang.Number>? {
@@ -200,8 +204,12 @@ module BolusFlow {
     // that it will be asked: it would otherwise say the dose was lowered before asking whether to lower it.
     function message(now as Lang.Number) as Lang.String? {
         if (!mode.equals("carbs") || calculatorBlock(now) != null || overLimit(now)) { return null; }
-        if (correctionChoiceNeeded(now)) { return correctionAbove() ? "Correction asked next" : "Reduction asked next"; }
-        if (correctionAutoAccepted(now)) { return correctionAbove() ? "Correction added (auto)" : "Bolus reduced (auto)"; }
+        // Each check is two full calculations: worked out once.
+        if (correctionApplies(now)) {
+            var above = correctionAbove();
+            if (!Prefs.autoAcceptCorrection()) { return above ? "Correction asked next" : "Reduction asked next"; }
+            return above ? "Correction added (auto)" : "Bolus reduced (auto)";
+        }
         // No reading at all: the dose shown has no correction, which the number alone doesn't say.
         if (Status.glucose() == null) { return "No CGM: " + noCorrection(); }
         // One the pump flags: why, and carbs only.
@@ -354,7 +362,9 @@ module BolusFlow {
         _armedGlucose = _armedDecline ? offered : (mode.equals("carbs") ? correctionGlucose(now) : null);
         _armedIncludeStale = mode.equals("carbs") && includeStale && _armedGlucose != null;
         _armedChoice = null;
-        if (correctionChoiceNeeded(now)) {
+        // A dose from the question names its answer. With the setting on the corrected dose is the setting's,
+        // but a decline the user chose (on a question showing when the setting arrived) is still theirs.
+        if (correctionApplies(now) && (!Prefs.autoAcceptCorrection() || declineCorrection)) {
             var target = Status.field("calculator", "target");
             var above = offered != null && target != null && offered > target;
             // The words on the half the user chose, so the confirm screen matches it exactly.

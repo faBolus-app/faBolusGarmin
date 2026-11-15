@@ -189,6 +189,18 @@ module CalculatorTest {
         Support.eq(BolusFlow.message(Support.NOW), "Bolus reduced (auto)");
         Test.assert(BolusFlow.arm(Support.NOW));
         Support.eq(HoldView.splitText(), "6.00 food - 1.75 reduction");
+        // The setting arrives while the question shows: the answer the user taps is still theirs, and a
+        // decline names itself on the confirm screen, so BACK goes back to change it.
+        reading(250);
+        Test.assert(BolusFlow.correctionChoiceNeeded(Support.NOW));
+        autoAccept();
+        Test.assert(BolusFlow.correctionApplies(Support.NOW));
+        BolusFlow.declineCorrection = true;
+        Test.assert(BolusFlow.arm(Support.NOW));
+        Support.eq(BolusFlow.armedDose(), 6000);
+        Support.eq(BolusFlow.armedChoice(), "Carbs only");
+        Support.eq(HoldView.splitText(), "6.00 food · no correction");
+        BolusFlow.declineCorrection = false;
         // Off again (a config without the field): asked as before.
         reading(250);
         Test.assert(!Prefs.autoAcceptCorrection());

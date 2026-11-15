@@ -457,7 +457,7 @@ class CorrectionDelegate extends Ui.BehaviorDelegate {
     function onTap(evt as Ui.ClickEvent) as Lang.Boolean {
         // No question any more: any tap goes back to the dose screen. The change screen: any tap shows the
         // question again, with the new doses.
-        if (!BolusFlow.correctionChoiceNeeded(Status.now())) { return choose("cancel"); }
+        if (!BolusFlow.correctionApplies(Status.now())) { return choose("cancel"); }
         if (_view.noticeChange(Status.now()) || _view.changed) { return acknowledge(); }
         var c = evt.getCoordinates();
         var size = Nav.screenSize();
@@ -470,7 +470,7 @@ class CorrectionDelegate extends Ui.BehaviorDelegate {
     function onNextPage() as Lang.Boolean { return Nav.isTouch() ? false : move(); }
     function onSelect() as Lang.Boolean {
         if (Nav.isTouch()) { return false; }
-        if (!BolusFlow.correctionChoiceNeeded(Status.now())) { return choose("cancel"); }
+        if (!BolusFlow.correctionApplies(Status.now())) { return choose("cancel"); }
         if (_view.noticeChange(Status.now()) || _view.changed) { return acknowledge(); }
         return choose(_view.cursor == 0 ? "apply" : "carbsOnly");
     }
@@ -497,7 +497,7 @@ class CorrectionDelegate extends Ui.BehaviorDelegate {
             Ui.popView(Ui.SLIDE_RIGHT);
             return true;
         }
-        if (!BolusFlow.correctionChoiceNeeded(now)) { return choose("cancel"); }
+        if (!BolusFlow.correctionApplies(now)) { return choose("cancel"); }
         // Doses that changed since the screen showed them aren't what the user aimed at: the change screen
         // shows instead, and nothing is armed.
         if (_view.noticeChange(Status.now()) || _view.changed) {
