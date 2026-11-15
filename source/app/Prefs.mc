@@ -83,6 +83,12 @@ module Prefs {
             "pumpStatusMinutes" => statusMinutes,
             "plotFloor" => floor, "plotCeiling" => ceiling
         } as Lang.Dictionary;
+        // Absent: dots. A style this watch doesn't know is refused, as any unknown token is.
+        if (glucose.hasKey("plotStyle")) {
+            var style = Wire.token(glucose, "plotStyle", ["dots", "line"]);
+            if (style == null) { return null; }
+            out["plotStyle"] = style;
+        }
         // Absent: never hide a stale reading.
         var hide = Wire.int(glucose, "hideDelayMinutes", 0, 1440);
         if (hide != null) { out["hideDelayMinutes"] = hide; }
@@ -241,4 +247,9 @@ module Prefs {
     }
     function plotFloor() as Lang.Number { return number("plotFloor", 40); }
     function plotCeiling() as Lang.Number { return number("plotCeiling", 300); }
+    // "dots" or "line": how the chart draws its readings.
+    function plotStyle() as Lang.String {
+        var v = value("plotStyle");
+        return (v instanceof Lang.String) ? v : "dots";
+    }
 }

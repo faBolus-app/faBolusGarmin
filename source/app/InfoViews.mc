@@ -1,5 +1,6 @@
 using Toybox.Graphics as Gfx;
 using Toybox.Lang;
+using Toybox.Math;
 using Toybox.Time;
 using Toybox.Time.Gregorian;
 using Toybox.System;
@@ -77,15 +78,37 @@ class CgmView extends Ui.View {
         return lines;
     }
 
-    // Whether a reading falls on the plot, bounds included. A reading off it isn't drawn, never pinned to
-    // the edge, where it would read as a reading at the edge: the phone's plots follow the same rule.
-    static function onPlot(mgdl as Lang.Number, floor as Lang.Number, ceiling as Lang.Number) as Lang.Boolean {
-        return mgdl >= floor && mgdl <= ceiling;
+    // The height a reading is drawn at: its own value, or the plot's edge when it is past it. The phone's
+    // plots follow the same rule (GlucosePlotScale.placement there).
+    static function pinned(mgdl as Lang.Number, floor as Lang.Number, ceiling as Lang.Number) as Lang.Number {
+        if (mgdl < floor) { return floor; }
+        if (mgdl > ceiling) { return ceiling; }
+        return mgdl;
     }
 
-    // What the empty plot says: no readings in the range at all, or only ones off the plot.
-    static function emptyText(inWindow as Lang.Number) as Lang.String {
-        return inWindow == 0 ? "no history" : "all off the plot";
+    // Whether a reading is past the plot's edge, bounds included on the plot. Such a reading is drawn at the
+    // edge marked, so it never reads as a reading at the edge: a ring among dots, a dotted segment in a line.
+    static function capped(mgdl as Lang.Number, floor as Lang.Number, ceiling as Lang.Number) as Lang.Boolean {
+        return pinned(mgdl, floor, ceiling) != mgdl;
+    }
+
+    // Whether the line joins two neighbouring readings: a missed reading or two is joined, a longer gap (a
+    // sensor change) isn't, so it never draws as readings. The phone's line plots use the same 15 minutes.
+    static function joined(t0 as Lang.Number, t1 as Lang.Number) as Lang.Boolean {
+        return t1 - t0 <= 15 * 60;
+    }
+
+    // A capped segment: dots about 7 pixels apart, since the screen has no dashed line. Each dot is wider than the
+    // line, so a capped run stays as easy to see as the line itself.
+    static function drawDotted(dc as Gfx.Dc, x0 as Lang.Float, y0 as Lang.Float, x1 as Lang.Float, y1 as Lang.Float) as Void {
+        var dx = x1 - x0;
+        var dy = y1 - y0;
+        var n = (Math.sqrt(dx * dx + dy * dy) / 7).toNumber();
+        if (n < 1) { n = 1; }
+        for (var i = 0; i <= n; i += 1) {
+            var f = i.toFloat() / n;
+            dc.fillCircle(x0 + dx * f, y0 + dy * f, 2);
+        }
     }
 
     static function multiplesBetween(floor as Lang.Number, ceiling as Lang.Number, step as Lang.Number) as Lang.Array<Lang.Number> {
@@ -141,27 +164,53 @@ class CgmView extends Ui.View {
         var start = now - CgmView.hours() * 3600;
         // The points' times are the phone's clock; placed on this watch's.
         var offset = Status.clockOffset();
-        var drawn = 0;
-        var inWindow = 0;
+        // In time order, as the phone sends them: each reading's place, its own value and whether it is capped.
+        var xs = [] as Lang.Array<Lang.Float>;
+        var ys = [] as Lang.Array<Lang.Float>;
+        var ts = [] as Lang.Array<Lang.Number>;
+        var gs = [] as Lang.Array<Lang.Number>;
         for (var k = 0; k < at.size() && k < mgdl.size(); k += 1) {
             var at0 = at[k];
             var g = mgdl[k];
             if (!(at0 instanceof Lang.Number) || !(g instanceof Lang.Number)) { continue; }
             var t = at0 + offset;
             if (t < start || t > now) { continue; }
-            inWindow += 1;
-            if (!onPlot(g, floor, ceiling)) { continue; }
-            var v = g.toFloat();
-            var x = left + (t - start).toFloat() / (now - start).toFloat() * (right - left);
-            var y = bottom - ((v - vmin) / (vmax - vmin)) * (bottom - top);
-            dc.setColor(Display.rangeColor(g), Gfx.COLOR_TRANSPARENT);
-            dc.fillCircle(x, y, 2);
-            drawn += 1;
+            var v = pinned(g, floor, ceiling).toFloat();
+            xs.add(left + (t - start).toFloat() / (now - start).toFloat() * (right - left));
+            ys.add(bottom - ((v - vmin) / (vmax - vmin)) * (bottom - top));
+            ts.add(t);
+            gs.add(g);
         }
+        var line = Prefs.plotStyle().equals("line");
+        var drawn = xs.size();
+        dc.setPenWidth(2);
+        for (var k = 0; k < drawn; k += 1) {
+            var g = gs[k];
+            var cap = capped(g, floor, ceiling);
+            // Coloured by the reading's own value; a segment by the reading it ends at.
+            dc.setColor(Display.rangeColor(g), Gfx.COLOR_TRANSPARENT);
+            var fromPrevious = line && k > 0 && joined(ts[k - 1], ts[k]);
+            var toNext = line && k + 1 < drawn && joined(ts[k], ts[k + 1]);
+            if (fromPrevious) {
+                if (cap || capped(gs[k - 1], floor, ceiling)) {
+                    drawDotted(dc, xs[k - 1], ys[k - 1], xs[k], ys[k]);
+                } else {
+                    dc.drawLine(xs[k - 1], ys[k - 1], xs[k], ys[k]);
+                }
+            }
+            // A dot per reading; in a line, only for a reading no segment reaches, so none goes undrawn.
+            if (!fromPrevious && !toNext) {
+                if (cap) {
+                    dc.drawCircle(xs[k], ys[k], 3);
+                } else {
+                    dc.fillCircle(xs[k], ys[k], 2);
+                }
+            }
+        }
+        dc.setPenWidth(1);
         if (drawn == 0) {
-            // Readings that are all off the plot are history all the same: say so, not that there is none.
             dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, (top + bottom) / 2, Gfx.FONT_XTINY, emptyText(inWindow), vc);
+            dc.drawText(cx, (top + bottom) / 2, Gfx.FONT_XTINY, "no history", vc);
         }
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.90, Gfx.FONT_XTINY, CgmView.hours().toString() + " Hours (tap)", vc);
