@@ -155,6 +155,99 @@ module CalculatorTest {
         return true;
     }
 
+    // The phone's config with Auto-accept corrections on, received at NOW.
+    function autoAccept() as Void {
+        Test.assert(Prefs.accept(Support.payloadOf(Rez.JsonData.fixture_config_auto_correction), Support.NOW));
+    }
+
+    // With the phone's Auto-accept corrections on, the question isn't asked: the corrected dose is armed, the
+    // confirm screen shows the correction, and the request declines nothing. Below target, the reduction.
+    (:test)
+    function autoAcceptAnswersTheCorrection(logger as Test.Logger) as Lang.Boolean {
+        reading(250);
+        autoAccept();
+        Test.assert(Prefs.autoAcceptCorrection());
+        Test.assert(!BolusFlow.correctionChoiceNeeded(Support.NOW));
+        Support.eq(BolusFlow.estimate(Support.NOW), 8250);
+        Support.eq(BolusFlow.message(Support.NOW), "Correction added (auto)");
+        Support.eq(BolusEntryView.previewLine(Support.NOW), "8.25 U");
+        Test.assert(BolusFlow.canDeliver(Support.NOW));
+        Test.assert(BolusFlow.arm(Support.NOW));
+        // No answer to go back to: BACK cancels, and the split says what the dose holds.
+        Support.eq(BolusFlow.armedChoice(), null);
+        Support.eq(HoldView.splitText(), "6.00 food + 2.25 correction");
+        Test.assert(BolusFlow.send(Support.NOW));
+        var p = Wire.payload(Support.lastSent() as Lang.Dictionary);
+        Support.eq(p["estimateMU"] as Lang.Object?, 8250);
+        Support.eq(p["glucoseMgdl"] as Lang.Object?, 250);
+        Support.eq(p["declineCorrection"] as Lang.Object?, null);
+        BolusFlow.forget();
+        reading(90);
+        autoAccept();
+        Test.assert(!BolusFlow.correctionChoiceNeeded(Support.NOW));
+        Support.eq(BolusFlow.estimate(Support.NOW), 4250);
+        Support.eq(BolusFlow.message(Support.NOW), "Bolus reduced (auto)");
+        Test.assert(BolusFlow.arm(Support.NOW));
+        Support.eq(HoldView.splitText(), "6.00 food - 1.75 reduction");
+        // The setting arrives while the question shows: the answer the user taps is still theirs, and a
+        // decline names itself on the confirm screen, so BACK goes back to change it.
+        reading(250);
+        Test.assert(BolusFlow.correctionChoiceNeeded(Support.NOW));
+        autoAccept();
+        Test.assert(BolusFlow.correctionApplies(Support.NOW));
+        BolusFlow.declineCorrection = true;
+        Test.assert(BolusFlow.arm(Support.NOW));
+        Support.eq(BolusFlow.armedDose(), 6000);
+        Support.eq(BolusFlow.armedChoice(), "Carbs only");
+        Support.eq(HoldView.splitText(), "6.00 food · no correction");
+        BolusFlow.declineCorrection = false;
+        // Off again (a config without the field): asked as before.
+        reading(250);
+        Test.assert(!Prefs.autoAcceptCorrection());
+        Test.assert(BolusFlow.correctionChoiceNeeded(Support.NOW));
+        return true;
+    }
+
+    // It answers only the correction question, only when it would be asked: under 70, a flagged reading, a
+    // stale one and no reading are as without it, and a stale reading is still asked about.
+    (:test)
+    function autoAcceptAddsNoCorrectionTheQuestionWouldNot(logger as Test.Logger) as Lang.Boolean {
+        reading(60);
+        autoAccept();
+        Test.assert(!BolusFlow.correctionAutoAccepted(Support.NOW));
+        Support.eq(BolusFlow.estimate(Support.NOW), 3500);
+        Support.eq(BolusFlow.message(Support.NOW), "Glucose low: dose reduced");
+        // Flagged by the pump: carbs only.
+        Support.connected();
+        autoAccept();
+        Status.accept(Support.payloadOf(Rez.JsonData.fixture_status_glucose_caution), Support.NOW);
+        BolusFlow.mode = "carbs";
+        BolusFlow.carbs = 45;
+        Test.assert(!BolusFlow.correctionAutoAccepted(Support.NOW));
+        Support.eq(BolusFlow.estimate(Support.NOW), 6000);
+        Support.eq(BolusFlow.message(Support.NOW), "Check BG: carbs only");
+        // Stale but includable: the stale question is still asked; carbs only until the user includes it.
+        reading(250);
+        autoAccept();
+        Status.accept(Support.status({ "glucose" => { "mgdl" => 250, "at" => Support.NOW - 600, "backup" => false } }),
+                      Support.NOW);
+        Test.assert(BolusFlow.staleChoiceNeeded(Support.NOW));
+        Test.assert(!BolusFlow.correctionAutoAccepted(Support.NOW));
+        Support.eq(BolusFlow.estimate(Support.NOW), 6000);
+        // Too old to include: carbs only.
+        Status.accept(Support.status({ "glucose" => { "mgdl" => 250, "at" => Support.NOW - 960, "backup" => false } }),
+                      Support.NOW);
+        Test.assert(!BolusFlow.staleChoiceNeeded(Support.NOW));
+        Support.eq(BolusFlow.estimate(Support.NOW), 6000);
+        // No reading at all.
+        var st = Support.payloadOf(Rez.JsonData.fixture_status);
+        st.remove("glucose");
+        Status.accept(st, Support.NOW);
+        Test.assert(!BolusFlow.correctionAutoAccepted(Support.NOW));
+        Support.eq(BolusFlow.estimate(Support.NOW), 6000);
+        return true;
+    }
+
     // New doses while the question shows: noticed once, and the change screen holds until the user has seen
     // it. A reading that ends the question isn't asked about.
     (:test)

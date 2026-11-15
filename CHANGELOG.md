@@ -13,6 +13,11 @@ wrong tree.
 
 ### Added
 
+- The phone's Auto-accept corrections (Settings → Bolus & entry, off by default) reaches the watch as the
+  config's `bolus.autoAcceptCorrection`. On, the watch doesn't ask "Add a correction?" / "Reduce the
+  bolus?": the dose screen shows the corrected dose with "Correction added (auto)" or "Bolus reduced
+  (auto)", and the confirm screen shows its split. A stale or flagged reading, a BG under 70 and no reading
+  are as before. A config without the field is off.
 - Details shows a temp rate set on the pump, with its percent ("Basal 1.20/3.00 U/hr · 40% · Temp 150%"),
   and Basal-IQ's stop for a predicted low ("Basal: Basal-IQ suspended"), which isn't the pump's suspension:
   a bolus still goes. The basal complication says "Temp" or "Basal-IQ off" for them.
