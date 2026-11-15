@@ -83,6 +83,12 @@ module Prefs {
             "pumpStatusMinutes" => statusMinutes,
             "plotFloor" => floor, "plotCeiling" => ceiling
         } as Lang.Dictionary;
+        // Absent: off, so the correction question is asked. Anything but a boolean is refused, as on the phone.
+        if (bolus.hasKey("autoAcceptCorrection")) {
+            var auto = Wire.bool(bolus, "autoAcceptCorrection");
+            if (auto == null) { return null; }
+            out["autoAcceptCorrection"] = auto;
+        }
         // Absent: dots. A style this watch doesn't know is refused, as any unknown token is.
         if (glucose.hasKey("plotStyle")) {
             var style = Wire.token(glucose, "plotStyle", ["dots", "line"]);
@@ -251,5 +257,11 @@ module Prefs {
     function plotStyle() as Lang.String {
         var v = value("plotStyle");
         return (v instanceof Lang.String) ? v : "dots";
+    }
+    // The phone's Auto-accept corrections: the calculator's correction question is answered yes for the
+    // user, so the watch doesn't ask it. Off until a config says otherwise.
+    function autoAcceptCorrection() as Lang.Boolean {
+        var v = value("autoAcceptCorrection");
+        return (v instanceof Lang.Boolean) ? v as Lang.Boolean : false;
     }
 }

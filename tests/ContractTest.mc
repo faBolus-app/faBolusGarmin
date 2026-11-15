@@ -151,6 +151,23 @@ module ContractTest {
     }
 
     (:test)
+    function configAutoAcceptCorrectionReads(logger as Test.Logger) as Lang.Boolean {
+        Support.fresh();
+        // Absent: off, so the question is asked.
+        Test.assert(Prefs.accept(Support.payloadOf(Rez.JsonData.fixture_config), NOW));
+        Test.assert(!Prefs.autoAcceptCorrection());
+        Test.assert(Prefs.accept(Support.payloadOf(Rez.JsonData.fixture_config_auto_correction), NOW));
+        Test.assert(Prefs.autoAcceptCorrection());
+        // Anything but a boolean: the whole config is refused, and the one it had stays.
+        var bad = Support.payloadOf(Rez.JsonData.fixture_config_auto_correction);
+        var bolus = bad["bolus"] as Lang.Dictionary;
+        bolus["autoAcceptCorrection"] = "yes";
+        Test.assert(!Prefs.accept(bad, NOW + 1));
+        Test.assert(Prefs.autoAcceptCorrection());
+        return true;
+    }
+
+    (:test)
     function historyReads(logger as Test.Logger) as Lang.Boolean {
         Support.fresh();
         Test.assert(History.accept(Support.payloadOf(Rez.JsonData.fixture_history)));

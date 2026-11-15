@@ -151,8 +151,17 @@ module BolusFlow {
 
     // Whether to ask "Add a correction?" / "Reduce the bolus?": a fresh reading of 70 or more whose
     // correction changes the dose to another dose, as on the phone. A stale reading the user chose to
-    // include was a choice already; with no carbs, or a reduction to nothing, there's no choice.
-    function correctionChoiceNeeded(now as Lang.Number) as Lang.Boolean { return correctionDoses(now) != null; }
+    // include was a choice already; with no carbs, or a reduction to nothing, there's no choice. With the
+    // phone's Auto-accept corrections on, the answer is yes and it isn't asked: the dose is the corrected
+    // one (`declineCorrection` stays false), which the phone composes from its own fresh reading.
+    function correctionChoiceNeeded(now as Lang.Number) as Lang.Boolean {
+        return !Prefs.autoAcceptCorrection() && correctionDoses(now) != null;
+    }
+
+    // The question would be asked, and the phone's setting answered it.
+    function correctionAutoAccepted(now as Lang.Number) as Lang.Boolean {
+        return Prefs.autoAcceptCorrection() && correctionDoses(now) != null;
+    }
 
     // The question's two doses in milliunits, with the correction then without, or null when it isn't asked.
     // Worked out once for a screen that draws both, as each is a full calculation.
@@ -192,6 +201,7 @@ module BolusFlow {
     function message(now as Lang.Number) as Lang.String? {
         if (!mode.equals("carbs") || calculatorBlock(now) != null || overLimit(now)) { return null; }
         if (correctionChoiceNeeded(now)) { return correctionAbove() ? "Correction asked next" : "Reduction asked next"; }
+        if (correctionAutoAccepted(now)) { return correctionAbove() ? "Correction added (auto)" : "Bolus reduced (auto)"; }
         // No reading at all: the dose shown has no correction, which the number alone doesn't say.
         if (Status.glucose() == null) { return "No CGM: " + noCorrection(); }
         // One the pump flags: why, and carbs only.
