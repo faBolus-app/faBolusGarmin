@@ -85,6 +85,14 @@ module LateMessageTest {
         Status.clear();
         Status.load();
         Support.eq(Status.sentAt(), NOW);
+        // The service's copy, sent later but received in the same second as the one held, is loaded.
+        Support.fresh();
+        Test.assert(Status.accept(Support.status({ "sentAt" => NOW + 95 }), NOW + 100));
+        Status.save(Store.BG_STATUS);
+        Status.clear();
+        Test.assert(Status.accept(Support.status({ "sentAt" => NOW + 90 }), NOW + 100));
+        Status.load();
+        Support.eq(Status.sentAt(), NOW + 95);
         return true;
     }
 
@@ -105,6 +113,13 @@ module LateMessageTest {
         Status.load();
         Test.assert((Status.ageOf("glucose", NOW) as Lang.Number) >= 3600 + 80);
         Test.assert(Glucose.stale(NOW));
+        // With the clock behind its arrival, a stored stamp isn't the only clock: it may be from before a
+        // restart, with uptime since passing it, and would say too little time has passed.
+        rec["t"] = System.getTimer() - 10000;
+        Storage.setValue(Store.BG_STATUS, rec as Storage.ValueType);
+        Status.clear();
+        Status.load();
+        Support.eq(Status.ageOf("glucose", NOW - 600), null);
         // Saved before the watch restarted (uptime is below it now), and the clock stepped back since.
         rec["t"] = System.getTimer() + 100000000;
         Storage.setValue(Store.BG_STATUS, rec as Storage.ValueType);

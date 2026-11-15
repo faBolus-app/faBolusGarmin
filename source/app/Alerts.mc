@@ -102,7 +102,30 @@ module Alerts {
                 out[id] = gone[id];
             }
         }
-        Store.save(Store.BG_SHOWN_GONE, out);
+        if (!sameMap(out, gone)) { Store.save(Store.BG_SHOWN_GONE, out); }
+    }
+
+    // The same keys with the same values: the service runs every few minutes, and an unchanged map isn't
+    // written again.
+    (:background)
+    function sameMap(a as Lang.Dictionary, b as Lang.Dictionary) as Lang.Boolean {
+        if (a.size() != b.size()) { return false; }
+        var keys = a.keys();
+        for (var i = 0; i < keys.size(); i += 1) {
+            if (!b.hasKey(keys[i]) || b[keys[i]] != a[keys[i]]) { return false; }
+        }
+        return true;
+    }
+
+    // The same ids, in any order.
+    (:background)
+    function sameSet(a as Lang.Array, b as Lang.Array) as Lang.Boolean {
+        if (a.size() != b.size()) { return false; }
+        for (var i = 0; i < a.size(); i += 1) {
+            var e = a[i];
+            if (!(e instanceof Lang.String) || !Wire.contains(b, e)) { return false; }
+        }
+        return true;
     }
 
     // The app's part: the alerts to show now, those not shown since they last came up.

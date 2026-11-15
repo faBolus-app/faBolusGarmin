@@ -38,6 +38,7 @@ module Inbound {
             // last good status's bolus gate in use. A config carries no sentAt, so it says nothing about when
             // the phone was last there.
             if (!applyState(kind, data, now, Store.STATUS, Store.CONFIG)) { return kind; }
+            Link.speaksVersion2();
             if (kind == Wire.STATUS) {
                 Link.heardAt(Status.heardTime(Status.sentAt(), now), now);
                 Alerts.onStatus(now);
@@ -47,6 +48,7 @@ module Inbound {
             }
             return kind;
         }
+        Link.speaksVersion2();
         var p = Wire.payload(data);
         // A dismiss result carries no sentAt either.
         if (kind == Wire.HISTORY || kind == Wire.OUTCOME) { Link.heardAt(sentTime(p, now), now); }

@@ -109,13 +109,20 @@ module Link {
         _heardMs = System.getTimer();
         _pollSentAt = 0;
         _misses = 0;
+        speaksVersion2();
+    }
+
+    // A version 2 message read, however old: the phone app speaks this watch's version. Unlike hearing from
+    // it, this doesn't depend on when the message was sent.
+    function speaksVersion2() as Void {
         _phoneTooOld = false;
         _watchTooOld = false;
     }
 
     // The phone was heard from at `at` (Status.heardTime), told now. A message Connect IQ held can arrive
-    // long after the phone sent it, so only a recent time counts, and it never moves the last-heard time back, unless the wall clock is now behind that time: it was stepped
-    // back (set from the phone), and the stored time means nothing on it any more.
+    // long after the phone sent it, so only a recent time counts, and it never moves the last-heard time
+    // back, unless the wall clock is now behind that time: it was stepped back (set from the phone), and the
+    // stored time means nothing on it any more.
     function heardAt(at as Lang.Number?, now as Lang.Number) as Void {
         if (at != null && at <= now && now - at <= LIVE_SEC && (at >= _heardAt || now < _heardAt)) {
             heard(at);

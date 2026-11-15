@@ -21,6 +21,10 @@ module Status {
     // the watch last restarted). The wall clock can be stepped back; uptime can't.
     (:background, :glance)
     var _rMs as Lang.Number? = null;
+    // _rMs came from storage. Uptime starts again from zero when the watch restarts and can pass the stored
+    // stamp, so a stored one is used only to make a value older, never as the only clock (elapsed).
+    (:background, :glance)
+    var _rMsStored as Lang.Boolean = false;
     // The watch-minus-phone clock difference each recent status showed, its time in transit included.
     (:background)
     var _offsets as Lang.Array<Lang.Number> = [] as Lang.Array<Lang.Number>;
@@ -67,6 +71,7 @@ module Status {
         _p = clean;
         _r = receivedAt;
         _rMs = System.getTimer();
+        _rMsStored = false;
         _offsets.add(receivedAt - sent);
         if (_offsets.size() > MAX_OFFSETS) { _offsets = _offsets.slice(1, null); }
         return true;
@@ -276,13 +281,15 @@ module Status {
         if (!(p instanceof Lang.Dictionary) || !(r instanceof Lang.Number)) { return; }
         var v = p["sentAt"];
         if (!(v instanceof Lang.Number)) { return; }
-        if (_p != null && (r == _r || sentBy(v, r) < sentBy(sentAt(), _r))) { return; }
+        // The copy held already, or one the phone sent before it.
+        if (_p != null && sentBy(v, r) <= sentBy(sentAt(), _r)) { return; }
         _p = p;
         _r = r;
         // The uptime it arrived at counts while uptime hasn't restarted since (it starts at zero when the
         // watch boots); otherwise only the wall clock can say how long ago that was.
         var t = rec["t"];
         _rMs = (t instanceof Lang.Number && System.getTimer() >= t) ? t : null;
+        _rMsStored = true;
     }
 
     // When the phone sent a message, by the watch's clock as near as it can tell: its sentAt, or when it
@@ -306,6 +313,7 @@ module Status {
         _p = null;
         _r = 0;
         _rMs = null;
+        _rMsStored = false;
         _offsets = [] as Lang.Array<Lang.Number>;
     }
 
@@ -369,7 +377,11 @@ module Status {
     // arrival and uptime isn't known, so any age would be a guess, and the values are treated as stale.
     (:background, :glance)
     function elapsed(now as Lang.Number) as Lang.Number? {
-        return elapsedFrom(now - _r, _rMs, System.getTimer());
+        var ms = _rMs;
+        // With the wall clock behind the arrival a stored stamp would be the only clock, and one from before a
+        // restart would say too little time has passed: how long it has been can't be told.
+        if (_rMsStored && now < _r) { ms = null; }
+        return elapsedFrom(now - _r, ms, System.getTimer());
     }
 
     (:background, :glance)

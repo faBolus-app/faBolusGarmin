@@ -67,12 +67,10 @@ class BolusEntryView extends Ui.View {
         var est = BolusFlow.estimate(now);
         if (est < 0) { return "Calculator unavailable"; }
         // Both doses the question will offer, in its order: with the correction, then without; one over the
-        // limit is named as that. With the phone's Auto-accept on there's no question, and the dose is the
-        // corrected one.
-        if (BolusFlow.correctionChoiceNeeded(now)) {
-            var doses = BolusFlow.correctionDoses(now) as Lang.Array<Lang.Number>;
-            return previewDose(doses[0]) + " or " + previewDose(doses[1]);
-        }
+        // limit is named as that. With the phone's Auto-accept on there's no question (correctionChoiceNeeded),
+        // and the dose is the corrected one.
+        var doses = Prefs.autoAcceptCorrection() ? null : BolusFlow.correctionDoses(now);
+        if (doses != null) { return previewDose(doses[0]) + " or " + previewDose(doses[1]); }
         if (est > BolusFlow.dialMax()) { return "Over the " + Display.units(BolusFlow.dialMax()) + " U limit"; }
         return Display.units(est) + " U";
     }
@@ -508,7 +506,9 @@ class CorrectionDelegate extends Ui.BehaviorDelegate {
             Ui.popView(Ui.SLIDE_RIGHT);
             return true;
         }
-        if (!BolusFlow.correctionApplies(now)) { return choose("cancel"); }
+        // The question no longer applies (correctionApplies): back to the dose screen.
+        var doses = BolusFlow.correctionDoses(now);
+        if (doses == null) { return choose("cancel"); }
         // Doses that changed since the screen showed them aren't what the user aimed at: the change screen
         // shows instead, and nothing is armed.
         if (_view.noticeChange(Status.now()) || _view.changed) {
@@ -516,7 +516,6 @@ class CorrectionDelegate extends Ui.BehaviorDelegate {
             return true;
         }
         // The half over the limit can't be sent; the question stays for the other.
-        var doses = BolusFlow.correctionDoses(now) as Lang.Array<Lang.Number>;
         if (doses[choice.equals("apply") ? 0 : 1] > BolusFlow.dialMax()) {
             Toast.show("Over the " + Display.units(BolusFlow.dialMax()) + " U limit");
             return true;
@@ -1090,10 +1089,7 @@ class HoldDelegate extends Ui.BehaviorDelegate {
     }
 
     private function cancel() as Void {
-        var now = Status.now();
-        var sent = BolusFlow.cancel(now);
-        Toast.show(BolusFlow.cancelToast(sent, now));
-        if (!Link.phoneLive(now)) { Controller.checkPhone(now); }
+        Nav.pressCancel(Status.now());
         Ui.requestUpdate();
     }
 }

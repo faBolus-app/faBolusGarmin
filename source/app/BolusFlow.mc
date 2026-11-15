@@ -196,14 +196,8 @@ module BolusFlow {
 
     // The calculator's dose from `glucose` (null for carbs only), in milliunits; -1 when there isn't one.
     function estimateFrom(glucose as Lang.Number?) as Lang.Number {
-        var ratio = Status.field("calculator", "carbRatioMg");
-        var isf = Status.field("calculator", "isf");
-        var target = Status.field("calculator", "target");
-        var iob = Status.field("iob", "mU");
-        if (ratio == null || isf == null || target == null || iob == null) { return -1; }
-        // Carbs off: the food is insulin, with no carb ratio, as on the phone.
-        if (Status.carbsOff()) { return Calculator.estimateFood(foodMU, glucose, isf, target, iob); }
-        return Calculator.estimate(carbs, glucose, ratio, isf, target, iob);
+        var total = totalFrom(glucose);
+        return (total == null) ? -1 : Calculator.roundDown(total);
     }
 
     // Why the dose is what it is, in a few words, or null. While the correction question is still to come,
@@ -247,6 +241,7 @@ module BolusFlow {
         var target = Status.field("calculator", "target");
         var iob = Status.field("iob", "mU");
         if (ratio == null || isf == null || target == null || iob == null) { return null; }
+        // Carbs off: the food is insulin, with no carb ratio, as on the phone.
         if (Status.carbsOff()) { return Calculator.foodTotalUnits(foodMU, glucose, isf, target, iob); }
         return Calculator.totalUnits(carbs, glucose, ratio, isf, target, iob);
     }

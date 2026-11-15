@@ -92,8 +92,11 @@ class BgServiceDelegate extends System.ServiceDelegate {
         var kept = Alerts.reconciled(list, seen, posted);
         var keptAt = {} as Lang.Dictionary;
         for (var i = 0; i < kept.size(); i += 1) { keptAt[kept[i]] = Alerts.goneCount(at, kept[i] as Lang.String); }
-        Store.save(Store.BG_NOTIFIED, kept);
-        Store.save(Store.BG_NOTIFIED_AT, keptAt);
+        // Written only when changed: this runs every few minutes.
+        if (!Alerts.sameSet(kept, Alerts.loadSet(Store.BG_NOTIFIED)) || !Alerts.sameMap(keptAt, Store.map(Store.BG_NOTIFIED_AT))) {
+            Store.save(Store.BG_NOTIFIED, kept);
+            Store.save(Store.BG_NOTIFIED_AT, keptAt);
+        }
     }
 
     // Separate so tests can record the posts.

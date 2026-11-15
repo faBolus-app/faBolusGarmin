@@ -158,6 +158,11 @@ module Controller {
     // True when a poll went, or one is already waiting for its answer (it asks for the reading next time).
     function checkPhone(now as Lang.Number) as Lang.Boolean {
         Link.wantFreshGlucose();
+        return askPhone(now);
+    }
+
+    // Asks the phone now rather than at the next poll. True when a poll went, or one is already waiting.
+    function askPhone(now as Lang.Number) as Lang.Boolean {
         if (Link.outstanding()) { return true; }
         var sent = Link.poll(now);
         _nextPollAt = now + (Link.delayMs() + Link.jitterMs()) / 1000;
