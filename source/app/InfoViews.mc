@@ -98,15 +98,16 @@ class CgmView extends Ui.View {
         return t1 - t0 <= 15 * 60;
     }
 
-    // A capped segment: dots about 5 pixels apart, since the screen has no dashed line.
+    // A capped segment: dots about 7 pixels apart, since the screen has no dashed line. Each dot is wider than the
+    // line, so a capped run stays as easy to see as the line itself.
     static function drawDotted(dc as Gfx.Dc, x0 as Lang.Float, y0 as Lang.Float, x1 as Lang.Float, y1 as Lang.Float) as Void {
         var dx = x1 - x0;
         var dy = y1 - y0;
-        var n = (Math.sqrt(dx * dx + dy * dy) / 5).toNumber();
+        var n = (Math.sqrt(dx * dx + dy * dy) / 7).toNumber();
         if (n < 1) { n = 1; }
         for (var i = 0; i <= n; i += 1) {
             var f = i.toFloat() / n;
-            dc.fillCircle(x0 + dx * f, y0 + dy * f, 1);
+            dc.fillCircle(x0 + dx * f, y0 + dy * f, 2);
         }
     }
 
