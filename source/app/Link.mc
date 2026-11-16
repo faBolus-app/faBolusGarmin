@@ -23,6 +23,11 @@ module Link {
     const REPLY_SEC = 12;
     // The phone app counts as answering while it was heard from this recently.
     const LIVE_SEC = 60;
+    // A one-way link: this many asks the phone always answers have gone unanswered, the first this long
+    // before the phone was last heard from (see oneWay).
+    // Generous, as the phone sends the chart after any status due, so a busy phone can hold it back a while.
+    const ONE_WAY_ASKS = 4;
+    const ONE_WAY_SEC = 45;
 
     var _pollSentAt as Lang.Number = 0;
     var _misses as Lang.Number = 0;
@@ -35,6 +40,9 @@ module Link {
     // What the next poll asks for.
     var _wantHistory as Lang.Boolean = false;
     var _wantFreshGlucose as Lang.Boolean = false;
+    // Asks handed over since the phone last answered one (see asked), and when the first of them went.
+    var _asks as Lang.Number = 0;
+    var _askSince as Lang.Number = 0;
 
     // For tests: whether the phone counts as connected, instead of the device setting, and whether a
     // transmit actually goes out. The simulator has no phone, and a real transmit there opens a dialog.
@@ -53,6 +61,8 @@ module Link {
         _watchTooOld = false;
         _wantHistory = false;
         _wantFreshGlucose = false;
+        _asks = 0;
+        _askSince = 0;
         testSent = [];
         testTransmitFails = false;
     }
@@ -98,6 +108,18 @@ module Link {
         return wallSec <= LIVE_SEC && (uptimeMs < 0 || uptimeMs <= LIVE_SEC * 1000);
     }
 
+    // The phone's messages arrive but the watch's don't reach it: several asks it always answers went
+    // unanswered, while it was heard from well after the first of them, so it was there to answer. Seen
+    // after a sideload, until the watch was restarted; nothing on the phone or in Garmin Connect cleared it.
+    // A message lost now and then never adds up to this, as any answer starts the count again.
+    function oneWay(now as Lang.Number) as Lang.Boolean {
+        return _asks >= ONE_WAY_ASKS && _heardAt - _askSince >= ONE_WAY_SEC && phoneLive(now);
+    }
+
+    // What the user is told, unless the phone's setting mutes it. Detection goes on either way, so a muted
+    // watch still asks for the chart until the phone answers.
+    function sayOneWay(now as Lang.Number) as Lang.Boolean { return oneWay(now) && !Prefs.muteOneWayNotice(); }
+
     function phoneTooOld() as Lang.Boolean { return _phoneTooOld; }
     function watchTooOld() as Lang.Boolean { return _watchTooOld; }
 
@@ -142,6 +164,27 @@ module Link {
         _watchTooOld = true;
     }
 
+    // A message the phone always answers was handed over: a bolus request, which it answers at once with at
+    // least "received", or a poll asking for the chart, which it answers with one. Statuses can't count:
+    // the phone sends them unasked.
+    function asked(now as Lang.Number) as Void {
+        if (_asks == 0 || now < _askSince) { _askSince = now; }
+        _asks += 1;
+    }
+
+    // The phone answered one: what the watch sends reaches it.
+    function answered() as Void {
+        _asks = 0;
+        _askSince = 0;
+    }
+
+    // The chart arrived. The ask stands until then, so a lost poll asks again rather than leave the chart
+    // unfilled until the next reopen.
+    function historyArrived() as Void {
+        _wantHistory = false;
+        answered();
+    }
+
     function missed() as Void {
         _pollSentAt = 0;
         if (_misses < 4) { _misses += 1; }
@@ -159,11 +202,14 @@ module Link {
 
     // Sends a poll now, naming the config revision the watch holds and the bolus request it waits on.
     function poll(now as Lang.Number) as Lang.Boolean {
-        var msg = Wire.poll(Prefs.revision(), BolusFlow.awaitingId(now), _wantHistory, _wantFreshGlucose);
+        // While the asks add up to a one-way link the poll asks for the chart too, so a link that's back
+        // proves it with the answer rather than wait for the next bolus.
+        var askHistory = _wantHistory || _asks >= ONE_WAY_ASKS;
+        var msg = Wire.poll(Prefs.revision(), BolusFlow.awaitingId(now), askHistory, _wantFreshGlucose);
         _pollSentAt = now;
         var sent = hand(msg, new SendListener(new Lang.Method(Link, :pollFailed), now));
         if (sent) {
-            _wantHistory = false;
+            if (askHistory) { asked(now); }
             _wantFreshGlucose = false;
         } else {
             missed();

@@ -64,6 +64,14 @@ module Nav {
             return;
         }
         if (!BolusFlow.canStart(now)) {
+            // The phone can't hear the watch: say what fixed it, and ask again in case it's back (a chart
+            // ask still standing goes with the poll, and its answer clears the block).
+            if (Link.sayOneWay(now)) {
+                Controller.checkPhone(now);
+                Toast.show("Restart the watch");
+                Ui.requestUpdate();
+                return;
+            }
             // The phone hasn't answered lately: ask it now rather than at the next poll, which can be two
             // minutes off, so the button opens as soon as it answers.
             if (!Link.phoneLive(now)) {

@@ -343,8 +343,23 @@ module BolusFlow {
         if (!Link.phoneLive(now)) { return "No reply from faBolus"; }
         if (!Prefs.bolusEnabled()) { return "Bolusing off (phone)"; }
         if (Prefs.readOnly()) { return "Read-only"; }
+        // A request wouldn't reach the phone. After the phone's own settings, which the notice's mute sits
+        // with: with bolusing off there's nothing to hold.
+        if (Link.sayOneWay(now)) { return ONE_WAY_BLOCK; }
         if (busy()) { return "Bolus in progress"; }
         if (!Status.canBolus()) { return blockText(Status.blockReason()); }
+        return null;
+    }
+
+    const ONE_WAY_BLOCK = "Phone can't hear watch. Restart watch.";
+
+    // Under the request's headline while the phone can't hear the watch: the request may never reach it,
+    // and restarting the watch is what brought the link back. Never that nothing was delivered: the
+    // phone may have the request from before.
+    function oneWayHint(now as Lang.Number) as Lang.String? {
+        if (!Link.sayOneWay(now)) { return null; }
+        if (_state.equals("sending")) { return "Phone can't hear the watch. Restart the watch."; }
+        if (_state.equals("noAnswer")) { return "Phone can't hear the watch. Restart the watch and check the pump."; }
         return null;
     }
 
@@ -550,6 +565,7 @@ module BolusFlow {
         _armedAt = 0;
         _armedConfirmed = [];
         if (Link.transmit(msg, new BolusListener(), now)) {
+            Link.asked(now);
             _state = "sending";
         } else {
             // Nothing went out: the phone isn't connected.
@@ -578,7 +594,7 @@ module BolusFlow {
             _lastSendAt = now;
             // Whatever the Bluetooth flag says, which can say no phone while the link works: a resend is
             // the same request, which the phone never delivers twice.
-            Link.hand(msg, new BolusListener());
+            if (Link.hand(msg, new BolusListener())) { Link.asked(now); }
         }
         // Nothing heard after sending, or nothing more about this request partway (the phone went away, or
         // lost the request): the watch can't tell what happened. The poll keeps asking, and any answer
@@ -600,8 +616,9 @@ module BolusFlow {
         var token = Wire.token(p, "outcome", OUTCOMES);
         var mine = _id;
         if (id == null || token == null || mine == null || !id.equals(mine)) { return false; }
-        // A repeat still says the phone has it.
+        // A repeat still says the phone has it, and that the watch's messages reach it.
         _heardAt = now;
+        Link.answered();
         if (!canMove(_state, token)) { return false; }
         _state = token;
         var requested = Wire.int(p, "requestedMU", 0, Wire.MAX_MU);

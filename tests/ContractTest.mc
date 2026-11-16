@@ -168,6 +168,23 @@ module ContractTest {
     }
 
     (:test)
+    function configMuteOneWayNoticeReads(logger as Test.Logger) as Lang.Boolean {
+        Support.fresh();
+        // Absent: not muted, so the notice shows.
+        Test.assert(Prefs.accept(Support.payloadOf(Rez.JsonData.fixture_config), NOW));
+        Test.assert(!Prefs.muteOneWayNotice());
+        Test.assert(Prefs.accept(Support.payloadOf(Rez.JsonData.fixture_config_mute_one_way), NOW));
+        Test.assert(Prefs.muteOneWayNotice());
+        // Anything but a boolean: the whole config is refused, and the one it had stays.
+        var bad = Support.payloadOf(Rez.JsonData.fixture_config_mute_one_way);
+        var bolus = bad["bolus"] as Lang.Dictionary;
+        bolus["muteOneWayNotice"] = 1;
+        Test.assert(!Prefs.accept(bad, NOW + 1));
+        Test.assert(Prefs.muteOneWayNotice());
+        return true;
+    }
+
+    (:test)
     function historyReads(logger as Test.Logger) as Lang.Boolean {
         Support.fresh();
         Test.assert(History.accept(Support.payloadOf(Rez.JsonData.fixture_history)));

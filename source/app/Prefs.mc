@@ -89,6 +89,13 @@ module Prefs {
             if (auto == null) { return null; }
             out["autoAcceptCorrection"] = auto;
         }
+        // Absent: not muted, so the watch says when the phone can't hear it. Anything but a boolean is
+        // refused, as on the phone.
+        if (bolus.hasKey("muteOneWayNotice")) {
+            var mute = Wire.bool(bolus, "muteOneWayNotice");
+            if (mute == null) { return null; }
+            out["muteOneWayNotice"] = mute;
+        }
         // Absent: dots. A style this watch doesn't know is refused, as any unknown token is.
         if (glucose.hasKey("plotStyle")) {
             var style = Wire.token(glucose, "plotStyle", ["dots", "line"]);
@@ -262,6 +269,12 @@ module Prefs {
     // user, so the watch doesn't ask it. Off until a config says otherwise.
     function autoAcceptCorrection() as Lang.Boolean {
         var v = value("autoAcceptCorrection");
+        return (v instanceof Lang.Boolean) ? v as Lang.Boolean : false;
+    }
+    // The phone's Say when the phone can't hear the watch, off: the watch neither says so nor holds its
+    // bolus button for it. Shown until a config says otherwise.
+    function muteOneWayNotice() as Lang.Boolean {
+        var v = value("muteOneWayNotice");
         return (v instanceof Lang.Boolean) ? v as Lang.Boolean : false;
     }
 }
