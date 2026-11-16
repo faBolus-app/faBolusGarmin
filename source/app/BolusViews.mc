@@ -926,6 +926,8 @@ class HoldView extends Ui.View {
         var delivered = BolusFlow.deliveredMU();
         var line = BolusFlow.text();
         if (delivered != null) { line = Display.units(delivered) + " U delivered"; }
+        var oneWay = BolusFlow.oneWayHint(now);
+        if (oneWay != null) { line = oneWay; }
         if (BolusFlow.cancelSlow(now)) { line = BolusFlow.CANCEL_HINT; }
         if (line != null) {
             dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);

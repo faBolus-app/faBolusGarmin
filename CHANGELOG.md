@@ -26,6 +26,15 @@ wrong tree.
 - The phone's "Bolus limits not checked" confirmation (the pump's hourly bolus count couldn't be read) is
   asked on the watch, with the phone's words, and confirmed as its own kind, never as the max hourly bolus
   confirmation.
+- The watch notices when the phone's messages arrive but its own don't reach the phone, which a sideload
+  once left until the watch was restarted. Four asks the phone always answers (a bolus request and its
+  resends, or a poll asking for the chart) going unanswered, while the phone's statuses keep coming 45 s
+  and more after the first, means the phone can't hear the watch. With bolusing on, the bolus button then
+  says "Phone can't hear watch. Restart watch.", and a request on its way says to restart the watch (and,
+  once there's no answer, to check the pump). Any answer from the phone clears it. A poll keeps asking for
+  the chart until it arrives, so a lost one is asked again. The phone's Settings → Watch → Say when the
+  phone can't hear the watch, off, mutes the notice and the hold (the config's `bolus.muteOneWayNotice`;
+  absent shows it).
 
 ### Changed
 

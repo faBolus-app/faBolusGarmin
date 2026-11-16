@@ -53,6 +53,8 @@ module Inbound {
         // A dismiss result carries no sentAt either.
         if (kind == Wire.HISTORY || kind == Wire.OUTCOME) { Link.heardAt(sentTime(p, now), now); }
         if (kind == Wire.HISTORY) {
+            // An answer to the watch's ask, whether or not it reads.
+            Link.historyArrived();
             History.accept(p);
         } else if (kind == Wire.OUTCOME) {
             BolusFlow.onOutcome(p, now);
