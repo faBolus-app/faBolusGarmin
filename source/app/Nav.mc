@@ -45,13 +45,21 @@ module Nav {
         return true;
     }
 
+    // Cancel, from the main screen's button or the request screen's: sends the cancel and says what it may
+    // do. The phone hasn't answered lately: ask it now, so the button shows what it says.
+    function pressCancel(now as Lang.Number) as Void {
+        var sent = BolusFlow.cancel(now);
+        Toast.show(BolusFlow.cancelToast(sent, now));
+        if (!Link.phoneLive(now)) { Controller.askPhone(now); }
+    }
+
     // The bolus button. With a bolus to cancel it cancels; otherwise it opens entry when a bolus may start.
     function pressBolus() as Void { pressBolusAt(Status.now()); }
 
     // Separate from pressBolus so tests can drive the clock.
     function pressBolusAt(now as Lang.Number) as Void {
         if (BolusFlow.canCancel()) {
-            Toast.show(BolusFlow.cancel(now) ? "Cancel sent" : "Not sent — try again");
+            pressCancel(now);
             Ui.requestUpdate();
             return;
         }

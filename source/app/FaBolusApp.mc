@@ -76,7 +76,7 @@ module Controller {
         Prefs.load(Status.revision());
         History.load();
         BolusFlow.load(Status.now());
-        Comm.registerForPhoneAppMessages(new Lang.Method(Controller, :phoneMessage));
+        registerForMessages();
         registerBackground();
         BgComplication.publish(Status.now());
         Link.wantHistory();
@@ -96,6 +96,16 @@ module Controller {
     function initialView() as [Ui.Views, Ui.InputDelegates] {
         _foreground = true;
         return Nav.initialView();
+    }
+
+    // The background service registers its own listener to hear the answer to its poll, and a service the
+    // system ends without exiting never tells the app it ran. Registering again replaces the listener, and
+    // costs nothing if it was still in place, so the app does it with every poll and whenever the service
+    // has run, and a missed registration can't leave it hearing nothing. Counted for tests.
+    var registrations as Lang.Number = 0;
+    function registerForMessages() as Void {
+        registrations += 1;
+        Comm.registerForPhoneAppMessages(new Lang.Method(Controller, :phoneMessage));
     }
 
     // Every five minutes, and whenever the phone sends a message while the app is closed. Registering
@@ -132,6 +142,7 @@ module Controller {
         // A clock stepped back would hold the next poll until it caught up.
         if (_nextPollAt - now > Link.MAX_POLL_MS / 1000 + 4) { _nextPollAt = now; }
         if (now >= _nextPollAt && Link.pollDue(now)) {
+            registerForMessages();
             Link.poll(now);
             _nextPollAt = now + (Link.delayMs() + Link.jitterMs()) / 1000;
         }
@@ -147,6 +158,11 @@ module Controller {
     // True when a poll went, or one is already waiting for its answer (it asks for the reading next time).
     function checkPhone(now as Lang.Number) as Lang.Boolean {
         Link.wantFreshGlucose();
+        return askPhone(now);
+    }
+
+    // Asks the phone now rather than at the next poll. True when a poll went, or one is already waiting.
+    function askPhone(now as Lang.Number) as Lang.Boolean {
         if (Link.outstanding()) { return true; }
         var sent = Link.poll(now);
         _nextPollAt = now + (Link.delayMs() + Link.jitterMs()) / 1000;
@@ -155,9 +171,11 @@ module Controller {
 
     function phoneMessage(msg as Comm.PhoneAppMessage) as Void { phoneData(msg.data); }
 
-    // Separate from phoneMessage so tests can drive it: a PhoneAppMessage can't be built in a test.
-    function phoneData(data as Lang.Object?) as Void {
-        var now = Status.now();
+    function phoneData(data as Lang.Object?) as Void { phoneDataAt(data, Status.now()); }
+
+    // Separate from phoneMessage so tests can drive it and the clock: a PhoneAppMessage can't be built in a
+    // test.
+    function phoneDataAt(data as Lang.Object?, now as Lang.Number) as Void {
         var kind = Inbound.handle(data, now);
         if (kind == Wire.STATUS || kind == Wire.CONFIG) {
             _lastPublishAt = now;
@@ -184,10 +202,12 @@ module Controller {
         _phoneAway = false;
     }
 
-    // The background service saved a status or config: load it.
+    // The background service saved a status or config: load it. The service registered its own listener
+    // for the answer to its poll, so the app registers again.
     function backgroundData() as Void {
         Status.load();
         Prefs.load(Status.revision());
+        registerForMessages();
         BgComplication.publish(Status.now());
         announce();
         Ui.requestUpdate();
@@ -195,10 +215,12 @@ module Controller {
 
     // Shows each alert the app hasn't shown yet, once, and vibrates for those the phone says to.
     function announce() as Void {
-        if (!_foreground) { return; }
         var list = Alerts.list();
-        var seen = Alerts.loadSet(Store.ALERTS_SEEN);
-        var fresh = Alerts.unseen(list, seen);
+        // Noted even in the background: an alert the service notified that has left the list is announced
+        // again when it comes back.
+        Alerts.noteGone(list);
+        if (!_foreground) { return; }
+        var fresh = Alerts.toAnnounce(list);
         var shown = [] as Lang.Array;
         if (fresh.size() > 0) {
             // One the background service already notified isn't vibrated for again.
@@ -211,7 +233,7 @@ module Controller {
                 if (pushAlert(a)) { shown.add(Alerts.idOf(a)); }
             }
         }
-        Store.save(Store.ALERTS_SEEN, Alerts.reconciled(list, seen, shown));
+        Alerts.recordShown(list, shown, Status.now());
     }
 
     // False when the card couldn't be shown, so the alert stays unseen and is shown next time.

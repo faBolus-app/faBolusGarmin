@@ -98,12 +98,13 @@ module Calculator {
     const LOW_GLUCOSE = 70;
 
     // Why the dose is what it is, as the phone says it (faBolusCore CalculatorMessage), in a few words; null
-    // for nothing to say. Under 70, what the low did to the dose of `doseMU` for `carbs`: "lowNoCarbs",
+    // for nothing to say. Under 70, what the low did to the total of `doseMU` for `carbs`: "lowNoCarbs",
     // "lowNone" (no bolus) or "lowReduced". "reduced": below target, the dose reduced to nothing; "iobLow":
     // on target with IOB, or IOB that may take the glucose under 70; "iobCovers": above target, IOB more
-    // than the correction. As Tandem's app chooses them.
+    // than the correction. As Tandem's app chooses them. `doseMU` is the calculator's total before it's
+    // rounded down to the pump's step, as the phone judges it: a total under one step still isn't "no bolus".
     function message(glucose as Lang.Number?, isf as Lang.Number, target as Lang.Number, iobMU as Lang.Number,
-                     carbs as Lang.Number, doseMU as Lang.Number) as Lang.String? {
+                     carbs as Lang.Number, doseMU as Lang.Number or Lang.Double) as Lang.String? {
         if (glucose == null || !correctable(glucose) || isf <= 0 || target < TARGET_MIN || target > TARGET_MAX) {
             return null;
         }

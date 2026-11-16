@@ -18,7 +18,17 @@ module Store {
     const CONFIG = "v2.config";
     const HISTORY = "v2.history";
     const BOLUS = "v2.bolus";
+    // Read by the background service too, so it doesn't post an alert the app has shown.
+    (:background)
     const ALERTS_SEEN = "v2.alertsSeen";
+    // When the app last showed each alert in ALERTS_SEEN (id => epoch seconds), so the service can tell that
+    // showing apart from a later one.
+    (:background)
+    const ALERTS_SHOWN_AT = "v2.alertsShownAt";
+    // How many times the app has seen each alert the background service notified leave the list since
+    // (id => count): a notification stands only for the time an alert was up when it was posted.
+    (:background)
+    const ALERTS_GONE = "v2.alertsGone";
     const INTRO_SHOWN = "v2.introShown";
     const REQUEST_SEQ = "v2.requestSeq";
 
@@ -29,6 +39,14 @@ module Store {
     const BG_CONFIG = "v2.bg.config";
     (:background)
     const BG_NOTIFIED = "v2.bg.notified";
+    // For each alert in BG_NOTIFIED, its ALERTS_GONE count when it was posted (id => count).
+    (:background)
+    const BG_NOTIFIED_AT = "v2.bg.notifiedAt";
+    // For each alert in ALERTS_SEEN the service has seen leave the list since, the ALERTS_SHOWN_AT of the
+    // showing it outlived (id => epoch seconds): that showing no longer counts, though the app's set, kept up
+    // to date only while it's open, still names it.
+    (:background)
+    const BG_SHOWN_GONE = "v2.bg.shownGone";
 
     // The first launch of this version clears what the old version stored: none of its keys mean anything
     // to this one, and leaving them would keep its settings and alert history around. Only the app does
@@ -46,6 +64,13 @@ module Store {
     function record(key as Lang.String) as Lang.Dictionary? {
         var v = Storage.getValue(key);
         return (v instanceof Lang.Dictionary) ? v : null;
+    }
+
+    // A stored map: a dictionary, or empty for anything else.
+    (:background)
+    function map(key as Lang.String) as Lang.Dictionary {
+        var v = record(key);
+        return (v != null) ? v : {};
     }
 
     // The newer of two stored copies, by when this watch received each ("r").

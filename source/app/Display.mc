@@ -82,11 +82,21 @@ module Glucose {
         return a == null || a > Prefs.staleSeconds();
     }
 
+    // A reading whose age can't be told (the watch restarted with its clock behind the status's arrival) is
+    // shown as old, or hidden when the user hides old readings: it may be older than any delay.
     function isHidden(now as Lang.Number) as Lang.Boolean {
+        if (Status.glucose() == null) { return true; }
         var a = age(now);
-        if (a == null || Status.glucose() == null) { return true; }
         var delay = Prefs.hideDelaySeconds();
+        if (a == null) { return delay != null; }
         return delay != null && a > Prefs.staleSeconds() + delay;
+    }
+
+    // The reading's age in words: "old" when it can't be told, "" with no reading.
+    function ageText(now as Lang.Number) as Lang.String {
+        var a = age(now);
+        if (a == null) { return (Status.glucose() != null) ? "old" : ""; }
+        return Display.ago(a);
     }
 
     function text(now as Lang.Number) as Lang.String {

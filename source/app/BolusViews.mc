@@ -66,12 +66,17 @@ class BolusEntryView extends Ui.View {
         }
         var est = BolusFlow.estimate(now);
         if (est < 0) { return "Calculator unavailable"; }
+        // Both doses the question will offer, in its order: with the correction, then without; one over the
+        // limit is named as that. With the phone's Auto-accept on there's no question (correctionChoiceNeeded),
+        // and the dose is the corrected one.
+        var doses = Prefs.autoAcceptCorrection() ? null : BolusFlow.correctionDoses(now);
+        if (doses != null) { return previewDose(doses[0]) + " or " + previewDose(doses[1]); }
         if (est > BolusFlow.dialMax()) { return "Over the " + Display.units(BolusFlow.dialMax()) + " U limit"; }
-        // Both doses the question will offer, in its order: with the correction, then without.
-        if (BolusFlow.correctionChoiceNeeded(now)) {
-            return Display.units(est) + " U or " + Display.units(BolusFlow.estimateFrom(null)) + " U";
-        }
         return Display.units(est) + " U";
+    }
+
+    static function previewDose(mu as Lang.Number) as Lang.String {
+        return mu > BolusFlow.dialMax() ? "over limit" : Display.units(mu) + " U";
     }
 
     function onUpdate(dc as Gfx.Dc) as Void {
@@ -182,6 +187,7 @@ class BolusEntryDelegate extends Ui.BehaviorDelegate {
         var now = Status.now();
         // Asked again on every Deliver: an answer holds for the attempt it was given in.
         BolusFlow.declineCorrection = false;
+        BolusFlow.includeStale = false;
         if (BolusFlow.mode.equals("carbs")) {
             if (BolusFlow.staleChoiceNeeded(now)) {
                 var v = new StaleBolusView(now);
@@ -437,9 +443,12 @@ class CorrectionView extends Ui.View {
                 dc.setPenWidth(1);
             }
             var mx = r[0] + r[2] / 2;
-            dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+            var mu = (doses as Lang.Array<Lang.Number>)[i];
+            // A half over the limit can't be chosen: it says so in grey instead of a dose.
+            var over = mu > BolusFlow.dialMax();
+            dc.setColor(over ? Gfx.COLOR_LT_GRAY : Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
             dc.drawText(mx, r[1] + r[3] * 0.32, Gfx.FONT_XTINY, label(choices[i]), vc);
-            dc.drawText(mx, r[1] + r[3] * 0.66, Gfx.FONT_SMALL, doseText((doses as Lang.Array<Lang.Number>)[i]), vc);
+            dc.drawText(mx, r[1] + r[3] * 0.66, over ? Gfx.FONT_XTINY : Gfx.FONT_SMALL, over ? "Over limit" : doseText(mu), vc);
         }
         dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.825, Gfx.FONT_XTINY, Nav.isTouch() ? "BACK to cancel" : "UP/DOWN · START", vc);
@@ -497,11 +506,18 @@ class CorrectionDelegate extends Ui.BehaviorDelegate {
             Ui.popView(Ui.SLIDE_RIGHT);
             return true;
         }
-        if (!BolusFlow.correctionApplies(now)) { return choose("cancel"); }
+        // The question no longer applies (correctionApplies): back to the dose screen.
+        var doses = BolusFlow.correctionDoses(now);
+        if (doses == null) { return choose("cancel"); }
         // Doses that changed since the screen showed them aren't what the user aimed at: the change screen
         // shows instead, and nothing is armed.
         if (_view.noticeChange(Status.now()) || _view.changed) {
             Ui.requestUpdate();
+            return true;
+        }
+        // The half over the limit can't be sent; the question stays for the other.
+        if (doses[choice.equals("apply") ? 0 : 1] > BolusFlow.dialMax()) {
+            Toast.show("Over the " + Display.units(BolusFlow.dialMax()) + " U limit");
             return true;
         }
         BolusFlow.declineCorrection = choice.equals("carbsOnly");
@@ -579,7 +595,7 @@ class StaleBolusView extends Ui.View {
             } else {
                 dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
                 dc.drawText(cx, h * 0.44, Gfx.FONT_XTINY,
-                            g == null ? "No CGM" : "Stale CGM · " + Display.ago(Glucose.age(now)), vc);
+                            g == null ? "No CGM" : "Stale CGM · " + Glucose.ageText(now), vc);
             }
             dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
             // What it means for the dose, as the correction question's gone screen says it ("Carbs only now",
@@ -599,7 +615,7 @@ class StaleBolusView extends Ui.View {
         dc.drawText(cx, h * 0.185, Gfx.FONT_SMALL,
                     "BG " + (g != null ? Display.glucose(g, unit) : "--") + " " + Display.glucoseUnit(unit), vc);
         dc.setColor(Gfx.COLOR_YELLOW, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.285, Gfx.FONT_XTINY, "Stale CGM · " + Display.ago(Glucose.age(now)), vc);
+        dc.drawText(cx, h * 0.285, Gfx.FONT_XTINY, "Stale CGM · " + Glucose.ageText(now), vc);
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
         dc.drawText(cx, h * 0.37, Gfx.FONT_XTINY, "Include it?", vc);
         var list = choices();
@@ -1004,6 +1020,8 @@ class HoldDelegate extends Ui.BehaviorDelegate {
     // dose that came from the correction question goes back to it, to change the answer.
     function onBack() as Lang.Boolean {
         stop();
+        // Leaving the confirm: a yes to a stale reading was for this confirm only.
+        BolusFlow.includeStale = false;
         if (!_view.sent && BolusFlow.armedChoice() != null) {
             BolusFlow.declineCorrection = false;
             var c = new CorrectionView(Status.now());
@@ -1071,7 +1089,7 @@ class HoldDelegate extends Ui.BehaviorDelegate {
     }
 
     private function cancel() as Void {
-        Toast.show(BolusFlow.cancel(Status.now()) ? "Cancel sent" : "Not sent — try again");
+        Nav.pressCancel(Status.now());
         Ui.requestUpdate();
     }
 }

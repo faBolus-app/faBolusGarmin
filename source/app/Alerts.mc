@@ -9,7 +9,12 @@ using Toybox.System;
 //
 // Each alert is announced once. The app keeps which ones it has shown (ALERTS_SEEN) and the background
 // service which ones it has notified (BG_NOTIFIED); an alert that leaves the list leaves the set too, so
-// one that comes back is announced again.
+// one that comes back is announced again. Each process updates its own set only when it runs, so each also
+// notes what the other's set no longer means: the service, which showing of an alert by the app it saw the
+// alert outlive (BG_SHOWN_GONE, against ALERTS_SHOWN_AT, so a later showing still counts); the app, an alert
+// the service notified that left the list while the app was open (ALERTS_GONE, counted, so a notification
+// posted after it left still stands). A returning alert then buzzes once, whichever process sees it leave
+// and come back.
 module Alerts {
     const MAX_ANNOUNCED = 4;
 
@@ -41,6 +46,157 @@ module Alerts {
             if (a instanceof Lang.Dictionary && !Wire.contains(seen, idOf(a))) { out.add(a); }
         }
         return out;
+    }
+
+    // The alerts the background service should post: new ones the phone says should vibrate, not one the
+    // open app has already shown (`shown`), which buzzed then.
+    (:background)
+    function toPost(list as Lang.Array, seen as Lang.Array, shown as Lang.Array) as Lang.Array {
+        var fresh = unseen(list, seen);
+        var out = [] as Lang.Array;
+        for (var i = 0; i < fresh.size(); i += 1) {
+            var a = fresh[i] as Lang.Dictionary;
+            if (Wire.text(a, "intent", "").equals("alert") && !Wire.contains(shown, idOf(a))) { out.add(a); }
+        }
+        return out;
+    }
+
+    // A stored stamp for `id`, or `missing`. A shown alert saved before stamps were kept reads as 0, and
+    // one the service hasn't seen leave as -1, so the two never match by accident.
+    (:background)
+    function stampOf(d as Lang.Dictionary, id as Lang.String, missing as Lang.Number) as Lang.Number {
+        var v = d[id];
+        return (v instanceof Lang.Number) ? v : missing;
+    }
+
+    // The alerts the app has shown whose showing still counts: the service hasn't seen them leave the list
+    // since. Read from storage by both processes.
+    (:background)
+    function appShown() as Lang.Array {
+        var seen = loadSet(Store.ALERTS_SEEN);
+        var at = Store.map(Store.ALERTS_SHOWN_AT);
+        var gone = Store.map(Store.BG_SHOWN_GONE);
+        var out = [] as Lang.Array;
+        for (var i = 0; i < seen.size(); i += 1) {
+            var id = seen[i];
+            if (id instanceof Lang.String && stampOf(at, id, 0) != stampOf(gone, id, -1)) { out.add(id); }
+        }
+        return out;
+    }
+
+    // The service's part: an alert the app has shown that isn't in the list now has outlived that showing.
+    // The mark stays until the app shows it again (a new stamp) or drops it from its set.
+    (:background)
+    function noteShownGone(list as Lang.Array) as Void {
+        var active = ids(list);
+        var seen = loadSet(Store.ALERTS_SEEN);
+        var at = Store.map(Store.ALERTS_SHOWN_AT);
+        var gone = Store.map(Store.BG_SHOWN_GONE);
+        var out = {} as Lang.Dictionary;
+        for (var i = 0; i < seen.size(); i += 1) {
+            var id = seen[i];
+            if (!(id instanceof Lang.String)) { continue; }
+            if (!Wire.contains(active, id)) {
+                out[id] = stampOf(at, id, 0);
+            } else if (gone.hasKey(id)) {
+                out[id] = gone[id];
+            }
+        }
+        if (!sameMap(out, gone)) { Store.save(Store.BG_SHOWN_GONE, out); }
+    }
+
+    // The same keys with the same values: the service runs every few minutes, and an unchanged map isn't
+    // written again.
+    (:background)
+    function sameMap(a as Lang.Dictionary, b as Lang.Dictionary) as Lang.Boolean {
+        if (a.size() != b.size()) { return false; }
+        var keys = a.keys();
+        for (var i = 0; i < keys.size(); i += 1) {
+            if (!b.hasKey(keys[i]) || b[keys[i]] != a[keys[i]]) { return false; }
+        }
+        return true;
+    }
+
+    // The same ids, in any order.
+    (:background)
+    function sameSet(a as Lang.Array, b as Lang.Array) as Lang.Boolean {
+        if (a.size() != b.size()) { return false; }
+        for (var i = 0; i < a.size(); i += 1) {
+            var e = a[i];
+            if (!(e instanceof Lang.String) || !Wire.contains(b, e)) { return false; }
+        }
+        return true;
+    }
+
+    // The app's part: the alerts to show now, those not shown since they last came up.
+    function toAnnounce(list as Lang.Array) as Lang.Array { return unseen(list, appShown()); }
+
+    // The app's part: keeps as shown what still counts and is in the list, and the ids just shown (`shown`),
+    // each stamped `now`, a stamp unlike the one it had and the one the service holds for it.
+    function recordShown(list as Lang.Array, shown as Lang.Array, now as Lang.Number) as Void {
+        var seen = reconciled(list, appShown(), shown);
+        var at = Store.map(Store.ALERTS_SHOWN_AT);
+        var gone = Store.map(Store.BG_SHOWN_GONE);
+        var out = {} as Lang.Dictionary;
+        for (var i = 0; i < seen.size(); i += 1) {
+            var id = seen[i] as Lang.String;
+            var s = stampOf(at, id, 0);
+            if (Wire.contains(shown, id)) {
+                var old = s;
+                s = now;
+                while (s == old || s == stampOf(gone, id, -1)) { s += 1; }
+            }
+            out[id] = s;
+        }
+        Store.save(Store.ALERTS_SEEN, seen);
+        Store.save(Store.ALERTS_SHOWN_AT, out);
+    }
+
+    // How many times the app has seen alert `id` leave the list while it stood notified.
+    (:background)
+    function goneCount(gone as Lang.Dictionary, id as Lang.String) as Lang.Number {
+        var n = gone[id];
+        return (n instanceof Lang.Number) ? n : 0;
+    }
+
+    // The alerts the background service notified whose notification still stands: the app hasn't seen them
+    // leave the list since it was posted. Read from storage by both processes.
+    (:background)
+    function notifiedStanding() as Lang.Array {
+        var notified = loadSet(Store.BG_NOTIFIED);
+        var at = Store.map(Store.BG_NOTIFIED_AT);
+        var gone = Store.map(Store.ALERTS_GONE);
+        var out = [] as Lang.Array;
+        for (var i = 0; i < notified.size(); i += 1) {
+            var id = notified[i];
+            if (id instanceof Lang.String && goneCount(gone, id) == goneCount(at, id)) { out.add(id); }
+        }
+        return out;
+    }
+
+    // The app's part: an alert whose notification stands and that isn't in the list now has left it, so
+    // when it comes back it is announced, and buzzes, again. Counts for alerts the service no longer has
+    // notified are dropped; the service records the count when it posts again.
+    function noteGone(list as Lang.Array) as Void {
+        var active = ids(list);
+        var standing = notifiedStanding();
+        var notified = loadSet(Store.BG_NOTIFIED);
+        var gone = Store.map(Store.ALERTS_GONE);
+        var out = {} as Lang.Dictionary;
+        var changed = false;
+        var keys = gone.keys();
+        for (var i = 0; i < keys.size(); i += 1) {
+            var id = keys[i];
+            if (id instanceof Lang.String && Wire.contains(notified, id)) { out[id] = goneCount(gone, id); } else { changed = true; }
+        }
+        for (var i = 0; i < standing.size(); i += 1) {
+            var id = standing[i] as Lang.String;
+            if (!Wire.contains(active, id)) {
+                out[id] = goneCount(out, id) + 1;
+                changed = true;
+            }
+        }
+        if (changed) { Store.save(Store.ALERTS_GONE, out); }
     }
 
     // What to keep as seen: what was seen and is still active, plus what was just announced.
@@ -107,7 +263,7 @@ module Alerts {
 
     function dismissable(a as Lang.Dictionary) as Lang.Boolean { return Wire.bool(a, "dismissable") == true; }
 
-    // Sends the dismiss. False when the phone isn't connected; nothing is hidden then.
+    // Sends the dismiss. False when the phone isn't reachable or the transmit throws; nothing is hidden then.
     function dismiss(alertId as Lang.String, now as Lang.Number) as Lang.Boolean {
         var id = Link.newRoutineId(now);
         var sent = Link.transmit(Wire.dismiss(id, alertId), new SendListener(new Lang.Method(Alerts, :sendFailed), id), now);
@@ -168,9 +324,9 @@ module Alerts {
         _clearedAt = keepAt;
     }
 
-    // Of `fresh`, those the background service hasn't already notified: they vibrate when the app shows
-    // them, and the others are only shown.
-    function toVibrate(fresh as Lang.Array) as Lang.Array { return unseen(fresh, loadSet(Store.BG_NOTIFIED)); }
+    // Of `fresh`, those the background service hasn't already notified, or that have left the list and come
+    // back since it did: they vibrate when the app shows them, and the others are only shown.
+    function toVibrate(fresh as Lang.Array) as Lang.Array { return unseen(fresh, notifiedStanding()); }
 
     // The list as shown: the status's, less what the pump has just confirmed cleared.
     function shown() as Lang.Array {

@@ -184,8 +184,19 @@ module ResyncTest {
         Test.assert(Link.phoneTooOld());
         Support.eq(BolusFlow.startBlock(NOW), "Update faBolus on phone");
         Support.eq(Display.linkLine(NOW), "Update faBolus on phone");
-        // A version 2 message clears it.
-        Controller.phoneData(Support.message("status", Support.payloadOf(Rez.JsonData.fixture_status)));
+        // A version 2 message, sent just now, clears it.
+        Controller.phoneDataAt(Support.message("status", Support.payloadOf(Rez.JsonData.fixture_status)), NOW);
+        Test.assert(!Link.phoneTooOld());
+        // So does one that doesn't count as hearing from the phone (a config, which has no send time, or a
+        // chart sent long ago): it still says the phone speaks this version.
+        Controller.phoneData(Support.fixture(Rez.JsonData.fixture_v1_statusRead_from_phone));
+        Test.assert(Link.phoneTooOld());
+        Controller.phoneDataAt(Support.message("config", Support.payloadOf(Rez.JsonData.fixture_config)), NOW + 1);
+        Test.assert(!Link.phoneTooOld());
+        Controller.phoneData(Support.fixture(Rez.JsonData.fixture_v1_statusRead_from_phone));
+        var history = Support.payloadOf(Rez.JsonData.fixture_history);
+        history["sentAt"] = NOW - 3600;
+        Controller.phoneDataAt(Support.message("history", history), NOW + 2);
         Test.assert(!Link.phoneTooOld());
         return true;
     }

@@ -66,7 +66,7 @@ module FaultTest {
         // A second press while that poll waits for its answer sends nothing more.
         Nav.pressBolusAt(t + 1);
         Support.eq(Support.sentKinds(), ["poll"]);
-        Controller.phoneData(Support.message("status", Support.status({ "sentAt" => t + 2 })));
+        Controller.phoneDataAt(Support.message("status", Support.status({ "sentAt" => t + 2 })), t + 2);
         Test.assert(BolusFlow.canStart(t + 2));
         // The entry asks again at once, for a fresh reading.
         Test.assert(Controller.checkPhone(t + 3));
@@ -135,7 +135,7 @@ module FaultTest {
         Support.eq(Link.testSent.size(), before + 1);
         Support.eq(Support.sentKinds()[before], "poll");
         // The phone answers, and the polls are back to their usual pace.
-        Controller.phoneData(Support.message("status", Support.status({ "sentAt" => t })));
+        Controller.phoneDataAt(Support.message("status", Support.status({ "sentAt" => t })), t);
         Support.eq(Link.delayMs(), Link.POLL_MS);
         return true;
     }
@@ -500,7 +500,8 @@ module FaultTest {
         Support.eq(Status.elapsedFrom(30, null, 0), 30);
         Support.eq(Status.elapsedFrom(-600, 1000, 61000), 60);
         Support.eq(Status.elapsedFrom(90, 1000, 61000), 90);
-        Support.eq(Status.elapsedFrom(-5, null, 0), 0);
+        // Behind the arrival with no uptime to go by: how long it has been can't be told.
+        Support.eq(Status.elapsedFrom(-5, null, 0), null);
         // A timer that wrapped reads negative and is ignored.
         Support.eq(Status.elapsedFrom(20, 2000000000, 5), 20);
         return true;
@@ -618,17 +619,16 @@ module FaultTest {
         return true;
     }
 
-    // A status sent before the one held, arriving just after it, is a late copy and changes nothing; a
-    // phone whose clock moved back is believed once a minute has passed.
+    // A status sent before the one held is a late or held copy and changes nothing, however late it arrives.
     (:test)
     function aLateStatusDoesntRollTheWatchBack(logger as Test.Logger) as Lang.Boolean {
         Support.connected();
         Test.assert(Status.accept(Support.status({ "sentAt" => NOW + 20,
             "glucose" => { "mgdl" => 150, "at" => NOW + 10, "backup" => false } }), NOW + 20));
         Test.assert(!Status.accept(Support.payloadOf(Rez.JsonData.fixture_status), NOW + 25));
+        Test.assert(!Status.accept(Support.payloadOf(Rez.JsonData.fixture_status), NOW + 80));
+        Test.assert(!Status.accept(Support.payloadOf(Rez.JsonData.fixture_status), NOW + 3600));
         Support.eq(Status.glucose(), 150);
-        Test.assert(Status.accept(Support.payloadOf(Rez.JsonData.fixture_status), NOW + 20 + Status.REORDER_SEC));
-        Support.eq(Status.glucose(), 142);
         return true;
     }
 }

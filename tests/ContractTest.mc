@@ -236,6 +236,43 @@ module ContractTest {
         return true;
     }
 
+    // The phone couldn't check the pump's bolus limits for this dose: the watch asks it with the phone's
+    // words, and the new request names it as its own kind. It is never sent as maxHourlyBolus, a different
+    // question the phone matches by kind, and a list asking both keeps both apart.
+    (:test)
+    function limitsNotCheckedIsConfirmedAsItsOwnKind(logger as Test.Logger) as Lang.Boolean {
+        Support.connected();
+        BolusFlow.mode = "units";
+        BolusFlow.unitsMU = 2000;
+        Test.assert(BolusFlow.arm(NOW));
+        Test.assert(BolusFlow.send(NOW));
+        var first = BolusFlow.requestId() as Lang.String;
+        var p = Support.payloadOf(Rez.JsonData.fixture_bolusOutcome_confirm_limits_not_checked);
+        p["requestId"] = first;
+        Test.assert(BolusFlow.onOutcome(p, NOW + 2));
+        Support.eq(BolusFlow.state(), "failed");
+        Support.eq(BolusFlow.headline(NOW + 2), "Confirm");
+        Support.eq(BolusFlow.text(), "Bolus limits not checked: the pump's hourly count couldn't be read.");
+        Test.assert(BolusFlow.confirmable(NOW + 2));
+        Test.assert(BolusFlow.armConfirmed(NOW + 3));
+        Test.assert(Support.same(BolusFlow.armedConfirmed(), ["bolusLimitsNotChecked"]));
+        Test.assert(BolusFlow.send(NOW + 4));
+        var sent = Wire.payload(Support.lastSent() as Lang.Dictionary);
+        Test.assert(!(sent["requestId"] as Lang.String).equals(first));
+        Support.eq(sent["mU"] as Lang.Object?, 2000);
+        Test.assert(Support.same(sent["confirmed"] as Lang.Object?, ["bolusLimitsNotChecked"]));
+        // Both asked: both confirmed, each as itself.
+        var second = BolusFlow.requestId() as Lang.String;
+        p["requestId"] = second;
+        p["confirm"] = ["maxHourlyBolus", "bolusLimitsNotChecked"];
+        Test.assert(BolusFlow.onOutcome(p, NOW + 6));
+        Test.assert(BolusFlow.armConfirmed(NOW + 7));
+        Test.assert(BolusFlow.send(NOW + 8));
+        sent = Wire.payload(Support.lastSent() as Lang.Dictionary);
+        Test.assert(Support.same(sent["confirmed"] as Lang.Object?, ["maxHourlyBolus", "bolusLimitsNotChecked"]));
+        return true;
+    }
+
     // Too late, or a request that went through, can't be confirmed again; a confirm list the phone can't
     // send (unknown or repeated tokens, or on a delivered request) is ignored.
     (:test)
@@ -314,6 +351,8 @@ module ContractTest {
         Test.assert(Support.same(Wire.bolusCalculator("1793534390-15-121700", NOW - 10, null, 3000, 3800, 142, false, [],
                                                       false),
                                  Support.fixture(Rez.JsonData.fixture_bolus_insulin_food)));
+        Test.assert(Support.same(Wire.bolusUnits("1793534390-16-121720", NOW - 10, 2000, ["bolusLimitsNotChecked"]),
+                                 Support.fixture(Rez.JsonData.fixture_bolus_units_limits_not_checked_confirmed)));
         Test.assert(Support.same(Wire.cancel("1793534399-11-121000", "1793534390-7-118220"),
                                  Support.fixture(Rez.JsonData.fixture_cancel)));
         Test.assert(Support.same(Wire.dismiss("1793534395-r3-119001", "pump.alert.2"),

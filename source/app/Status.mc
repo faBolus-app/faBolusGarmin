@@ -4,19 +4,27 @@ using Toybox.Time;
 
 // The phone's latest status: every live value with the time it was measured, by the phone's clock.
 //
-// A value's age is the phone's view of it when the status was sent (sentAt - at) plus the time since the
-// status arrived on this watch, so a difference between the two clocks never makes a value look fresher
-// than it is. A value missing from the status, or one that didn't read, is absent here, never zero.
+// A value's age is the older of two estimates, so neither clock can make a value look fresher than it is:
+// the phone's view of it when the status was sent (sentAt - at) plus the time since the status arrived,
+// which holds whatever the difference between the two clocks; and the watch's clock less `at`, which holds
+// however long Connect IQ kept the message before handing it over (it holds one while the app is closed and
+// hands it over when the app registers). The second assumes the clocks agree, as they do when the watch
+// takes its time from the phone; a watch set fast shows values older by that much, the safe direction. A
+// value missing from the status, or one that didn't read, is absent here, never zero.
 module Status {
     (:background, :glance)
     var _p as Lang.Dictionary? = null;
     // When this watch received it (epoch seconds, the watch's clock).
     (:background, :glance)
     var _r as Lang.Number = 0;
-    // When it arrived by this watch's uptime (System.getTimer(), ms), for a status received in this process;
-    // null for one loaded from storage. The wall clock can be stepped back; uptime can't.
+    // When it arrived by this watch's uptime (System.getTimer(), ms); null when that isn't known (saved before
+    // the watch last restarted). The wall clock can be stepped back; uptime can't.
     (:background, :glance)
     var _rMs as Lang.Number? = null;
+    // _rMs came from storage. Uptime starts again from zero when the watch restarts and can pass the stored
+    // stamp, so a stored one is used only to make a value older, never as the only clock (elapsed).
+    (:background, :glance)
+    var _rMsStored as Lang.Boolean = false;
     // The watch-minus-phone clock difference each recent status showed, its time in transit included.
     (:background)
     var _offsets as Lang.Array<Lang.Number> = [] as Lang.Array<Lang.Number>;
@@ -39,26 +47,44 @@ module Status {
     (:background)
     const MAX_ALERTS = 32;
 
-    // How long after a status one sent before it is still taken as late rather than as newer: past this, a
-    // lower sentAt means the phone's clock moved back, and the watch mustn't ignore it for good.
-    (:background)
-    const REORDER_SEC = 60;
+    // How far behind the watch's clock a message's sentAt may be and still count as sent just now: time in
+    // transit, and the clocks' small disagreement. Further behind, it was held on its way here. Every
+    // allowance for the difference between the clocks is capped at this.
+    (:background, :glance)
+    const CLOCK_SEC = 30;
 
     // Takes a status payload. Returns false, changing nothing, when it lacks what every status has, or
-    // when it was sent before the one held and arrived soon after it (a late or reordered message); a
-    // value inside it that doesn't read is left out and the rest is kept.
+    // when it was sent before the one held and was held on its way here (a late or reordered copy), however
+    // late it arrives; a value inside it that doesn't read is left out and the rest is kept. One sent before
+    // the one held but current by the watch's clock is taken when the one held was sent more than CLOCK_SEC
+    // ahead of the watch's clock: the phone's clock was ahead and has been put right. Decided from the status
+    // held, which the background service loads from storage, so it holds in each of its fresh processes.
     (:background)
     function accept(p as Lang.Dictionary, receivedAt as Lang.Number) as Lang.Boolean {
         var clean = cleaned(p);
         if (clean == null) { return false; }
         var sent = clean["sentAt"] as Lang.Number;
-        if (_p != null && sent < sentAt() && receivedAt - _r < REORDER_SEC) { return false; }
+        if (_p != null && sent < sentAt()
+            && (receivedAt - sent > CLOCK_SEC || sentAt() - receivedAt <= CLOCK_SEC)) {
+            return false;
+        }
         _p = clean;
         _r = receivedAt;
         _rMs = System.getTimer();
+        _rMsStored = false;
         _offsets.add(receivedAt - sent);
         if (_offsets.size() > MAX_OFFSETS) { _offsets = _offsets.slice(1, null); }
         return true;
+    }
+
+    // When a message with this sentAt, received now, counts as hearing from the phone: when the phone sent it,
+    // allowing CLOCK_SEC for transit and the clocks' disagreement, and never later than now. A message
+    // Connect IQ held is then as old as it is, and doesn't make the phone count as answering. Null with no
+    // sentAt (a config, a dismiss result): when it was sent can't be told.
+    function heardTime(sent as Lang.Number?, now as Lang.Number) as Lang.Number? {
+        if (sent == null) { return null; }
+        var at = sent + CLOCK_SEC;
+        return (at < now) ? at : now;
     }
 
     (:background)
@@ -231,24 +257,55 @@ module Status {
 
     // MARK: Storage. The app saves to STATUS, the background service to BG_STATUS; loading takes the newer.
 
+    // Saved with when it arrived by both clocks, so a process that loads it ages it by uptime too.
     (:background)
     function save(key as Lang.String) as Void {
         var p = _p;
-        if (p != null) { Store.save(key, { "p" => p, "r" => _r }); }
+        if (p == null) { return; }
+        var rec = { "p" => p, "r" => _r } as Lang.Dictionary;
+        var ms = _rMs;
+        if (ms != null) { rec["t"] = ms; }
+        Store.save(key, rec);
     }
 
+    // Takes the stored copy the phone sent last, as near as the watch can tell, unless the one held was sent
+    // later: a held message arrives late but was sent early, so when it arrived doesn't say which is newer.
     (:background, :glance)
     function load() as Void {
-        var rec = Store.newer(Store.record(Store.STATUS), Store.record(Store.BG_STATUS));
+        var a = Store.record(Store.STATUS);
+        var b = Store.record(Store.BG_STATUS);
+        var rec = (b != null && (a == null || recordSentBy(b) > recordSentBy(a))) ? b : a;
         if (rec == null) { return; }
         var p = rec["p"];
         var r = rec["r"];
-        if (p instanceof Lang.Dictionary && r instanceof Lang.Number && r >= _r) {
-            // Another process's copy: when it arrived by this process's uptime isn't known.
-            if (r > _r) { _rMs = null; }
-            _p = p;
-            _r = r;
-        }
+        if (!(p instanceof Lang.Dictionary) || !(r instanceof Lang.Number)) { return; }
+        var v = p["sentAt"];
+        if (!(v instanceof Lang.Number)) { return; }
+        // The copy held already, or one the phone sent before it.
+        if (_p != null && sentBy(v, r) <= sentBy(sentAt(), _r)) { return; }
+        _p = p;
+        _r = r;
+        // The uptime it arrived at counts while uptime hasn't restarted since (it starts at zero when the
+        // watch boots); otherwise only the wall clock can say how long ago that was.
+        var t = rec["t"];
+        _rMs = (t instanceof Lang.Number && System.getTimer() >= t) ? t : null;
+        _rMsStored = true;
+    }
+
+    // When the phone sent a message, by the watch's clock as near as it can tell: its sentAt, or when it
+    // arrived if that's earlier (the phone's clock ahead). A held message's is long before it arrived.
+    (:background, :glance)
+    function sentBy(sent as Lang.Number, receivedAt as Lang.Number) as Lang.Number {
+        return (sent < receivedAt) ? sent : receivedAt;
+    }
+
+    (:background, :glance)
+    function recordSentBy(rec as Lang.Dictionary) as Lang.Number {
+        var p = rec["p"];
+        var r = rec["r"];
+        var v = (p instanceof Lang.Dictionary) ? p["sentAt"] : null;
+        if (!(r instanceof Lang.Number) || !(v instanceof Lang.Number)) { return 0; }
+        return sentBy(v, r);
     }
 
     // For tests: forget the status.
@@ -256,6 +313,7 @@ module Status {
         _p = null;
         _r = 0;
         _rMs = null;
+        _rMsStored = false;
         _offsets = [] as Lang.Array<Lang.Number>;
     }
 
@@ -314,22 +372,24 @@ module Status {
         return (v instanceof Lang.Number) ? v : null;
     }
 
-    // Seconds since this status arrived; never negative. By the wall clock, or by uptime when that says
-    // longer, so a wall clock stepped back can't stop values aging.
+    // Seconds since this status arrived. By the wall clock, or by uptime when that says longer, so a wall
+    // clock stepped back can't stop values aging. Null when neither can say: the wall clock is behind the
+    // arrival and uptime isn't known, so any age would be a guess, and the values are treated as stale.
     (:background, :glance)
-    function elapsed(now as Lang.Number) as Lang.Number {
-        return elapsedFrom(now - _r, _rMs, System.getTimer());
+    function elapsed(now as Lang.Number) as Lang.Number? {
+        var ms = _rMs;
+        // With the wall clock behind the arrival a stored stamp would be the only clock, and one from before a
+        // restart would say too little time has passed: how long it has been can't be told.
+        if (_rMsStored && now < _r) { ms = null; }
+        return elapsedFrom(now - _r, ms, System.getTimer());
     }
 
     (:background, :glance)
-    function elapsedFrom(wall as Lang.Number, receivedMs as Lang.Number?, nowMs as Lang.Number) as Lang.Number {
-        var e = wall;
-        if (receivedMs != null) {
-            // A wrapped timer reads negative and is ignored.
-            var m = (nowMs - receivedMs) / 1000;
-            if (m > e) { e = m; }
-        }
-        return (e > 0) ? e : 0;
+    function elapsedFrom(wall as Lang.Number, receivedMs as Lang.Number?, nowMs as Lang.Number) as Lang.Number? {
+        // A wrapped timer reads negative and is ignored.
+        var m = (receivedMs != null) ? (nowMs - receivedMs) / 1000 : -1;
+        if (wall < 0 && m < 0) { return null; }
+        return (wall > m) ? wall : m;
     }
 
     // The phone's clock now, as near as this watch can tell: this watch's, less the smallest difference
@@ -337,8 +397,10 @@ module Status {
     // smallest is the closest, and the estimate isn't ahead of the phone. A bolus request is stamped with
     // it, because the phone judges the request's age, and whether a delivery since supersedes it, on its own
     // clock.
+    // The offset isn't capped here: a held status makes the stamp older, and the phone then refuses the
+    // request as too old rather than take it as newer than it is.
     function phoneNow(now as Lang.Number) as Lang.Number {
-        var best = clockOffset();
+        var best = (_p == null) ? 0 : _r - sentAt();
         for (var i = 0; i < _offsets.size(); i += 1) {
             if (i == 0 || _offsets[i] < best) { best = _offsets[i]; }
         }
@@ -346,12 +408,17 @@ module Status {
     }
 
     // Seconds to add to a time by the phone's clock to put it on this watch's: the phone's sentAt is this
-    // watch's receivedAt, less the moment in transit. Zero with no status.
+    // watch's receivedAt, less the moment in transit. A held status shows a difference as long as it was
+    // held, so no more than CLOCK_SEC is taken: past that, the clocks are taken to agree, and a held
+    // reading is placed when it was measured rather than as if current. Zero with no status.
     function clockOffset() as Lang.Number {
-        return (_p == null) ? 0 : _r - sentAt();
+        if (_p == null) { return 0; }
+        var d = _r - sentAt();
+        return (d > CLOCK_SEC) ? CLOCK_SEC : d;
     }
 
-    // How old the value under `key` is now, in seconds; null when there is no such value.
+    // How old the value under `key` is now, in seconds; null when there is no such value, or its age can't be
+    // told.
     (:background, :glance)
     function ageOf(key as Lang.String, now as Lang.Number) as Lang.Number? {
         return ageSince(field(key, "at"), now);
@@ -446,13 +513,22 @@ module Status {
         return b != null && Wire.bool(b, "tempRate") == true;
     }
 
-    // Seconds from `at` (a phone epoch time in this status) to now: its age when the status was sent, plus
-    // the time since. Never negative.
+    // Seconds from `at` (a phone epoch time in this status) to now: the older of its age when the status was
+    // sent plus the time since, and the watch's clock less `at`. Never negative; null with no `at`, or when
+    // the time since the status arrived can't be told.
     (:background, :glance)
     function ageSince(at as Lang.Number?, now as Lang.Number) as Lang.Number? {
-        if (at == null) { return null; }
+        var since = elapsed(now);
+        if (at == null || since == null) { return null; }
         var atPhone = sentAt() - at;
-        return (atPhone > 0 ? atPhone : 0) + elapsed(now);
+        var relative = (atPhone > 0 ? atPhone : 0) + since;
+        var absolute = now - at;
+        return (absolute > relative) ? absolute : relative;
+    }
+
+    // How long ago the phone sent this status, by the same two estimates; null with none.
+    function statusAge(now as Lang.Number) as Lang.Number? {
+        return (_p == null) ? null : ageSince(sentAt(), now);
     }
 
     function charging() as Lang.Boolean {

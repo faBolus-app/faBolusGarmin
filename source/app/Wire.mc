@@ -149,8 +149,10 @@ module Wire {
     }
 
     // What the phone may ask the user to confirm before a dose goes (a refused outcome's `confirm`), and a
-    // new request names once they went on (`confirmed`).
-    const CONFIRMATIONS = ["tooManyBoluses", "maxHourlyBolus", "lowInsulin"];
+    // new request names once they went on (`confirmed`). The phone matches each by its kind alone, so each
+    // goes back as the kind it was asked as: "bolusLimitsNotChecked" (the pump's hourly count couldn't be
+    // read) is never answered as "maxHourlyBolus" (it was read, and the dose is over).
+    const CONFIRMATIONS = ["tooManyBoluses", "maxHourlyBolus", "bolusLimitsNotChecked", "lowInsulin"];
 
     // `confirmed`, when not empty, names what the user confirmed for this dose.
     function bolusUnits(requestId as Lang.String, sentAt as Lang.Number, milliunits as Lang.Number,
